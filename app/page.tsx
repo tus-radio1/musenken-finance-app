@@ -107,7 +107,7 @@ export default async function Home() {
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-5xl mx-auto w-full space-y-8">
+            <div className="max-w-7xl mx-auto w-full space-y-8">
               <div className="flex justify-between items-center">
                 <div>
                   <h1 className="text-2xl font-bold tracking-tight">ホーム</h1>
