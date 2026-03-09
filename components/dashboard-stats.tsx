@@ -21,7 +21,7 @@ export function DashboardStats({
   totalAmountThisYear,
 }: Props) {
   return (
-    <div className="grid gap-4 grid-cols-1">
+    <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
       <Card className="bg-white">
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground mb-1">

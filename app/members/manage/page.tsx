@@ -17,6 +17,8 @@ import {
   type MemberManageRow,
 } from "./_components/manage-members-client";
 import type { RoleOption } from "./_components/edit-member-dialog";
+import { MobileSidebar } from "@/components/mobile-sidebar";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 function extractRoleInfo(rows: any[] | null | undefined) {
   const names: string[] = [];
@@ -78,6 +80,8 @@ export default async function MembersManagePage() {
             </main>
           </div>
         </div>
+        <MobileSidebar />
+        <MobileBottomNav />
       </div>
     );
   }
@@ -140,7 +144,7 @@ export default async function MembersManagePage() {
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 overflow-y-auto">
+          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
             <div className="max-w-6xl mx-auto w-full">
               <Card>
                 <CardHeader>
@@ -157,6 +161,8 @@ export default async function MembersManagePage() {
           </main>
         </div>
       </div>
+      <MobileSidebar />
+      <MobileBottomNav />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { fetchAllSubsidies, fetchProfilesList } from "./actions";
 import { SubsidiesManageClientPage } from "./client-page";
 import { AppSidebar } from "@/components/app-sidebar";
+import { MobileSidebar } from "@/components/mobile-sidebar";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 import { createAdminClient } from "@/utils/supabase/server";
 
@@ -23,6 +25,8 @@ export default async function SubsidiesManagePage() {
             </div>
           </main>
         </div>
+        <MobileSidebar />
+        <MobileBottomNav />
       </div>
     );
   }
@@ -32,7 +36,7 @@ export default async function SubsidiesManagePage() {
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 overflow-y-auto p-6 pt-16 md:pt-6 pb-20 md:pb-6">
             <div className="max-w-7xl mx-auto w-full space-y-6">
               <SubsidiesManageClientPage
                 initialData={result.data || []}
@@ -44,6 +48,8 @@ export default async function SubsidiesManagePage() {
           </main>
         </div>
       </div>
+      <MobileSidebar />
+      <MobileBottomNav />
     </div>
   );
 }

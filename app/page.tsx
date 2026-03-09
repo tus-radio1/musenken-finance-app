@@ -3,6 +3,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { RecentApplications } from "@/components/recent-applications";
 import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab";
+import { MobileSidebar } from "@/components/mobile-sidebar";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
@@ -68,8 +70,14 @@ export default async function Home() {
     (tx) => tx.approval_status === "pending",
   ).length;
 
-  const approvedCountThisYear = txList.filter(
-    (tx) => tx.approval_status === "approved",
+  const approvedCountThisYear = txList.filter((tx) =>
+    [
+      "approved",
+      "accepted",
+      "receipt_received",
+      "refunded",
+      "received",
+    ].includes(tx.approval_status as string),
   ).length;
 
   // 今年度の申請金額（支出=負の金額の絶対値合計）
@@ -94,7 +102,7 @@ export default async function Home() {
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 overflow-y-auto">
+          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
             <div className="max-w-5xl mx-auto w-full space-y-8">
               <div className="flex justify-between items-center">
                 <div>
@@ -102,7 +110,7 @@ export default async function Home() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[2fr,1fr]">
+              <div className="flex flex-col gap-4">
                 <RecentApplications items={recentMyItems as any} />
                 <DashboardStats
                   totalCountThisYear={totalCountThisYear}
@@ -115,6 +123,8 @@ export default async function Home() {
           </main>
         </div>
       </div>
+      <MobileSidebar />
+      <MobileBottomNav />
       <MobileNewTransactionFab categories={categories || []} />
     </div>
   );

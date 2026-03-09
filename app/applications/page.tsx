@@ -3,6 +3,8 @@ import { TransactionForm } from "@/components/transaction-form";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ApplicationsTable } from "@/components/applications-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MobileSidebar } from "@/components/mobile-sidebar";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 export default async function ApplicationsPage() {
   const supabase = await createClient();
@@ -46,7 +48,7 @@ export default async function ApplicationsPage() {
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 overflow-y-auto">
+          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
             <div className="max-w-5xl mx-auto w-full space-y-6">
               <div className="flex justify-between items-center">
                 <div>
@@ -78,6 +80,8 @@ export default async function ApplicationsPage() {
           </main>
         </div>
       </div>
+      <MobileSidebar />
+      <MobileBottomNav />
     </div>
   );
 }
