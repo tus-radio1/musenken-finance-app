@@ -78,7 +78,7 @@ function BudgetPieChart({
           ))}
         </Pie>
         <Tooltip
-          formatter={(value: number | undefined) => formatCurrency(value ?? 0)}
+          formatter={(value: any) => formatCurrency(Number(value) || 0)}
           contentStyle={{
             borderRadius: "8px",
             fontSize: "12px",
