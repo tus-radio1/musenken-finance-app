@@ -372,9 +372,14 @@ export default function LedgerView({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="pending">未承認</SelectItem>
+                  <SelectItem value="pending">申請中</SelectItem>
+                  <SelectItem value="accepted">受付済</SelectItem>
+                  <SelectItem value="checking">確認中</SelectItem>
+                  <SelectItem value="receipt_received">領収書受領済</SelectItem>
                   <SelectItem value="approved">承認済</SelectItem>
                   <SelectItem value="rejected">却下</SelectItem>
+                  <SelectItem value="received">受領済</SelectItem>
+                  <SelectItem value="refunded">返金済</SelectItem>
                 </SelectContent>
               </Select>
             </div>

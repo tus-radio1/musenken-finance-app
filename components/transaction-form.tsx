@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -84,6 +85,7 @@ export function TransactionForm({
 
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const router = useRouter();
 
   const isEditing = !!initialData;
   // 編集権限(canEdit)の確認は呼び出し元やサーバー側で行われているため、フォームが開けたならコア編集可能
@@ -232,8 +234,9 @@ export function TransactionForm({
       setFile(null);
       setOpen(false);
       // Server ActionのrevalidatePathにより次回ナビゲーション時にデータが更新される
-      // 現在のページを即座にリフレッシュするためwindow.dispatchEventでカスタムイベントを発信
+      // 現在のページを即座にリフレッシュするためwindow.dispatchEventでカスタムイベントを発信し、router.refreshでサーバーデータを再取得
       window.dispatchEvent(new Event("ledger-refresh"));
+      router.refresh();
     } catch (error) {
       console.error("Transaction submit error:", error);
       toast.error("予期せぬエラーが発生しました");
@@ -301,38 +304,48 @@ export function TransactionForm({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>日付</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
+                    <div className="flex gap-2 items-center">
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="2024/01/01"
+                          disabled={preventCoreEdits}
+                          value={
+                            field.value ? format(field.value, "yyyy/MM/dd") : ""
+                          }
+                          onChange={(e) => {
+                            const parsed = new Date(e.target.value);
+                            if (!isNaN(parsed.getTime())) {
+                              field.onChange(parsed);
+                            }
+                          }}
+                          className="w-[140px]"
+                        />
+                      </FormControl>
+                      <Popover>
+                        <PopoverTrigger asChild>
                           <Button
                             variant={"outline"}
+                            size="icon"
                             disabled={preventCoreEdits}
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground",
-                            )}
                           >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: ja })
-                            ) : (
-                              <span>日付を選択</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            <CalendarIcon className="h-4 w-4" />
                           </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date > new Date() || date < new Date("1900-01-01")
+                            }
+                            locale={ja}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -384,13 +397,13 @@ export function TransactionForm({
               )}
             />
 
-            {/* 摘要入力 */}
+            {/* 概要入力 */}
             <FormField
               control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>摘要</FormLabel>
+                  <FormLabel>概要</FormLabel>
                   <FormControl>
                     <Input placeholder="例: 秋月電子 パーツ代" {...field} />
                   </FormControl>
@@ -567,31 +580,48 @@ export function TransactionForm({
             />
 
             <div className="space-y-2">
-              <FormLabel>領収書画像 (任意)</FormLabel>
-              <div className="flex items-center gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("receipt-upload")?.click()
-                  }
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {file ? "画像を変更" : "画像を選択"}
-                </Button>
-                <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-                  {file ? file.name : "選択されていません"}
-                </span>
-                <Input
-                  id="receipt-upload"
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden" // 見た目を隠してButtonで制御
-                  onChange={(e) => {
-                    const selectedFile = e.target.files?.[0];
-                    if (selectedFile) setFile(selectedFile);
-                  }}
-                />
+              <FormLabel>領収書データ (任意)</FormLabel>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      document.getElementById("receipt-upload")?.click()
+                    }
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {file ? "データを変更" : "データを選択"}
+                  </Button>
+                  <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+                    {file ? file.name : "選択されていません"}
+                  </span>
+                  <Input
+                    id="receipt-upload"
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden" // 見た目を隠してButtonで制御
+                    onChange={(e) => {
+                      const selectedFile = e.target.files?.[0];
+                      if (selectedFile) setFile(selectedFile);
+                    }}
+                  />
+                </div>
+                {file && file.type.startsWith("image/") && (
+                  <div className="w-full max-w-[200px] border rounded-md overflow-hidden bg-muted flex flex-col items-center justify-center p-2">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt="プレビュー"
+                      className="object-contain max-h-[150px] w-auto h-auto rounded-sm"
+                    />
+                  </div>
+                )}
+                {file && file.type === "application/pdf" && (
+                  <div className="w-full max-w-[200px] h-24 border rounded-md bg-muted flex items-center justify-center text-sm font-medium text-muted-foreground flex-col gap-2">
+                    <FileText className="h-8 w-8 text-muted-foreground/60" />
+                    <span>PDFデータ</span>
+                  </div>
+                )}
               </div>
             </div>
 

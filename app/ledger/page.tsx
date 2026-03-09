@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import LedgerView from "@/components/ledger-view";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { getUserTeams, TeamInfo } from "@/lib/teams";
 
 type Role = {
   name: string | null;
@@ -24,90 +25,17 @@ export default async function LedgerPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // ロール情報取得（所属グループ）
   let isGlobalAdmin = false;
   let isAccountingUser = false;
   let profileId: string | null = null;
-  const myTeams: Array<{
-    id: string;
-    name: string;
-    type: "general" | "leader";
-  }> = [];
+  let myTeams: TeamInfo[] = [];
+
   if (user) {
     profileId = user.id;
-
-    // profile, roles, categories を並列取得
-    const [{ data: profile }, { data: userRoles }, { data: categories }] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", profileId)
-          .maybeSingle(),
-        supabase
-          .from("user_roles")
-          .select("roles(name, type, accounting_group_id)")
-          .eq("user_id", profileId),
-        admin.from("accounting_groups").select("id, name").order("name"),
-      ]);
-
-    isAccountingUser = profile?.role === "accounting";
-
-    const roles: Role[] = (userRoles || []).flatMap((ur) => {
-      const rr = (ur as unknown as { roles?: Role | Role[] | null }).roles;
-      if (Array.isArray(rr)) return rr;
-      return rr ? [rr] : [];
-    });
-    isGlobalAdmin = roles.some((r) => r.type === "admin");
-    if (!isAccountingUser) {
-      isAccountingUser = roles.some((r) => r?.name === "会計");
-    }
-
-    const safeCategories: AccountingGroup[] = (categories ||
-      []) as unknown as AccountingGroup[];
-
-    // 部長・副部長も全グループアクセス可能
-    const isFullAccess =
-      isAccountingUser ||
-      isGlobalAdmin ||
-      roles.some((r) => r?.name === "部長" || r?.name === "副部長");
-
-    if (isFullAccess) {
-      safeCategories.forEach((c) => {
-        myTeams.push({ id: c.id, name: c.name, type: "general" });
-      });
-    } else {
-      // 全ユーザーに general タイプのグループを表示
-      const { data: generalGroups } = await admin
-        .from("accounting_groups")
-        .select("id, name, type")
-        .eq("type", "general")
-        .order("name");
-
-      (
-        (generalGroups || []) as unknown as Array<{
-          id: string;
-          name: string;
-          type: string;
-        }>
-      ).forEach((g) => {
-        if (!myTeams.some((t) => t.id === g.id)) {
-          myTeams.push({ id: g.id, name: g.name, type: "general" });
-        }
-      });
-
-      // さらに所属班(会)のグループを追加
-      roles.forEach((r) => {
-        const gid = r?.accounting_group_id ?? undefined;
-        if (!gid) return;
-        const cat = safeCategories.find((c) => c.id === gid);
-        if (!cat) return;
-        if (myTeams.some((t) => t.id === gid)) return;
-        const type: "general" | "leader" =
-          r.type === "leader" ? "leader" : "general";
-        myTeams.push({ id: gid, name: cat.name, type });
-      });
-    }
+    const teamData = await getUserTeams(supabase, admin, profileId);
+    isGlobalAdmin = teamData.isGlobalAdmin;
+    isAccountingUser = teamData.isAccountingUser;
+    myTeams = teamData.teams;
   }
 
   // 年度決定 と profiles を並列取得

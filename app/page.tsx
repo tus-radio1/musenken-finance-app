@@ -1,10 +1,11 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createAdminClient } from "@/utils/supabase/server";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { RecentApplications } from "@/components/recent-applications";
 import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { getUserTeams } from "@/lib/teams";
 import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
@@ -40,11 +41,14 @@ export default async function Home() {
     fyYear = fyLatest?.[0]?.year as number | undefined;
   }
 
+  const admin = createAdminClient();
+
   // 会計グループ一覧（FAB用）
-  const { data: categories } = await supabase
-    .from("accounting_groups")
-    .select("id, name")
-    .order("name");
+  let categories: { id: string; name: string }[] = [];
+  if (user) {
+    const teamData = await getUserTeams(supabase, admin, user.id);
+    categories = teamData.teams;
+  }
 
   // ログインユーザーの今年度の取引を取得
   let myTxQuery = supabase
