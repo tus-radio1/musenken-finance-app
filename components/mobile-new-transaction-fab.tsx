@@ -8,7 +8,7 @@ export function MobileNewTransactionFab({ categories }: { categories: any[] }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="fixed bottom-5 right-5 md:hidden z-40">
+    <div className="fixed bottom-20 right-5 md:bottom-5 md:hidden z-40">
       <TransactionForm
         categories={categories}
         open={open}

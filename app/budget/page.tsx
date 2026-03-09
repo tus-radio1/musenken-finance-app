@@ -18,6 +18,8 @@ import {
   TransactionRow,
   SubsidyItemData,
 } from "@/lib/ledger";
+import { MobileSidebar } from "@/components/mobile-sidebar";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("ja-JP", {
@@ -78,6 +80,8 @@ export default async function BudgetPage({
             </main>
           </div>
         </div>
+        <MobileSidebar />
+        <MobileBottomNav />
       </div>
     );
   }
@@ -239,7 +243,7 @@ export default async function BudgetPage({
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 overflow-y-auto">
+          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
             <div className="max-w-5xl mx-auto w-full space-y-8">
               <div className="flex justify-between items-center">
                 <div>
@@ -336,6 +340,8 @@ export default async function BudgetPage({
           </main>
         </div>
       </div>
+      <MobileSidebar />
+      <MobileBottomNav />
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/server";
 import { AppSidebar } from "@/components/app-sidebar";
 import LedgerView from "@/components/ledger-view";
+import { MobileSidebar } from "@/components/mobile-sidebar";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 type Role = {
   name: string | null;
@@ -129,7 +131,7 @@ export default async function LedgerPage() {
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 overflow-y-auto">
+          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
             <div className="max-w-7xl mx-auto w-full space-y-8">
               <LedgerView
                 teams={myTeams}
@@ -143,6 +145,8 @@ export default async function LedgerPage() {
           </main>
         </div>
       </div>
+      <MobileSidebar />
+      <MobileBottomNav />
     </div>
   );
 }
