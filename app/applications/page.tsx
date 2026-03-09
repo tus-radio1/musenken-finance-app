@@ -1,10 +1,11 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createAdminClient } from "@/utils/supabase/server";
 import { TransactionForm } from "@/components/transaction-form";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ApplicationsTable } from "@/components/applications-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { getUserTeams } from "@/lib/teams";
 
 export default async function ApplicationsPage() {
   const supabase = await createClient();
@@ -17,12 +18,11 @@ export default async function ApplicationsPage() {
     return null;
   }
 
+  const admin = createAdminClient();
+
   // 会計グループ一覧を取得
-  const { data: accountingGroups } = await supabase
-    .from("accounting_groups")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
+  const teamData = await getUserTeams(supabase, admin, user.id);
+  const accountingGroups = teamData.teams;
 
   // 当該ユーザの過去の申請を取得（会計グループ名付き）
   const { data: transactions } = await supabase

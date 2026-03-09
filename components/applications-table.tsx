@@ -57,7 +57,7 @@ export function ApplicationsTable({
   const filtered = useMemo(() => {
     let result = [...transactions];
 
-    // テキスト検索（摘要）
+    // テキスト検索（概要）
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       result = result.filter(
@@ -92,24 +92,53 @@ export function ApplicationsTable({
     switch (status) {
       case "approved":
         return (
-          <Badge className="bg-green-500 hover:bg-green-600">承認済</Badge>
-        );
-      case "pending":
-        return (
-          <Badge className="bg-yellow-500 hover:bg-yellow-600">申請中</Badge>
-        );
-      case "checking":
-        return <Badge className="bg-blue-500 hover:bg-blue-600">確認中</Badge>;
-      case "receipt_received":
-        return (
-          <Badge className="bg-indigo-500 hover:bg-indigo-600">
-            領収書受領
+          <Badge className="bg-green-500 hover:bg-green-600 text-white border-none">
+            承認済
           </Badge>
         );
       case "rejected":
-        return <Badge variant="destructive">却下</Badge>;
+        return (
+          <Badge className="bg-red-500 hover:bg-red-600 text-white border-none">
+            却下
+          </Badge>
+        );
+      case "accepted":
+        return (
+          <Badge className="bg-blue-500 hover:bg-blue-600 text-white border-none">
+            受付済
+          </Badge>
+        );
+      case "checking":
+        return (
+          <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white border-none">
+            確認中
+          </Badge>
+        );
+      case "receipt_received":
+        return (
+          <Badge className="bg-teal-500 hover:bg-teal-600 text-white border-none">
+            領収書受領済
+          </Badge>
+        );
+      case "refunded":
+        return (
+          <Badge className="bg-slate-500 hover:bg-slate-600 text-white border-none">
+            返金済
+          </Badge>
+        );
+      case "received":
+        return (
+          <Badge className="bg-slate-500 hover:bg-slate-600 text-white border-none">
+            受領済
+          </Badge>
+        );
+      case "pending":
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return (
+          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white border-none">
+            申請中
+          </Badge>
+        );
     }
   };
 
@@ -126,7 +155,7 @@ export function ApplicationsTable({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="摘要・会計区分で検索..."
+            placeholder="概要・会計区分で検索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -141,10 +170,13 @@ export function ApplicationsTable({
             <SelectContent>
               <SelectItem value="all">すべて</SelectItem>
               <SelectItem value="pending">申請中</SelectItem>
+              <SelectItem value="accepted">受付済</SelectItem>
               <SelectItem value="checking">確認中</SelectItem>
-              <SelectItem value="receipt_received">領収書受領</SelectItem>
+              <SelectItem value="receipt_received">領収書受領済</SelectItem>
               <SelectItem value="approved">承認済</SelectItem>
               <SelectItem value="rejected">却下</SelectItem>
+              <SelectItem value="received">受領済</SelectItem>
+              <SelectItem value="refunded">返金済</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -174,7 +206,7 @@ export function ApplicationsTable({
                   </Button>
                 </TableHead>
                 <TableHead>収支</TableHead>
-                <TableHead>摘要</TableHead>
+                <TableHead>概要</TableHead>
                 <TableHead>会計区分</TableHead>
                 <TableHead>
                   <Button
