@@ -70,8 +70,14 @@ export default async function Home() {
     (tx) => tx.approval_status === "pending",
   ).length;
 
-  const approvedCountThisYear = txList.filter(
-    (tx) => tx.approval_status === "approved",
+  const approvedCountThisYear = txList.filter((tx) =>
+    [
+      "approved",
+      "accepted",
+      "receipt_received",
+      "refunded",
+      "received",
+    ].includes(tx.approval_status as string),
   ).length;
 
   // 今年度の申請金額（支出=負の金額の絶対値合計）
@@ -104,7 +110,7 @@ export default async function Home() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[2fr,1fr]">
+              <div className="flex flex-col gap-4">
                 <RecentApplications items={recentMyItems as any} />
                 <DashboardStats
                   totalCountThisYear={totalCountThisYear}
