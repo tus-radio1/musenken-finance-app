@@ -91,11 +91,10 @@ export default async function MembersManagePage() {
     .order("grade", { ascending: false })
     .order("student_number", { ascending: true });
 
-  // 全ロール一覧（accounting_group_id が NULL のもの = グローバルロール）
+  // 全ロール一覧
   const { data: rolesData } = await admin
     .from("roles")
     .select("id, name")
-    .is("accounting_group_id", null)
     .order("name");
 
   const allRoles: RoleOption[] = (rolesData || []).map((r: any) => ({
@@ -106,8 +105,7 @@ export default async function MembersManagePage() {
   // 全ユーザーのロール割当取得
   const { data: allUserRoles } = await admin
     .from("user_roles")
-    .select("user_id, role_id, roles(name, accounting_group_id)")
-    .is("roles.accounting_group_id", null);
+    .select("user_id, role_id, roles(name)");
 
   // ユーザーごとのロール情報をマップ
   const rolesByUser: Record<string, { names: string[]; ids: string[] }> = {};
@@ -115,7 +113,6 @@ export default async function MembersManagePage() {
     const userId: string = ur.user_id;
     const role = ur.roles;
     if (!role) return;
-    // accounting_group_id が null のロールだけ (joinのフィルタ)
     const entry = rolesByUser[userId] || { names: [], ids: [] };
     if (role.name && !entry.names.includes(role.name)) {
       entry.names.push(role.name);
