@@ -150,22 +150,8 @@ export async function updateMember(
     },
   });
 
-  // 3) ロール同期: accounting_group_id が NULL のロールのみ管理
-  // まず既存の全ロール割り当てを取得
-  const { data: currentUserRoles } = await admin
-    .from("user_roles")
-    .select("id, role_id, roles(accounting_group_id)")
-    .eq("user_id", userId);
-
-  // accounting_group_id が NULL のロール割り当てだけ削除対象
-  const globalRoleAssignments = (currentUserRoles || []).filter(
-    (ur: any) => !ur.roles?.accounting_group_id,
-  );
-  const globalAssignmentIds = globalRoleAssignments.map((ur: any) => ur.id);
-
-  if (globalAssignmentIds.length > 0) {
-    await admin.from("user_roles").delete().in("id", globalAssignmentIds);
-  }
+  // 3) ロール同期: 既存の全ロール割り当てを削除して再割り当て
+  await admin.from("user_roles").delete().eq("user_id", userId);
 
   // 新しいロールを割り当て
   if (data.role_ids.length > 0) {
