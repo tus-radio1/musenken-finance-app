@@ -64,7 +64,7 @@ export default async function MembersManagePage() {
 
   if (!hasAccess) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <div className="flex h-screen">
           <AppSidebar />
           <div className="flex-1 flex flex-col">
@@ -139,8 +139,10 @@ export default async function MembersManagePage() {
     };
   });
 
+  const isAdmin = roleInfo.types.includes("admin");
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
@@ -154,7 +156,7 @@ export default async function MembersManagePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ManageMembersClient members={members} allRoles={allRoles} />
+                  <ManageMembersClient members={members} allRoles={allRoles} isAdmin={isAdmin} />
                 </CardContent>
               </Card>
             </div>

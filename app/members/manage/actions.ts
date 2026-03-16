@@ -93,18 +93,18 @@ export async function addMember(raw: {
     return { error: "プロフィール作成に失敗しました" } as const;
   }
 
-  // 3) 「一般部員」ロールを自動付与
-  const { data: ippanRole } = await admin
+  // 3) 「仮部員」ロールを自動付与
+  const { data: kariRole } = await admin
     .from("roles")
     .select("id")
-    .eq("name", "一般部員")
+    .eq("name", "仮部員")
     .is("accounting_group_id", null)
     .single();
 
-  if (ippanRole) {
+  if (kariRole) {
     await admin
       .from("user_roles")
-      .insert({ user_id: userId, role_id: ippanRole.id });
+      .insert({ user_id: userId, role_id: kariRole.id });
   }
 
   revalidatePath("/members/manage");
@@ -240,5 +240,55 @@ export async function deleteMember(userId: string) {
   }
 
   revalidatePath("/members/manage");
+  return { success: true } as const;
+}
+
+// --- パスワードリセット ---
+export async function resetPasswordMember(userId: string) {
+  // Adminのみリセット可能
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" } as const;
+
+  const studentNumber = extractStudentNumberFromUser(user);
+  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
+  if (!profileId) return { error: "Unauthorized" } as const;
+
+  const { data: userRoles } = await supabase
+    .from("user_roles")
+    .select("roles(type)")
+    .eq("user_id", profileId);
+
+  const isAdmin = (userRoles || []).some(
+    (ur: any) => ur.roles?.type === "admin",
+  );
+  if (!isAdmin) return { error: "Admin権限が必要です" } as const;
+
+  const admin = createAdminClient();
+
+  // 対象ユーザーの学籍番号を取得して初期パスワードを算出
+  const { data: targetProfile } = await admin
+    .from("profiles")
+    .select("student_number")
+    .eq("id", userId)
+    .single();
+
+  if (!targetProfile?.student_number) {
+    return { error: "対象ユーザーが見つかりません" } as const;
+  }
+
+  const newPassword = deriveInitialPassword(targetProfile.student_number);
+
+  const { error: resetErr } = await admin.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  });
+
+  if (resetErr) {
+    console.error(resetErr);
+    return { error: "パスワードリセットに失敗しました" } as const;
+  }
+
   return { success: true } as const;
 }

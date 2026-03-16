@@ -4,8 +4,10 @@ import { useEffect, useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Upload } from "lucide-react";
+import { Loader2, Upload, CalendarIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +20,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -73,6 +82,8 @@ const EXPENSE_TYPE_LABELS: Record<string, string> = {
   registration: "連盟登録費",
   travel: "旅費",
   accommodation: "宿泊費",
+  tournament: "大会参加費等",
+  expensive_goods: "高額物品購入費等",
   other: "その他",
 };
 
@@ -80,7 +91,7 @@ const EXPENSE_TYPE_LABELS: Record<string, string> = {
 const CATEGORY_EXPENSE_TYPES: Record<string, string[]> = {
   activity: ["facility", "participation", "equipment"],
   league: ["registration"],
-  special: ["facility", "participation", "travel", "accommodation", "other"],
+  special: ["tournament", "expensive_goods", "other"],
 };
 
 export function SubsidyForm({ categories, triggerButton }: Props) {
@@ -97,6 +108,9 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       name: "",
       requested_amount: 0,
       justification: "",
+      income_type: "expense",
+      date: new Date(),
+      evidence_url: "",
     },
   });
 
@@ -125,6 +139,9 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
         name: "",
         requested_amount: 0,
         justification: "",
+        income_type: "expense",
+        date: new Date(),
+        evidence_url: "",
       });
       setFile(null);
     }
@@ -142,7 +159,12 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
   async function onSubmit(values: z.infer<typeof subsidyFormSchema>) {
     try {
-      let evidenceUrl: string | null = null;
+      if (!file) {
+        toast.error("根拠書類をアップロードしてください");
+        return;
+      }
+
+      let evidenceUrl: string = "";
 
       // ファイルアップロード
       if (file) {
@@ -236,6 +258,85 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* 収支区分 */}
+              <FormField
+                control={form.control}
+                name="income_type"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>収支区分</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex gap-4"
+                      >
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="expense" />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">
+                            支出
+                          </FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="income" />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">
+                            収入
+                          </FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* 日付 */}
+              <FormField
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col space-y-3 justify-end">
+                    <FormLabel className="mb-1">日付</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground",
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "yyyy年MM月dd日")
+                            ) : (
+                              <span>日付を選択</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          locale={ja}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               {/* 申請期 */}
@@ -362,7 +463,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               name="justification"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>申請理由（任意）</FormLabel>
+                  <FormLabel>申請理由</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="支援が必要な理由を記載してください..."
@@ -379,7 +480,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
             {/* 根拠書類アップロード */}
             <div className="space-y-2">
-              <FormLabel>根拠書類（任意）</FormLabel>
+              <FormLabel>根拠書類</FormLabel>
               <FormDescription>
                 見積書やHP等の料金が記載された資料をアップロードしてください。
               </FormDescription>

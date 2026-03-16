@@ -22,7 +22,7 @@ export default async function SettingsPage() {
     .single();
 
   return (
-    <div className="flex bg-slate-50 min-h-screen">
+    <div className="flex bg-background min-h-screen">
       <AppSidebar />
       <main className="flex-1 p-8 pt-16 md:pt-8 pb-20 md:pb-8 h-screen overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-6 flex-shrink-0">

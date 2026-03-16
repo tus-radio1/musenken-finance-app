@@ -275,18 +275,8 @@ export async function deleteTransaction(id: string) {
   const isAccountingUser =
     profile?.role === "accounting" || roles.some((r: any) => r.name === "会計");
 
-  const isOwner = transaction.created_by === profileId;
-
-  let canDelete = false;
-  if (isGlobalAdmin) {
-    canDelete = true;
-  } else if (isAccountingUser) {
-    canDelete = isOwner;
-  } else {
-    canDelete = isOwner && transaction.approval_status === "pending";
-  }
-
-  if (!canDelete) {
+  // Admin のみ削除可能
+  if (!isGlobalAdmin) {
     return { error: "削除する権限がありません。" };
   }
 

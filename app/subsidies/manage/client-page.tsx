@@ -322,7 +322,7 @@ export function SubsidiesManageClientPage({
         </div>
       </div>
 
-      <div className="border rounded-lg overflow-x-auto bg-white">
+      <div className="border rounded-lg overflow-x-auto bg-card">
         <table className="w-full text-sm text-left">
           <thead className="bg-muted/50 text-muted-foreground font-medium border-b hidden md:table-header-group">
             <tr>
@@ -379,7 +379,7 @@ export function SubsidiesManageClientPage({
                           handleStatusChange(item.id, val)
                         }
                       >
-                        <SelectTrigger className="w-full h-8 bg-white">
+                        <SelectTrigger className="w-full h-8 bg-background">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

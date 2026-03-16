@@ -50,19 +50,25 @@ export default async function MembersManagementPage() {
     else addRoleName(roles);
   });
 
-  const members: MemberRow[] = (profiles || []).map((profile: any) => {
-    const names = roleNamesByUser[profile.id] || [];
-    return {
-      id: profile.id,
-      name: profile.name,
-      student_number: profile.student_number,
-      grade: profile.grade,
-      roles: names.length === 0 ? "一般部員" : names.join("、"),
-    };
-  });
+  const members: MemberRow[] = (profiles || [])
+    .filter((profile: any) => {
+      // 「会計」ロールのみを持つアカウントを除外
+      const names = roleNamesByUser[profile.id] || [];
+      return !(names.length === 1 && names[0] === "会計");
+    })
+    .map((profile: any) => {
+      const names = roleNamesByUser[profile.id] || [];
+      return {
+        id: profile.id,
+        name: profile.name,
+        student_number: profile.student_number,
+        grade: profile.grade,
+        roles: names.length === 0 ? "一般部員" : names.join("、"),
+      };
+    });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">

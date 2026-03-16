@@ -11,6 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { StatusBadge } from "@/components/status-badge";
 
 type Props = {
   transactionId: string;
@@ -47,51 +48,8 @@ export function ApprovalActions({
     }
   };
 
-  if (status !== "pending") {
-    switch (status) {
-      case "approved":
-        return (
-          <span className="text-green-600 text-xs font-bold flex items-center">
-            <Check className="h-3 w-3 mr-1" />
-            承認済
-          </span>
-        );
-      case "rejected":
-        return (
-          <span className="text-red-600 text-xs font-bold flex items-center">
-            <X className="h-3 w-3 mr-1" />
-            却下
-          </span>
-        );
-      case "accepted":
-        return (
-          <span className="text-blue-600 text-xs font-bold flex items-center">
-            受付済
-          </span>
-        );
-      case "refunded":
-        return (
-          <span className="text-slate-600 text-xs font-bold flex items-center">
-            {amount >= 0 ? "受領済" : "返金済"}
-          </span>
-        );
-      case "received":
-        return (
-          <span className="text-slate-600 text-xs font-bold flex items-center">
-            受領済
-          </span>
-        );
-      default:
-        break; // If custom status or unknown, fallthrough to pending logic
-    }
-  }
-
-  if (!canApprove || isMyTransaction) {
-    return (
-      <span className="text-yellow-600 text-xs font-bold flex items-center">
-        受付中
-      </span>
-    );
+  if (status !== "pending" || !canApprove || isMyTransaction) {
+    return <StatusBadge status={status} />;
   }
 
   return (

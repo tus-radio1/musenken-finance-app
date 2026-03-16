@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { z } from "zod";
+import { format } from "date-fns";
 import { subsidyFormSchema } from "@/lib/schema";
 import {
   extractStudentNumberFromUser,
@@ -36,13 +37,15 @@ export async function createSubsidyItem(
     category: values.category,
     term: values.term,
     expense_type: values.expense_type,
+    income_type: values.income_type as any, // 修正された型への対応
+    date: format(values.date, "yyyy-MM-dd"),
     accounting_group_id: values.accounting_group_id,
     applicant_id: profileId,
     fiscal_year_id: fy.year,
     name: values.name,
     requested_amount: values.requested_amount,
-    justification: values.justification || null,
-    evidence_url: values.evidence_url || null,
+    justification: values.justification,
+    evidence_url: values.evidence_url,
     status: "pending",
   });
 
@@ -115,6 +118,8 @@ export async function updateMySubsidyItem(
     category?: string;
     term?: number;
     expense_type?: string;
+    income_type?: string;
+    date?: Date;
     accounting_group_id?: string;
     name?: string;
     requested_amount?: number;
@@ -158,9 +163,14 @@ export async function updateMySubsidyItem(
     return { error: "受付中以外の申請は編集できません" };
   }
 
+  const updateData: any = { ...values };
+  if (updateData.date) {
+    updateData.date = format(updateData.date, "yyyy-MM-dd");
+  }
+
   const { error: updateError } = await supabase
     .from("subsidy_items")
-    .update(values)
+    .update(updateData)
     .eq("id", id);
 
   if (updateError) {

@@ -372,9 +372,8 @@ export default function LedgerView({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="pending">申請中</SelectItem>
+                  <SelectItem value="pending">受付中</SelectItem>
                   <SelectItem value="accepted">受付済</SelectItem>
-                  <SelectItem value="checking">確認中</SelectItem>
                   <SelectItem value="receipt_received">領収書受領済</SelectItem>
                   <SelectItem value="approved">承認済</SelectItem>
                   <SelectItem value="rejected">却下</SelectItem>
@@ -450,14 +449,8 @@ export default function LedgerView({
 
                 let canDelete = false;
                 if (isGlobalAdmin) {
-                  // Adminはすべて削除可能
+                  // Adminのみ削除可能
                   canDelete = true;
-                } else if (isAccountingUser) {
-                  // 会計は 자신이 作成したものだけ削除可能
-                  canDelete = isOwner;
-                } else {
-                  // 一般ユーザは 自分が作成したもの かつ 受付中 のみ削除可能
-                  canDelete = isOwner && r.approval_status === "pending";
                 }
 
                 return (

@@ -28,10 +28,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, LogOut, Trash2 } from "lucide-react";
+import { Loader2, LogOut, Trash2, KeyRound } from "lucide-react";
 import { AddMemberDialog } from "./add-member-dialog";
 import { EditMemberDialog, type RoleOption } from "./edit-member-dialog";
-import { retireMember, deleteMember } from "../actions";
+import { retireMember, deleteMember, resetPasswordMember } from "../actions";
 
 export type MemberManageRow = {
   id: string;
@@ -45,6 +45,7 @@ export type MemberManageRow = {
 type ManageMembersClientProps = {
   members: MemberManageRow[];
   allRoles: RoleOption[];
+  isAdmin?: boolean;
 };
 
 type SortKey = "name" | "student_number" | "grade";
@@ -93,6 +94,7 @@ function SortableHeader({
 export function ManageMembersClient({
   members,
   allRoles,
+  isAdmin = false,
 }: ManageMembersClientProps) {
   const [retireTarget, setRetireTarget] = useState<MemberManageRow | null>(
     null,
@@ -100,8 +102,10 @@ export function ManageMembersClient({
   const [deleteTarget, setDeleteTarget] = useState<MemberManageRow | null>(
     null,
   );
+  const [resetTarget, setResetTarget] = useState<MemberManageRow | null>(null);
   const [retireLoading, setRetireLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Filtering & Sorting State
   const [sort, setSort] = useState<SortState>(null);
@@ -146,6 +150,26 @@ export function ManageMembersClient({
   };
 
   const isOBOG = (member: MemberManageRow) => member.grade === 0;
+
+  const handleResetPassword = async () => {
+    if (!resetTarget) return;
+    setResetLoading(true);
+    try {
+      const res = await resetPasswordMember(resetTarget.id);
+      if ("error" in res && res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(
+          `${resetTarget.name} さんのパスワードを初期値にリセットしました`,
+        );
+        setResetTarget(null);
+      }
+    } catch {
+      toast.error("パスワードリセットに失敗しました");
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   // Derived state for filtering and sorting
   const grades = useMemo(() => {
@@ -349,6 +373,17 @@ export function ManageMembersClient({
                       }}
                       allRoles={allRoles}
                     />
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        onClick={() => setResetTarget(member)}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        PWリセット
+                      </Button>
+                    )}
                     {!isOBOG(member) && (
                       <Button
                         variant="ghost"
@@ -448,6 +483,42 @@ export function ManageMembersClient({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               完全に削除する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* パスワードリセット確認ダイアログ */}
+      <Dialog
+        open={!!resetTarget}
+        onOpenChange={(open) => !open && setResetTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>パスワードリセットの確認</DialogTitle>
+            <DialogDescription>
+              <strong>{resetTarget?.name}</strong>（
+              {resetTarget?.student_number}
+              ）のパスワードを初期パスワードにリセットします。リセット後、ユーザーは初期パスワードでログインする必要があります。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setResetTarget(null)}
+              disabled={resetLoading}
+            >
+              キャンセル
+            </Button>
+            <Button
+              variant="default"
+              onClick={handleResetPassword}
+              disabled={resetLoading}
+            >
+              {resetLoading && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              リセットする
             </Button>
           </DialogFooter>
         </DialogContent>
