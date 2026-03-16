@@ -17,7 +17,7 @@ export function AppSidebar() {
   } = useSidebarData();
 
   return (
-    <aside className="hidden md:flex md:flex-col md:w-56 border-r bg-white">
+    <aside className="hidden md:flex md:flex-col md:w-56 border-r bg-background">
       <div className="h-16 flex items-center px-4 border-b font-bold text-lg">
         無線研会計班
       </div>
@@ -100,9 +100,6 @@ export function AppSidebar() {
             <div className="flex flex-col overflow-hidden">
               <span className="text-sm font-medium truncate">
                 {userProfile.full_name}
-              </span>
-              <span className="text-xs text-muted-foreground truncate">
-                {userProfile.email}
               </span>
             </div>
           </div>

@@ -33,6 +33,7 @@ import { updateMySubsidyItem } from "@/app/subsidies/actions";
 import { uploadReceiptAction } from "@/app/actions";
 import { compressImageToWebp } from "@/lib/image";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -173,22 +174,7 @@ export function SubsidyItemsTable({
     return result;
   }, [items, searchQuery, statusFilter, categoryFilter, sortKey, sortOrder]);
 
-  const statusLabel = (status: string) => {
-    switch (status) {
-      case "approved":
-        return (
-          <Badge className="bg-green-500 hover:bg-green-600">承認済</Badge>
-        );
-      case "pending":
-        return (
-          <Badge className="bg-yellow-500 hover:bg-yellow-600">申請中</Badge>
-        );
-      case "rejected":
-        return <Badge variant="destructive">却下</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
+
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("ja-JP", {
@@ -457,7 +443,7 @@ export function SubsidyItemsTable({
                       "-"
                     )}
                   </TableCell>
-                  <TableCell>{statusLabel(item.status)}</TableCell>
+                  <TableCell><StatusBadge status={item.status} /></TableCell>
                   <TableCell className="text-right">
                     {item.status === "pending" && (
                       <Button

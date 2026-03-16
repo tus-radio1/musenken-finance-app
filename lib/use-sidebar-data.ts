@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   FileText,
-  Bell,
   PieChart,
   Settings,
   List,
@@ -107,9 +106,9 @@ export function useSidebarData() {
 
           if (profile) {
             setUserProfile({
-              full_name: profile.full_name,
-              email: user.email || "",
-              role: profile.role,
+              full_name: profile.name || user.user_metadata?.name || "",
+              email: null,
+              role: null,
             });
           }
         }
@@ -143,7 +142,6 @@ export function useSidebarData() {
     { href: "/subsidies", label: "支援金申請", icon: HandCoins },
     { href: "/ledger", label: "出納帳", icon: List },
     { href: "/members", label: "部員情報", icon: Users },
-    { href: "/notifications", label: "通知", icon: Bell },
     ...(hasAccountingRole || roleTypes.includes("admin")
       ? [
           { href: "/budget", label: "予算管理", icon: PieChart },

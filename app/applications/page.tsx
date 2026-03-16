@@ -44,19 +44,19 @@ export default async function ApplicationsPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-5xl mx-auto w-full space-y-6">
+            <div className="max-w-7xl mx-auto w-full space-y-6">
               <div className="flex justify-between items-center">
                 <div>
                   <h1 className="text-2xl font-bold tracking-tight">
                     経費申請
                   </h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    あなたの申請履歴と新規申請を管理します。
+                    無線研での活動費を経費として申請できます。
                   </p>
                 </div>
                 <div className="hidden md:block">

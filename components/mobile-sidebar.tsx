@@ -95,7 +95,7 @@ export function MobileSidebar() {
           variant="ghost"
           size="icon"
           onClick={() => setOpen(true)}
-          className="h-10 w-10 rounded-full bg-white/80 backdrop-blur shadow-sm border"
+          className="h-10 w-10 rounded-full bg-background/80 backdrop-blur shadow-sm border text-foreground"
           aria-label="メニューを開く"
         >
           <Menu className="h-5 w-5" />
@@ -191,9 +191,6 @@ export function MobileSidebar() {
                 <div className="flex flex-col overflow-hidden">
                   <span className="text-sm font-medium truncate">
                     {userProfile.full_name}
-                  </span>
-                  <span className="text-xs text-muted-foreground truncate">
-                    {userProfile.email}
                   </span>
                 </div>
               </div>

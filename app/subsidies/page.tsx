@@ -73,7 +73,7 @@ export default async function SubsidiesPage() {
     }).format(amount);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">

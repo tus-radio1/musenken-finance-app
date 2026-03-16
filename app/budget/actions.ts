@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createAdminClient } from "@/utils/supabase/server";
 import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
@@ -65,15 +65,16 @@ export async function upsertBudget(
     .limit(1)
     .maybeSingle();
 
+  const adminDb = createAdminClient();
   let error = null as any;
   if (existing?.id) {
-    const res = await supabase
+    const res = await adminDb
       .from("budgets")
       .update({ amount })
       .eq("id", existing.id);
     error = res.error;
   } else {
-    const res = await supabase.from("budgets").insert({
+    const res = await adminDb.from("budgets").insert({
       accounting_group_id: accountingGroupId,
       amount,
       fiscal_year_id: fiscalYearId,
@@ -130,9 +131,13 @@ export async function createFiscalYearBudgets(
   }
 
   // 年度作成
-  const { error: fyError } = await supabase
-    .from("fiscal_years")
-    .insert({ year, is_current: false });
+  const adminDb = createAdminClient();
+  const { error: fyError } = await adminDb.from("fiscal_years").insert({
+    year,
+    start_date: `${year}-04-01`,
+    end_date: `${year + 1}-03-31`,
+    is_current: false,
+  });
 
   if (fyError) {
     console.error(fyError);
@@ -149,7 +154,7 @@ export async function createFiscalYearBudgets(
     }));
 
   if (rows.length > 0) {
-    const { error: budgetError } = await supabase.from("budgets").insert(rows);
+    const { error: budgetError } = await adminDb.from("budgets").insert(rows);
 
     if (budgetError) {
       console.error(budgetError);

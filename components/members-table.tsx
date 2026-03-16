@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -241,7 +242,15 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
                     member.grade
                   )}
                 </TableCell>
-                <TableCell>{member.roles}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {member.roles.split("、").map((role) => (
+                      <Badge key={role} variant="outline" className="text-xs font-normal">
+                        {role}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

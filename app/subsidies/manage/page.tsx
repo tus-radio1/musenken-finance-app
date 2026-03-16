@@ -16,7 +16,7 @@ export default async function SubsidiesManagePage() {
 
   if (result.error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex h-screen">
+      <div className="min-h-screen bg-background flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <main className="flex-1 flex justify-center items-center p-6 overflow-y-auto">
@@ -32,7 +32,7 @@ export default async function SubsidiesManagePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="flex h-screen">
         <AppSidebar />
         <div className="flex-1 flex flex-col overflow-hidden">

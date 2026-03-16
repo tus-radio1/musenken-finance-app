@@ -27,6 +27,7 @@ export const formSchema = z.object({
       "accepted",
       "approved",
       "rejected",
+      "receipt_received",
       "refunded",
       "received",
     ])
@@ -47,14 +48,26 @@ export const subsidyFormSchema = z.object({
       "travel",
       "accommodation",
       "other",
+      "tournament",
+      "expensive_goods",
     ],
     { required_error: "経費種別を選択してください" },
   ),
+  income_type: z.enum(["expense", "income"], {
+    required_error: "収支区分を選択してください",
+  }),
+  date: z.date({
+    required_error: "日付を選択してください",
+  }),
   accounting_group_id: z.string({
     required_error: "会計グループを選択してください",
   }),
   name: z.string().min(1, "項目名を入力してください"),
   requested_amount: z.coerce.number().min(1, "金額は1円以上で入力してください"),
-  justification: z.string().nullable().optional(),
-  evidence_url: z.string().nullable().optional(),
+  justification: z.string({
+    required_error: "申請理由を入力してください",
+  }).min(1, "申請理由を入力してください"),
+  evidence_url: z.string({
+    required_error: "根拠書類をアップロードしてください",
+  }).min(1, "根拠書類をアップロードしてください"),
 });

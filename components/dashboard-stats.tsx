@@ -22,7 +22,7 @@ export function DashboardStats({
 }: Props) {
   return (
     <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-      <Card className="bg-white">
+      <Card>
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground mb-1">
             今年度の申請数
@@ -30,7 +30,7 @@ export function DashboardStats({
           <div className="text-2xl font-bold">{totalCountThisYear}</div>
         </CardContent>
       </Card>
-      <Card className="bg-white">
+      <Card>
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground mb-1">申請中の件数</div>
           <div className="text-2xl font-bold text-yellow-600">
@@ -38,7 +38,7 @@ export function DashboardStats({
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-white">
+      <Card>
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground mb-1">承認済み件数</div>
           <div className="text-2xl font-bold text-green-600">
@@ -46,7 +46,7 @@ export function DashboardStats({
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-white">
+      <Card>
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground mb-1">
             今年度の申請金額

@@ -119,7 +119,7 @@ export default async function AdminUsersPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
+    <div className="min-h-screen bg-background/50">
       <main className="container mx-auto py-10 max-w-6xl">
         <Card>
           <CardHeader>

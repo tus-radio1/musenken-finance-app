@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,59 +89,7 @@ export function ApplicationsTable({
     return result;
   }, [transactions, searchQuery, statusFilter, sortKey, sortOrder]);
 
-  const statusLabel = (status: string) => {
-    switch (status) {
-      case "approved":
-        return (
-          <Badge className="bg-green-500 hover:bg-green-600 text-white border-none">
-            承認済
-          </Badge>
-        );
-      case "rejected":
-        return (
-          <Badge className="bg-red-500 hover:bg-red-600 text-white border-none">
-            却下
-          </Badge>
-        );
-      case "accepted":
-        return (
-          <Badge className="bg-blue-500 hover:bg-blue-600 text-white border-none">
-            受付済
-          </Badge>
-        );
-      case "checking":
-        return (
-          <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white border-none">
-            確認中
-          </Badge>
-        );
-      case "receipt_received":
-        return (
-          <Badge className="bg-teal-500 hover:bg-teal-600 text-white border-none">
-            領収書受領済
-          </Badge>
-        );
-      case "refunded":
-        return (
-          <Badge className="bg-slate-500 hover:bg-slate-600 text-white border-none">
-            返金済
-          </Badge>
-        );
-      case "received":
-        return (
-          <Badge className="bg-slate-500 hover:bg-slate-600 text-white border-none">
-            受領済
-          </Badge>
-        );
-      case "pending":
-      default:
-        return (
-          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white border-none">
-            申請中
-          </Badge>
-        );
-    }
-  };
+
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("ja-JP", {
@@ -169,9 +118,8 @@ export function ApplicationsTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">すべて</SelectItem>
-              <SelectItem value="pending">申請中</SelectItem>
+              <SelectItem value="pending">受付中</SelectItem>
               <SelectItem value="accepted">受付済</SelectItem>
-              <SelectItem value="checking">確認中</SelectItem>
               <SelectItem value="receipt_received">領収書受領済</SelectItem>
               <SelectItem value="approved">承認済</SelectItem>
               <SelectItem value="rejected">却下</SelectItem>
@@ -263,7 +211,7 @@ export function ApplicationsTable({
                   >
                     {formatCurrency(Math.abs(tx.amount))}
                   </TableCell>
-                  <TableCell>{statusLabel(tx.approval_status)}</TableCell>
+                  <TableCell><StatusBadge status={tx.approval_status} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -114,7 +114,7 @@ export function TeamManager({ userId, currentTeams, allCategories }: Props) {
               {currentTeams.map((tm) => (
                 <div
                   key={tm.id}
-                  className="flex justify-between items-center bg-gray-50 p-2 rounded"
+                  className="flex justify-between items-center bg-background p-2 rounded"
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{tm.name}</span>
