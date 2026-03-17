@@ -67,7 +67,7 @@ export function SettingsClient({ fullName }: { fullName: string }) {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       {/* ユーザーアイコン設定 */}
       <Card>
         <CardHeader>
