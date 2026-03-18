@@ -108,6 +108,7 @@ export async function addMember(raw: {
   }
 
   revalidatePath("/members/manage");
+  revalidatePath("/members");
   return { success: true, userId } as const;
 }
 
@@ -167,6 +168,7 @@ export async function updateMember(
   }
 
   revalidatePath("/members/manage");
+  revalidatePath("/members");
   return { success: true } as const;
 }
 
@@ -209,6 +211,7 @@ export async function retireMember(userId: string) {
   });
 
   revalidatePath("/members/manage");
+  revalidatePath("/members");
   return { success: true } as const;
 }
 
@@ -240,6 +243,7 @@ export async function deleteMember(userId: string) {
   }
 
   revalidatePath("/members/manage");
+  revalidatePath("/members");
   return { success: true } as const;
 }
 

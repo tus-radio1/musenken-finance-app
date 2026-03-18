@@ -40,6 +40,7 @@ export default async function ApplicationsPage() {
     amount: tx.amount,
     description: tx.description,
     approval_status: tx.approval_status,
+    accounting_group_id: tx.accounting_group_id || undefined,
     accounting_group_name: tx.accounting_groups?.name || "-",
   }));
 
@@ -69,7 +70,7 @@ export default async function ApplicationsPage() {
                   <CardTitle>あなたの申請一覧</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ApplicationsTable transactions={tableData} />
+                  <ApplicationsTable transactions={tableData} accountingGroups={accountingGroups || []} />
                 </CardContent>
               </Card>
 

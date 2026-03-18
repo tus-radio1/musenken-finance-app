@@ -50,6 +50,7 @@ type SubsidyItem = {
   term: number;
   expense_type: string;
   name: string;
+  income_type?: string;
   requested_amount: number;
   approved_amount: number | null;
   status: string;
@@ -96,6 +97,18 @@ const CATEGORY_EXPENSE_TYPES: Record<string, string[]> = {
   special: ["facility", "participation", "travel", "accommodation", "other"],
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: "受付中",
+  accounting_received: "受付済",
+  approved: "審査通過",
+  rejected: "却下",
+  application_in_progress: "申請中",
+  application_rejected: "申請拒否",
+  receipt_submitted: "領収書提出済",
+  paid: "返金済",
+  unexecuted: "未執行",
+};
+
 export function SubsidyItemsTable({
   items: initialItems,
   accountingGroups = [],
@@ -107,6 +120,8 @@ export function SubsidyItemsTable({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [incomeTypeFilter, setIncomeTypeFilter] = useState<string>("all");
+  const [accountingGroupFilter, setAccountingGroupFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
@@ -140,14 +155,8 @@ export function SubsidyItemsTable({
 
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.name.toLowerCase().includes(q) ||
-          item.accounting_group_name.toLowerCase().includes(q) ||
-          (CATEGORY_LABELS[item.category] || "").toLowerCase().includes(q) ||
-          (EXPENSE_TYPE_LABELS[item.expense_type] || "")
-            .toLowerCase()
-            .includes(q),
+      result = result.filter((item) =>
+        item.name.toLowerCase().includes(q),
       );
     }
 
@@ -157,6 +166,14 @@ export function SubsidyItemsTable({
 
     if (categoryFilter !== "all") {
       result = result.filter((item) => item.category === categoryFilter);
+    }
+
+    if (incomeTypeFilter !== "all") {
+      result = result.filter((item) => item.income_type === incomeTypeFilter);
+    }
+
+    if (accountingGroupFilter !== "all") {
+      result = result.filter((item) => item.accounting_group_id === accountingGroupFilter);
     }
 
     result.sort((a, b) => {
@@ -172,7 +189,7 @@ export function SubsidyItemsTable({
     });
 
     return result;
-  }, [items, searchQuery, statusFilter, categoryFilter, sortKey, sortOrder]);
+  }, [items, searchQuery, statusFilter, categoryFilter, incomeTypeFilter, accountingGroupFilter, sortKey, sortOrder]);
 
 
 
@@ -302,18 +319,18 @@ export function SubsidyItemsTable({
   return (
     <div className="space-y-4">
       {/* フィルタ・検索バー */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="項目名・会計区分で検索..."
+            placeholder="概要で検索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="種別" />
@@ -325,15 +342,40 @@ export function SubsidyItemsTable({
               <SelectItem value="special">特別支援金</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={incomeTypeFilter} onValueChange={setIncomeTypeFilter}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="支出・収入" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">支出・収入</SelectItem>
+              <SelectItem value="expense">支出</SelectItem>
+              <SelectItem value="income">収入</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={accountingGroupFilter} onValueChange={setAccountingGroupFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="会計区分" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">すべての会計区分</SelectItem>
+              {accountingGroups.map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="状態" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">すべて</SelectItem>
-              <SelectItem value="pending">申請中</SelectItem>
-              <SelectItem value="approved">承認済</SelectItem>
-              <SelectItem value="rejected">却下</SelectItem>
+              <SelectItem value="all">すべての状態</SelectItem>
+              {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                <SelectItem key={key} value={key}>
+                  {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

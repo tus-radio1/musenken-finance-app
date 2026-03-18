@@ -38,7 +38,6 @@ export default async function MembersManagementPage() {
 
     const addRoleName = (role: any) => {
       if (!role) return;
-      if (role.accounting_group_id) return;
       const name: string | undefined = role.name;
       if (!name) return;
       const list = roleNamesByUser[userId] || [];

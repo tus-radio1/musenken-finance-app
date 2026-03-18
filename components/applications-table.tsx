@@ -30,6 +30,7 @@ type Transaction = {
   amount: number;
   description: string;
   approval_status: string;
+  accounting_group_id?: string;
   accounting_group_name: string;
 };
 
@@ -38,11 +39,15 @@ type SortOrder = "asc" | "desc";
 
 export function ApplicationsTable({
   transactions,
+  accountingGroups = [],
 }: {
   transactions: Transaction[];
+  accountingGroups?: { id: string; name: string }[];
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [incomeTypeFilter, setIncomeTypeFilter] = useState<string>("all");
+  const [accountingGroupFilter, setAccountingGroupFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
@@ -58,22 +63,30 @@ export function ApplicationsTable({
   const filtered = useMemo(() => {
     let result = [...transactions];
 
-    // テキスト検索（概要）
+    // Text search (description only)
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (tx) =>
-          tx.description.toLowerCase().includes(q) ||
-          tx.accounting_group_name.toLowerCase().includes(q),
-      );
+      result = result.filter((tx) => tx.description.toLowerCase().includes(q));
     }
 
-    // 状態フィルタ
+    // Status filter
     if (statusFilter !== "all") {
       result = result.filter((tx) => tx.approval_status === statusFilter);
     }
 
-    // ソート
+    // Income/expense filter (based on amount sign)
+    if (incomeTypeFilter === "expense") {
+      result = result.filter((tx) => tx.amount < 0);
+    } else if (incomeTypeFilter === "income") {
+      result = result.filter((tx) => tx.amount >= 0);
+    }
+
+    // Accounting group filter
+    if (accountingGroupFilter !== "all") {
+      result = result.filter((tx) => tx.accounting_group_id === accountingGroupFilter);
+    }
+
+    // Sort
     result.sort((a, b) => {
       let cmp = 0;
       if (sortKey === "date") {
@@ -87,7 +100,7 @@ export function ApplicationsTable({
     });
 
     return result;
-  }, [transactions, searchQuery, statusFilter, sortKey, sortOrder]);
+  }, [transactions, searchQuery, statusFilter, incomeTypeFilter, accountingGroupFilter, sortKey, sortOrder]);
 
 
 
@@ -100,24 +113,45 @@ export function ApplicationsTable({
   return (
     <div className="space-y-4">
       {/* フィルタ・検索バー */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="概要・会計区分で検索..."
+            placeholder="概要で検索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={incomeTypeFilter} onValueChange={setIncomeTypeFilter}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="支出・収入" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">支出・収入</SelectItem>
+              <SelectItem value="expense">支出</SelectItem>
+              <SelectItem value="income">収入</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={accountingGroupFilter} onValueChange={setAccountingGroupFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="会計区分" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">すべての会計区分</SelectItem>
+              {accountingGroups.map((g) => (
+                <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="状態" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">すべて</SelectItem>
+              <SelectItem value="all">すべての状態</SelectItem>
               <SelectItem value="pending">受付中</SelectItem>
               <SelectItem value="accepted">受付済</SelectItem>
               <SelectItem value="receipt_received">領収書受領済</SelectItem>

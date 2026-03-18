@@ -35,7 +35,7 @@ export default async function SubsidiesPage() {
   const { data: subsidyItems } = await supabase
     .from("subsidy_items")
     .select(
-      "id, category, term, expense_type, name, requested_amount, approved_amount, status, justification, evidence_url, created_at, accounting_group_id, accounting_groups(name)",
+      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, created_at, accounting_group_id, accounting_groups(name)",
     )
     .eq("applicant_id", profileId!)
     .order("created_at", { ascending: false });
@@ -46,10 +46,12 @@ export default async function SubsidiesPage() {
     category: item.category,
     term: item.term,
     expense_type: item.expense_type,
+    income_type: item.income_type,
     name: item.name,
     requested_amount: item.requested_amount,
     approved_amount: item.approved_amount,
     status: item.status,
+    accounting_group_id: item.accounting_group_id || undefined,
     accounting_group_name: item.accounting_groups?.name || "-",
     created_at: item.created_at,
   }));
