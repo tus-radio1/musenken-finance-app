@@ -158,9 +158,10 @@ export function ManageMembersClient({
       const res = await resetPasswordMember(resetTarget.id);
       if ("error" in res && res.error) {
         toast.error(res.error);
-      } else {
+      } else if ("newPassword" in res) {
         toast.success(
-          `${resetTarget.name} さんのパスワードを初期値にリセットしました`,
+          `${resetTarget.name} さんのパスワードをリセットしました。新しいパスワード: ${res.newPassword}`,
+          { duration: 15000 },
         );
         setResetTarget(null);
       }
@@ -499,7 +500,7 @@ export function ManageMembersClient({
             <DialogDescription>
               <strong>{resetTarget?.name}</strong>（
               {resetTarget?.student_number}
-              ）のパスワードを初期パスワードにリセットします。リセット後、ユーザーは初期パスワードでログインする必要があります。
+              ）のパスワードをリセットします。新しいパスワードが自動生成されます。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

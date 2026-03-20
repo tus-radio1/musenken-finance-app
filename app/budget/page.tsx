@@ -1,4 +1,5 @@
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BudgetOverview } from "@/components/budget-overview";
@@ -39,6 +40,10 @@ export default async function BudgetPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
 
   // ロール情報取得
   let isGlobalAdmin = false;
@@ -86,19 +91,15 @@ export default async function BudgetPage({
     );
   }
 
-  // 年度一覧を取得（管理者クライアントを使用してRLSをバイパス）
-  const adminClient = createAdminClient();
-  const { data: fiscalYears, error: fiscalYearsError } = await adminClient
+  // 年度一覧を取得 (RLS handles authorization for SELECT)
+  const { data: fiscalYears, error: fiscalYearsError } = await supabase
     .from("fiscal_years")
     .select("year, is_current")
     .order("year", { ascending: false });
 
-  // デバッグ用ログ
   if (fiscalYearsError) {
     console.error("fiscal_years取得エラー:", fiscalYearsError);
   }
-  console.log("fiscal_years データ:", fiscalYears);
-
   // 選択された年度、またはデフォルトで現在の年度
   const selectedYearParam = params.year;
   let fyYear: number | undefined;
@@ -113,14 +114,14 @@ export default async function BudgetPage({
     }
   }
 
-  // 会計グループ一覧（管理者クライアントを使用）
-  const { data: categories } = await adminClient
+  // 会計グループ一覧 (RLS handles authorization for SELECT)
+  const { data: categories } = await supabase
     .from("accounting_groups")
     .select("id, name")
     .order("name");
 
-  // 予算一覧（当該年度、管理者クライアントを使用）
-  let budgetQuery = adminClient
+  // 予算一覧（当該年度）
+  let budgetQuery = supabase
     .from("budgets")
     .select("id, accounting_group_id, amount, fiscal_year_id");
   if (typeof fyYear !== "undefined") {
@@ -128,24 +129,25 @@ export default async function BudgetPage({
   }
   const { data: budgets, error: budgetsError } = await budgetQuery;
 
-  // デバッグ用ログ
   if (budgetsError) {
     console.error("budgets取得エラー:", budgetsError);
   }
-  console.log("budgets データ:", budgets, "fyYear:", fyYear);
-
-  // 取引集計（支出のみ、管理者クライアントを使用）
-  let txQuery = adminClient.from("transactions").select("*");
+  // 取引集計（支出のみ）
+  let txQuery = supabase
+    .from("transactions")
+    .select("*")
+    .is("deleted_at", null);
   if (typeof fyYear !== "undefined") {
     txQuery = txQuery.eq("fiscal_year_id", fyYear);
   }
 
   // 支援金データの取得（統合用）
-  let subsidyQuery = adminClient
+  let subsidyQuery = supabase
     .from("subsidy_items")
     .select(
       "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status, accounting_group_id",
     )
+    .is("deleted_at", null)
     .in("status", ["approved", "receipt_submitted", "paid"]);
 
   if (typeof fyYear !== "undefined") {
@@ -161,11 +163,9 @@ export default async function BudgetPage({
     subsidyData as SubsidyItemData[],
   );
 
-  // デバッグ用ログ
   if (txResult.error) {
     console.error("transactions取得エラー:", txResult.error);
   }
-  console.log("transactions データ:", transactions.length, "件");
 
   const usageMap: Record<string, { expenses: number; pending: number }> = {};
   (transactions || []).forEach((tx: any) => {

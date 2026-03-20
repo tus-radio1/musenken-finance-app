@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import {
   Table,
@@ -77,11 +77,11 @@ export default async function AdminUsersPage() {
     );
   }
 
-  // 管理者であれば全ユーザー情報の取得はAdminクライアントで行う（RLSをバイパス）
-  const admin = createAdminClient();
-  const { data: profiles } = await admin
+  // データ取得 - uses RLS-respecting client
+  const { data: profiles } = await supabase
     .from("profiles")
     .select("id, name, student_number")
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false });
 
   // チーム連携UIは別途対応予定
@@ -91,8 +91,8 @@ export default async function AdminUsersPage() {
     .select("id, name")
     .order("name");
 
-  // 全ユーザーのロール取得
-  const { data: allUserRoles } = await admin
+  // 全ユーザーのロール取得 - uses RLS-respecting client
+  const { data: allUserRoles } = await supabase
     .from("user_roles")
     .select("user_id, roles(type, accounting_group_id)");
 
@@ -171,7 +171,6 @@ export default async function AdminUsersPage() {
                       <div className="flex justify-end gap-2">
                         <ResetPasswordButton
                           userId={profile.id}
-                          studentNumber={profile.student_number}
                         />
                         <TeamManager
                           userId={profile.id}

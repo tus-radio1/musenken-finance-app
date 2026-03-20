@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
 import { SubsidyForm } from "@/components/subsidy-form";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SubsidyItemsTable } from "@/components/subsidy-items-table";
@@ -18,7 +19,7 @@ export default async function SubsidiesPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return null;
+    redirect("/login");
   }
 
   const studentNumber = extractStudentNumberFromUser(user);
@@ -31,13 +32,14 @@ export default async function SubsidiesPage() {
     .eq("is_active", true)
     .order("name");
 
-  // 当該ユーザの支援金申請を取得
+  // 当該ユーザの支援金申請を取得 (soft-deleted records are excluded)
   const { data: subsidyItems } = await supabase
     .from("subsidy_items")
     .select(
-      "id, category, term, expense_type, name, requested_amount, approved_amount, status, justification, evidence_url, created_at, accounting_group_id, accounting_groups(name)",
+      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, created_at, accounting_group_id, accounting_groups(name)",
     )
     .eq("applicant_id", profileId!)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   // テーブル用にデータを整形
@@ -46,10 +48,12 @@ export default async function SubsidiesPage() {
     category: item.category,
     term: item.term,
     expense_type: item.expense_type,
+    income_type: item.income_type,
     name: item.name,
     requested_amount: item.requested_amount,
     approved_amount: item.approved_amount,
     status: item.status,
+    accounting_group_id: item.accounting_group_id || undefined,
     accounting_group_name: item.accounting_groups?.name || "-",
     created_at: item.created_at,
   }));

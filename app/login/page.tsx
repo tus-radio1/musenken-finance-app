@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,19 +14,17 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { deriveEmail } from "@/lib/account";
+import { loginAction } from "./actions";
 
 export default function LoginPage() {
   const router = useRouter();
   const [studentNumber, setStudentNumber] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [useCampusEmail] = useState(true);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const supabase = createClient();
 
     try {
       // 入力バリデーション（学籍番号は7桁の半角数字）
@@ -36,15 +33,13 @@ export default function LoginPage() {
         setIsLoading(false);
         return;
       }
-      // 学籍番号からメールを合成してログイン
-      const email = deriveEmail(studentNumber, useCampusEmail);
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
 
-      console.log("[auth] user signed in", data?.user);
+      // Server action with rate limiting
+      const result = await loginAction(studentNumber, password);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
 
       toast.success("ログインしました");
       router.push("/");

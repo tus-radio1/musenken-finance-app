@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { RecentApplications } from "@/components/recent-applications";
@@ -41,12 +41,10 @@ export default async function Home() {
     fyYear = fyLatest?.[0]?.year as number | undefined;
   }
 
-  const admin = createAdminClient();
-
   // 会計グループ一覧（FAB用）
   let categories: { id: string; name: string }[] = [];
   if (user) {
-    const teamData = await getUserTeams(supabase, admin, user.id);
+    const teamData = await getUserTeams(supabase, supabase, user.id);
     categories = teamData.teams;
   }
 
@@ -54,6 +52,7 @@ export default async function Home() {
   let myTxQuery = supabase
     .from("transactions")
     .select("id, date, description, amount, approval_status, created_at")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (profileId) {
@@ -69,6 +68,7 @@ export default async function Home() {
   let mySubQuery = supabase
     .from("subsidy_items")
     .select("id, name, requested_amount, status, created_at")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (profileId) {

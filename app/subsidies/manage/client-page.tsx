@@ -89,12 +89,16 @@ export function SubsidiesManageClientPage({
   accountingGroups?: { id: string; name: string }[];
   isAdmin?: boolean;
 }) {
+  const ACCOUNTING_USER_ID =
+    process.env.NEXT_PUBLIC_ACCOUNTING_SYSTEM_USER_ID ??
+    "9701edd2-bd9d-4d57-9dd6-7235686103bf";
+
   const augmentedProfiles = profiles.some(
-    (p) => p.id === "9701edd2-bd9d-4d57-9dd6-7235686103bf",
+    (p) => p.id === ACCOUNTING_USER_ID,
   )
     ? profiles
     : [
-        { id: "9701edd2-bd9d-4d57-9dd6-7235686103bf", name: "会計" },
+        { id: ACCOUNTING_USER_ID, name: "会計" },
         ...profiles,
       ];
 

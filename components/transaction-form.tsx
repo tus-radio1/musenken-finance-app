@@ -48,6 +48,10 @@ import {
 import { formSchema } from "@/lib/schema";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
+
+const ACCOUNTING_USER_ID =
+  process.env.NEXT_PUBLIC_ACCOUNTING_SYSTEM_USER_ID ??
+  "9701edd2-bd9d-4d57-9dd6-7235686103bf";
 import { Upload } from "lucide-react"; // アイコン用
 import { compressImageToWebp } from "@/lib/image";
 import { uploadReceiptAction } from "@/app/actions";
@@ -422,12 +426,12 @@ export function TransactionForm({
                 name="created_by"
                 render={({ field }) => {
                   const options = users.some(
-                    (u) => u.id === "9701edd2-bd9d-4d57-9dd6-7235686103bf",
+                    (u) => u.id === ACCOUNTING_USER_ID,
                   )
                     ? users
                     : [
                         {
-                          id: "9701edd2-bd9d-4d57-9dd6-7235686103bf",
+                          id: ACCOUNTING_USER_ID,
                           name: "会計",
                         },
                         ...users,
@@ -520,12 +524,12 @@ export function TransactionForm({
                 name="approved_by"
                 render={({ field }) => {
                   const options = users.some(
-                    (u) => u.id === "9701edd2-bd9d-4d57-9dd6-7235686103bf",
+                    (u) => u.id === ACCOUNTING_USER_ID,
                   )
                     ? users
                     : [
                         {
-                          id: "9701edd2-bd9d-4d57-9dd6-7235686103bf",
+                          id: ACCOUNTING_USER_ID,
                           name: "会計",
                         },
                         ...users,

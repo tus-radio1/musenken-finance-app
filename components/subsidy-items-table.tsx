@@ -50,6 +50,7 @@ type SubsidyItem = {
   term: number;
   expense_type: string;
   name: string;
+  income_type?: string;
   requested_amount: number;
   approved_amount: number | null;
   status: string;
@@ -96,6 +97,18 @@ const CATEGORY_EXPENSE_TYPES: Record<string, string[]> = {
   special: ["facility", "participation", "travel", "accommodation", "other"],
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: "受付中",
+  accounting_received: "受付済",
+  approved: "審査通過",
+  rejected: "却下",
+  application_in_progress: "申請中",
+  application_rejected: "申請拒否",
+  receipt_submitted: "領収書提出済",
+  paid: "返金済",
+  unexecuted: "未執行",
+};
+
 export function SubsidyItemsTable({
   items: initialItems,
   accountingGroups = [],
@@ -107,6 +120,8 @@ export function SubsidyItemsTable({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [incomeTypeFilter, setIncomeTypeFilter] = useState<string>("all");
+  const [accountingGroupFilter, setAccountingGroupFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
@@ -140,14 +155,8 @@ export function SubsidyItemsTable({
 
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.name.toLowerCase().includes(q) ||
-          item.accounting_group_name.toLowerCase().includes(q) ||
-          (CATEGORY_LABELS[item.category] || "").toLowerCase().includes(q) ||
-          (EXPENSE_TYPE_LABELS[item.expense_type] || "")
-            .toLowerCase()
-            .includes(q),
+      result = result.filter((item) =>
+        item.name.toLowerCase().includes(q),
       );
     }
 
@@ -157,6 +166,14 @@ export function SubsidyItemsTable({
 
     if (categoryFilter !== "all") {
       result = result.filter((item) => item.category === categoryFilter);
+    }
+
+    if (incomeTypeFilter !== "all") {
+      result = result.filter((item) => item.income_type === incomeTypeFilter);
+    }
+
+    if (accountingGroupFilter !== "all") {
+      result = result.filter((item) => item.accounting_group_id === accountingGroupFilter);
     }
 
     result.sort((a, b) => {
@@ -172,7 +189,7 @@ export function SubsidyItemsTable({
     });
 
     return result;
-  }, [items, searchQuery, statusFilter, categoryFilter, sortKey, sortOrder]);
+  }, [items, searchQuery, statusFilter, categoryFilter, incomeTypeFilter, accountingGroupFilter, sortKey, sortOrder]);
 
 
 
@@ -302,18 +319,18 @@ export function SubsidyItemsTable({
   return (
     <div className="space-y-4">
       {/* フィルタ・検索バー */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="項目名・会計区分で検索..."
+            placeholder="概要で検索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="種別" />
@@ -325,15 +342,40 @@ export function SubsidyItemsTable({
               <SelectItem value="special">特別支援金</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={incomeTypeFilter} onValueChange={setIncomeTypeFilter}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="支出・収入" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">支出・収入</SelectItem>
+              <SelectItem value="expense">支出</SelectItem>
+              <SelectItem value="income">収入</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={accountingGroupFilter} onValueChange={setAccountingGroupFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="会計区分" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">すべての会計区分</SelectItem>
+              {accountingGroups.map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="状態" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">すべて</SelectItem>
-              <SelectItem value="pending">申請中</SelectItem>
-              <SelectItem value="approved">承認済</SelectItem>
-              <SelectItem value="rejected">却下</SelectItem>
+              <SelectItem value="all">すべての状態</SelectItem>
+              {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                <SelectItem key={key} value={key}>
+                  {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -347,119 +389,169 @@ export function SubsidyItemsTable({
             : "条件に一致する申請がありません。"}
         </p>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 -ml-3 font-medium"
-                    onClick={() => toggleSort("created_at")}
-                  >
-                    申請日
-                    <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                  </Button>
-                </TableHead>
-                <TableHead>支援金種別</TableHead>
-                <TableHead>期</TableHead>
-                <TableHead>経費種別</TableHead>
-                <TableHead>項目名</TableHead>
-                <TableHead>会計区分</TableHead>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 -ml-3 font-medium"
-                    onClick={() => toggleSort("requested_amount")}
-                  >
-                    申請金額
-                    <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                  </Button>
-                </TableHead>
-                <TableHead>算定額</TableHead>
-                <TableHead>領収書</TableHead>
-                <TableHead className="w-[100px]">状態</TableHead>
-                <TableHead className="w-[80px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    {format(new Date(item.created_at), "yyyy/MM/dd")}
-                  </TableCell>
-                  <TableCell>
+        <>
+          {/* Mobile card view */}
+          <div className="md:hidden space-y-3">
+            {filtered.map((item) => (
+              <div
+                key={item.id}
+                className="border rounded-lg p-4 bg-card space-y-3"
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-muted-foreground">
+                      {format(new Date(item.created_at), "yyyy/MM/dd")}
+                    </div>
+                    <div className="font-medium truncate" title={item.name}>
+                      {item.name}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-semibold text-base">
+                      {formatCurrency(item.requested_amount)}
+                    </div>
+                    <StatusBadge status={item.status} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <Badge
                       variant="outline"
                       className={CATEGORY_BADGE_COLORS[item.category] || ""}
                     >
                       {CATEGORY_LABELS[item.category] || item.category}
                     </Badge>
-                  </TableCell>
-                  <TableCell>{item.term}期</TableCell>
-                  <TableCell className="text-sm">
-                    {EXPENSE_TYPE_LABELS[item.expense_type] ||
-                      item.expense_type}
-                  </TableCell>
-                  <TableCell
-                    className="max-w-[200px] truncate"
-                    title={item.name}
+                    <span className="text-xs text-muted-foreground">
+                      {item.term}期
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditClick(item)}
                   >
-                    {item.name}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-normal">
-                      {item.accounting_group_name}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-semibold">
-                    {formatCurrency(item.requested_amount)}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {item.approved_amount != null
-                      ? formatCurrency(item.approved_amount)
-                      : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {item.receipt_url ? (
-                      <a
-                        href={
-                          item.receipt_url.startsWith("http")
-                            ? item.receipt_url
-                            : publicReceiptBase
-                              ? `${publicReceiptBase}${item.receipt_url}`
-                              : "#"
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center text-blue-600 hover:underline text-xs"
-                      >
-                        <Receipt className="h-4 w-4 mr-1" />
-                        確認
-                      </a>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
-                  <TableCell className="text-right">
-                    {item.status === "pending" && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEditClick(item)}
-                      >
-                        <Edit className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </TableCell>
+                    詳細
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 -ml-3 font-medium"
+                      onClick={() => toggleSort("created_at")}
+                    >
+                      申請日
+                      <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>支援金種別</TableHead>
+                  <TableHead>期</TableHead>
+                  <TableHead>経費種別</TableHead>
+                  <TableHead>項目名</TableHead>
+                  <TableHead>会計区分</TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 -ml-3 font-medium"
+                      onClick={() => toggleSort("requested_amount")}
+                    >
+                      申請金額
+                      <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>算定額</TableHead>
+                  <TableHead>領収書</TableHead>
+                  <TableHead className="w-[100px]">状態</TableHead>
+                  <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      {format(new Date(item.created_at), "yyyy/MM/dd")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={CATEGORY_BADGE_COLORS[item.category] || ""}
+                      >
+                        {CATEGORY_LABELS[item.category] || item.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{item.term}期</TableCell>
+                    <TableCell className="text-sm">
+                      {EXPENSE_TYPE_LABELS[item.expense_type] ||
+                        item.expense_type}
+                    </TableCell>
+                    <TableCell
+                      className="max-w-[200px] truncate"
+                      title={item.name}
+                    >
+                      {item.name}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="font-normal">
+                        {item.accounting_group_name}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-semibold">
+                      {formatCurrency(item.requested_amount)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {item.approved_amount != null
+                        ? formatCurrency(item.approved_amount)
+                        : "-"}
+                    </TableCell>
+                    <TableCell>
+                      {item.receipt_url ? (
+                        <a
+                          href={
+                            item.receipt_url.startsWith("http")
+                              ? item.receipt_url
+                              : publicReceiptBase
+                                ? `${publicReceiptBase}${item.receipt_url}`
+                                : "#"
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center text-blue-600 hover:underline text-xs"
+                        >
+                          <Receipt className="h-4 w-4 mr-1" />
+                          確認
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell><StatusBadge status={item.status} /></TableCell>
+                    <TableCell className="text-right">
+                      {item.status === "pending" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditClick(item)}
+                        >
+                          <Edit className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <p className="text-xs text-muted-foreground text-right">

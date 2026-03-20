@@ -27,6 +27,8 @@ import {
   ArrowDown,
   ExternalLink,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/status-badge";
 import { ApprovalActions } from "@/components/approval-actions";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -383,134 +385,289 @@ export default function LedgerView({
               </Select>
             </div>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableHeader
-                  label="日付"
-                  sortKey="date"
-                  currentSortKey={sortKey}
-                  currentSortDir={sortDir}
-                  onSort={handleSort}
-                />
-                <SortableHeader
-                  label="申請者"
-                  sortKey="created_by_name"
-                  currentSortKey={sortKey}
-                  currentSortDir={sortDir}
-                  onSort={handleSort}
-                />
-                <SortableHeader
-                  label="概要"
-                  sortKey="description"
-                  currentSortKey={sortKey}
-                  currentSortDir={sortDir}
-                  onSort={handleSort}
-                />
-                <SortableHeader
-                  label="金額"
-                  sortKey="amount"
-                  currentSortKey={sortKey}
-                  currentSortDir={sortDir}
-                  onSort={handleSort}
-                  className="text-right"
-                />
-                <TableHead>領収書・詳細</TableHead>
-                <TableHead>備考</TableHead>
-                <SortableHeader
-                  label="承認状況"
-                  sortKey="approval_status"
-                  currentSortKey={sortKey}
-                  currentSortDir={sortDir}
-                  onSort={handleSort}
-                />
-                <SortableHeader
-                  label="承認者"
-                  sortKey="approved_by_name"
-                  currentSortKey={sortKey}
-                  currentSortDir={sortDir}
-                  onSort={handleSort}
-                />
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {processedRows.map((r) => {
+          {/* Mobile card view */}
+          <div className="md:hidden space-y-3">
+            {processedRows.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">
+                取引データがありません
+              </div>
+            ) : (
+              processedRows.map((r) => {
                 const isOwner =
                   !!currentProfileId && r.created_by === currentProfileId;
                 const canEdit =
                   isAdminOrAccounting ||
                   (isOwner && r.approval_status === "pending");
-
-                // 会計役職の削除権限は現状維持（自分が作成したデータのみ）
-                // したがって、削除できるのは「Admin」か「自分が作ったデータかつ(Admin/会計以外なら)受付中」
-                const isGeneralUserOnly =
-                  !isGlobalAdmin && !isAccountingUser && !r.is_subsidy; // is_subsidy は今回は考慮外だが念の為
-
                 let canDelete = false;
                 if (isGlobalAdmin) {
-                  // Adminのみ削除可能
                   canDelete = true;
                 }
 
                 return (
-                  <TableRow key={r.id}>
-                    <TableCell>
-                      {r.date
-                        ? new Date(r.date).toLocaleDateString("ja-JP")
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-gray-500 text-sm">
-                      {r.created_by_name || "未登録"}
-                    </TableCell>
-                    <TableCell
-                      className="min-w-[200px] max-w-[400px] break-words whitespace-normal space-x-2"
-                      title={r.description ?? undefined}
-                    >
+                  <div
+                    key={r.id}
+                    className="border rounded-lg p-4 bg-card space-y-3"
+                  >
+                    {/* Row 1: Date + Applicant | Amount */}
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs text-muted-foreground">
+                          {r.date
+                            ? new Date(r.date).toLocaleDateString("ja-JP")
+                            : "-"}
+                        </div>
+                        <div className="text-sm font-medium truncate">
+                          {r.created_by_name || "未登録"}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div
+                          className={`text-base font-semibold ${
+                            Number(r.amount) < 0
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }`}
+                        >
+                          {formatCurrency(Number(r.amount))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Description */}
+                    <div className="text-sm text-muted-foreground truncate">
                       {r.is_subsidy && (
                         <Badge
                           variant="secondary"
-                          className="mr-1 bg-blue-100 text-blue-800 hover:bg-blue-100 border-none"
+                          className="mr-1 bg-blue-100 text-blue-800 hover:bg-blue-100 border-none text-xs"
                         >
                           支援金
                         </Badge>
                       )}
                       <span>{r.description || "-"}</span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span
-                        className={
-                          Number(r.amount) < 0
-                            ? "text-red-600"
-                            : "text-green-600"
-                        }
+                    </div>
+
+                    {/* Row 3: Status badge + Actions */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="shrink-0">
+                        {r.is_subsidy ? (
+                          <StatusBadge
+                            status={r.approval_status || "pending"}
+                          />
+                        ) : (
+                          <ApprovalActions
+                            transactionId={r.id}
+                            status={r.approval_status || "pending"}
+                            canApprove={isAdminOrAccounting}
+                            isMyTransaction={isOwner}
+                            amount={Number(r.amount)}
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {/* Receipt / subsidy link */}
+                        {(() => {
+                          if (r.is_subsidy) {
+                            if (isAdminOrAccounting) {
+                              return (
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link href="/subsidies/manage">
+                                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                    支援金
+                                  </Link>
+                                </Button>
+                              );
+                            } else if (isOwner) {
+                              return (
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link href="/subsidies">
+                                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                    支援金
+                                  </Link>
+                                </Button>
+                              );
+                            }
+                            return null;
+                          }
+                          return null;
+                        })()}
+                        {r.receipt_public_url && (
+                          <Button variant="outline" size="sm" asChild>
+                            <a
+                              href={r.receipt_public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Receipt className="h-3.5 w-3.5 mr-1" />
+                              領収書
+                            </a>
+                          </Button>
+                        )}
+                        {/* Edit / Delete actions */}
+                        {!r.is_subsidy && (
+                          <TransactionRowActions
+                            transaction={r}
+                            categories={categoriesForSelected}
+                            canEdit={canEdit}
+                            canDelete={canDelete}
+                            userRole={userRoleStr}
+                            users={users}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <SortableHeader
+                    label="日付"
+                    sortKey="date"
+                    currentSortKey={sortKey}
+                    currentSortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="申請者"
+                    sortKey="created_by_name"
+                    currentSortKey={sortKey}
+                    currentSortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="概要"
+                    sortKey="description"
+                    currentSortKey={sortKey}
+                    currentSortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="金額"
+                    sortKey="amount"
+                    currentSortKey={sortKey}
+                    currentSortDir={sortDir}
+                    onSort={handleSort}
+                    className="text-right"
+                  />
+                  <TableHead>領収書・詳細</TableHead>
+                  <TableHead>備考</TableHead>
+                  <SortableHeader
+                    label="承認状況"
+                    sortKey="approval_status"
+                    currentSortKey={sortKey}
+                    currentSortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="承認者"
+                    sortKey="approved_by_name"
+                    currentSortKey={sortKey}
+                    currentSortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {processedRows.map((r) => {
+                  const isOwner =
+                    !!currentProfileId && r.created_by === currentProfileId;
+                  const canEdit =
+                    isAdminOrAccounting ||
+                    (isOwner && r.approval_status === "pending");
+
+                  // 会計役職の削除権限は現状維持（自分が作成したデータのみ）
+                  // したがって、削除できるのは「Admin」か「自分が作ったデータかつ(Admin/会計以外なら)受付中」
+                  const isGeneralUserOnly =
+                    !isGlobalAdmin && !isAccountingUser && !r.is_subsidy; // is_subsidy は今回は考慮外だが念の為
+
+                  let canDelete = false;
+                  if (isGlobalAdmin) {
+                    // Adminのみ削除可能
+                    canDelete = true;
+                  }
+
+                  return (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        {r.date
+                          ? new Date(r.date).toLocaleDateString("ja-JP")
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {r.created_by_name || "未登録"}
+                      </TableCell>
+                      <TableCell
+                        className="min-w-[200px] max-w-[400px] break-words whitespace-normal space-x-2"
+                        title={r.description ?? undefined}
                       >
-                        {formatCurrency(Number(r.amount))}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        if (r.is_subsidy) {
-                          if (isAdminOrAccounting) {
-                            return (
-                              <Link
-                                href="/subsidies/manage"
-                                className="flex items-center text-blue-600 hover:underline text-xs"
-                              >
-                                <ExternalLink className="h-4 w-4 mr-1" />
-                                支援金詳細
-                              </Link>
-                            );
-                          } else if (isOwner) {
-                            return (
-                              <Link
-                                href="/subsidies"
-                                className="flex items-center text-blue-600 hover:underline text-xs"
-                              >
-                                <ExternalLink className="h-4 w-4 mr-1" />
-                                支援金詳細
-                              </Link>
-                            );
+                        {r.is_subsidy && (
+                          <Badge
+                            variant="secondary"
+                            className="mr-1 bg-blue-100 text-blue-800 hover:bg-blue-100 border-none"
+                          >
+                            支援金
+                          </Badge>
+                        )}
+                        <span>{r.description || "-"}</span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span
+                          className={
+                            Number(r.amount) < 0
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }
+                        >
+                          {formatCurrency(Number(r.amount))}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          if (r.is_subsidy) {
+                            if (isAdminOrAccounting) {
+                              return (
+                                <Link
+                                  href="/subsidies/manage"
+                                  className="flex items-center text-blue-600 hover:underline text-xs"
+                                >
+                                  <ExternalLink className="h-4 w-4 mr-1" />
+                                  支援金詳細
+                                </Link>
+                              );
+                            } else if (isOwner) {
+                              return (
+                                <Link
+                                  href="/subsidies"
+                                  className="flex items-center text-blue-600 hover:underline text-xs"
+                                >
+                                  <ExternalLink className="h-4 w-4 mr-1" />
+                                  支援金詳細
+                                </Link>
+                              );
+                            } else if (r.receipt_public_url) {
+                              return (
+                                <a
+                                  href={r.receipt_public_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center text-blue-600 hover:underline text-xs"
+                                >
+                                  <Receipt className="h-4 w-4 mr-1" />
+                                  領収書確認
+                                </a>
+                              );
+                            } else {
+                              return (
+                                <span className="text-gray-300 text-xs">-</span>
+                              );
+                            }
                           } else if (r.receipt_public_url) {
                             return (
                               <a
@@ -520,7 +677,7 @@ export default function LedgerView({
                                 className="flex items-center text-blue-600 hover:underline text-xs"
                               >
                                 <Receipt className="h-4 w-4 mr-1" />
-                                領収書確認
+                                確認
                               </a>
                             );
                           } else {
@@ -528,62 +685,46 @@ export default function LedgerView({
                               <span className="text-gray-300 text-xs">-</span>
                             );
                           }
-                        } else if (r.receipt_public_url) {
-                          return (
-                            <a
-                              href={r.receipt_public_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center text-blue-600 hover:underline text-xs"
-                            >
-                              <Receipt className="h-4 w-4 mr-1" />
-                              確認
-                            </a>
-                          );
-                        } else {
-                          return (
-                            <span className="text-gray-300 text-xs">-</span>
-                          );
-                        }
-                      })()}
-                    </TableCell>
-                    <TableCell
-                      className="min-w-[150px] max-w-[300px] break-words whitespace-normal"
-                      title={r.remarks || ""}
-                    >
-                      {r.remarks || "-"}
-                    </TableCell>
-                    <TableCell>
-                      {!r.is_subsidy && (
-                        <ApprovalActions
-                          transactionId={r.id}
-                          status={r.approval_status || "pending"}
-                          canApprove={isAdminOrAccounting}
-                          isMyTransaction={isOwner}
-                          amount={Number(r.amount)}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-gray-500 text-sm">
-                      {r.is_subsidy ? "-" : r.approved_by_name || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {!r.is_subsidy && (
-                        <TransactionRowActions
-                          transaction={r}
-                          categories={categoriesForSelected}
-                          canEdit={canEdit}
-                          canDelete={canDelete}
-                          userRole={userRoleStr}
-                          users={users}
-                        />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                        })()}
+                      </TableCell>
+                      <TableCell
+                        className="min-w-[150px] max-w-[300px] break-words whitespace-normal"
+                        title={r.remarks || ""}
+                      >
+                        {r.remarks || "-"}
+                      </TableCell>
+                      <TableCell>
+                        {!r.is_subsidy && (
+                          <ApprovalActions
+                            transactionId={r.id}
+                            status={r.approval_status || "pending"}
+                            canApprove={isAdminOrAccounting}
+                            isMyTransaction={isOwner}
+                            amount={Number(r.amount)}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {r.is_subsidy ? "-" : r.approved_by_name || "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!r.is_subsidy && (
+                          <TransactionRowActions
+                            transaction={r}
+                            categories={categoriesForSelected}
+                            canEdit={canEdit}
+                            canDelete={canDelete}
+                            userRole={userRoleStr}
+                            users={users}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </>

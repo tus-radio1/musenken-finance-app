@@ -1,11 +1,26 @@
-import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { type NextRequest, NextResponse } from "next/server";
 
-export async function proxy(request: NextRequest) {
+const PUBLIC_PATHS = ["/login", "/api", "/_next", "/favicon.ico"];
+const STATIC_EXTENSIONS =
+  /\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|eot)$/;
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some(
+    (public_path) =>
+      pathname === public_path || pathname.startsWith(`${public_path}/`),
+  );
+}
+
+export async function proxy(request: NextRequest): Promise<NextResponse> {
+  const { pathname } = request.nextUrl;
+
+  if (STATIC_EXTENSIONS.test(pathname)) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+    request,
   });
 
   const supabase = createServerClient(
@@ -17,9 +32,7 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value),
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({
             request,
           });
@@ -31,13 +44,17 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // ユーザー情報を取得
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // ログインしておらず、かつログインページ以外にアクセスした場合
-  if (!user && !request.nextUrl.pathname.startsWith("/login")) {
+  if (user && pathname === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -49,12 +66,11 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
+     * Match all request paths except:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - images/ - public images
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

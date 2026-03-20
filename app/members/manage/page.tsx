@@ -1,5 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import {
   Card,
@@ -86,17 +86,16 @@ export default async function MembersManagePage() {
     );
   }
 
-  // --- データ取得（Admin クライアントで RLS バイパス）---
-  const admin = createAdminClient();
-
-  const { data: profiles } = await admin
+  // --- データ取得（RLS-respecting client）---
+  const { data: profiles } = await supabase
     .from("profiles")
     .select("id, name, student_number, grade")
+    .is("deleted_at", null)
     .order("grade", { ascending: false })
     .order("student_number", { ascending: true });
 
   // 全ロール一覧
-  const { data: rolesData } = await admin
+  const { data: rolesData } = await supabase
     .from("roles")
     .select("id, name")
     .order("name");
@@ -107,7 +106,7 @@ export default async function MembersManagePage() {
   }));
 
   // 全ユーザーのロール割当取得
-  const { data: allUserRoles } = await admin
+  const { data: allUserRoles } = await supabase
     .from("user_roles")
     .select("user_id, role_id, roles(name)");
 

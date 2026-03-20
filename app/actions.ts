@@ -9,6 +9,29 @@ import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
 } from "@/lib/account";
+import { logAuditEvent } from "@/lib/audit-log";
+import { uploadRateLimiter } from "@/lib/rate-limit";
+import {
+  updateTransactionStatusSchema,
+  deleteTransactionSchema,
+} from "@/lib/validations";
+
+// --- Role type used across this file ---
+type RoleRow = {
+  name?: string | null;
+  type?: string | null;
+  accounting_group_id?: string | null;
+};
+
+type UserRoleRow = {
+  roles?: RoleRow | RoleRow[] | null;
+};
+
+function flattenRoles(userRoles: UserRoleRow[] | null): RoleRow[] {
+  return (userRoles || [])
+    .map((ur) => ur.roles)
+    .filter((r): r is RoleRow => r != null && !Array.isArray(r));
+}
 
 export async function signOut() {
   const supabase = await createClient();
@@ -17,26 +40,62 @@ export async function signOut() {
 }
 
 export async function uploadReceiptAction(formData: FormData) {
+  // Authentication check
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "認証が必要です" };
+  }
+
+  // Rate limiting: 10 uploads per hour per user
+  const rateLimitResult = uploadRateLimiter.check(user.id);
+  if (!rateLimitResult.success) {
+    const retryMinutes = Math.ceil(
+      (rateLimitResult.resetAt - Date.now()) / 1000 / 60,
+    );
+    return {
+      error: `アップロード回数の上限に達しました。${retryMinutes}分後に再試行してください。`,
+    };
+  }
+
   const file = formData.get("file") as File;
   const fileName = formData.get("fileName") as string;
 
   if (!file || !fileName) {
-    return { error: "File and fileName are required" };
+    return { error: "ファイルとファイル名は必須です" };
   }
 
+  // File type validation
+  const ALLOWED_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf"];
+  if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+    return { error: "許可されていないファイル形式です（JPEG, PNG, PDFのみ）" };
+  }
+
+  // File size validation (max 10MB)
+  const MAX_FILE_SIZE = 10 * 1024 * 1024;
+  if (file.size > MAX_FILE_SIZE) {
+    return { error: "ファイルサイズが大きすぎます（最大10MB）" };
+  }
+
+  // Sanitize filename to prevent directory traversal
+  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9\-._]/g, "_");
+
+  // createAdminClient is required here to bypass storage RLS for receipt uploads
   const supabaseAdmin = createAdminClient();
 
   // upsert configuration is used in case a user updates the receipt for the same transaction
   const { error } = await supabaseAdmin.storage
     .from("receipts")
-    .upload(fileName, file, { upsert: true });
+    .upload(sanitizedFileName, file, { upsert: true });
 
   if (error) {
-    console.error("Storage upload error:", error);
+    console.error("[uploadReceiptAction] Storage upload error:", error);
     return { error: "アップロードに失敗しました" };
   }
 
-  return { success: true, filePath: fileName };
+  return { success: true, filePath: sanitizedFileName };
 }
 
 export async function updateTransactionStatus(
@@ -44,36 +103,48 @@ export async function updateTransactionStatus(
   status: "approved" | "rejected",
   reason?: string,
 ) {
+  // Validate inputs
+  const validation = updateTransactionStatusSchema.safeParse({
+    transactionId,
+    status,
+    reason,
+  });
+  if (!validation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  if (!user) return { error: "認証が必要です" };
 
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "Unauthorized" };
+  if (!profileId) return { error: "認証が必要です" };
 
-  // 取引の情報（会計グループと作成者）を取得
-  const { data: transaction } = await supabase
+  const { data: transaction, error: txFetchError } = await supabase
     .from("transactions")
-    .select("accounting_group_id, created_by")
+    .select("accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason")
     .eq("id", transactionId)
+    .is("deleted_at", null)
     .single();
 
-  if (!transaction) return { error: "Data not found" };
+  if (txFetchError || !transaction) {
+    console.error("[updateTransactionStatus] Fetch error:", txFetchError);
+    return { error: "対象のデータが見つかりません" };
+  }
 
-  // ユーザーのロールを取得（roles とのリレーション）
   const { data: userRoles } = await supabase
     .from("user_roles")
-    .select("role_id, roles(type, accounting_group_id)")
+    .select("roles(type, accounting_group_id)")
     .eq("user_id", profileId);
 
-  const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-  const isGlobalAdmin = roles.some((r: any) => r.type === "admin");
+  const roles = flattenRoles(userRoles as UserRoleRow[] | null);
+  const isGlobalAdmin = roles.some((r) => r.type === "admin");
   const isGroupLeader = roles.some(
-    (r: any) =>
+    (r) =>
       r.type === "leader" &&
       r.accounting_group_id === transaction.accounting_group_id,
   );
@@ -86,20 +157,37 @@ export async function updateTransactionStatus(
     return { error: "自分の申請を承認することはできません" };
   }
 
-  const { error } = await supabase
-    .from("transactions")
-    .update({
-      approval_status: status,
-      approved_by: profileId,
-      approved_at: new Date().toISOString(),
-      rejected_reason: reason || null,
-    })
-    .eq("id", transactionId);
+  const newStatusData = {
+    approval_status: status,
+    approved_by: profileId,
+    approved_at: new Date().toISOString(),
+    rejected_reason: reason || null,
+  };
 
-  if (error) {
-    console.error(error);
+  const { error: updateError } = await supabase
+    .from("transactions")
+    .update(newStatusData)
+    .eq("id", transactionId)
+    .is("deleted_at", null);
+
+  if (updateError) {
+    console.error("[updateTransactionStatus] Update error:", updateError);
     return { error: "ステータス更新に失敗しました" };
   }
+
+  await logAuditEvent({
+    tableName: "transactions",
+    recordId: transactionId,
+    action: "UPDATE",
+    oldData: {
+      approval_status: transaction.approval_status,
+      approved_by: transaction.approved_by,
+      approved_at: transaction.approved_at,
+      rejected_reason: transaction.rejected_reason,
+    },
+    newData: newStatusData,
+    changedBy: profileId,
+  });
 
   revalidatePath("/ledger");
   return { success: true };
@@ -109,45 +197,53 @@ export async function updateTransaction(
   id: string,
   values: z.infer<typeof formSchema> & { receipt_url?: string | null },
 ) {
+  // Validate id
+  const idValidation = z.string().uuid().safeParse(id);
+  if (!idValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
-  const supabaseAdmin = createAdminClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  if (!user) return { error: "認証が必要です" };
 
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "Unauthorized" };
+  if (!profileId) return { error: "認証が必要です" };
 
-  // 取引情報取得
-  const { data: transaction } = await supabaseAdmin
+  const { data: transaction, error: txFetchError } = await supabase
     .from("transactions")
     .select("accounting_group_id, created_by, approval_status, amount")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
-  if (!transaction) return { error: "Data not found" };
+  if (txFetchError || !transaction) {
+    console.error("[updateTransaction] Fetch error:", txFetchError);
+    return { error: "対象のデータが見つかりません" };
+  }
 
-  // ロールやユーザ情報のチェック
-  const { data: profile } = await supabaseAdmin
+  const { data: profile } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", profileId)
+    .is("deleted_at", null)
     .maybeSingle();
 
-  const { data: userRoles } = await supabaseAdmin
+  const { data: userRoles } = await supabase
     .from("user_roles")
     .select("roles(name, type, accounting_group_id)")
     .eq("user_id", profileId);
 
-  const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-  const isGlobalAdmin = roles.some((r: any) => r.type === "admin");
+  const roles = flattenRoles(userRoles as UserRoleRow[] | null);
+  const isGlobalAdmin = roles.some((r) => r.type === "admin");
   const isAccountingUser =
-    profile?.role === "accounting" || roles.some((r: any) => r.name === "会計");
+    profile?.role === "accounting" || roles.some((r) => r.name === "会計");
   const isGroupLeader = roles.some(
-    (r: any) =>
+    (r) =>
       r.type === "leader" &&
       r.accounting_group_id === transaction.accounting_group_id,
   );
@@ -162,35 +258,28 @@ export async function updateTransaction(
     return { error: "更新できませんでした（権限がない可能性があります）" };
   }
 
-  // 一般ユーザーは「受付中」のみ編集可能
   const isGeneralUserOnly =
     !isGlobalAdmin && !isAccountingUser && !isGroupLeader;
   if (isGeneralUserOnly && transaction.approval_status !== "pending") {
     return { error: "受付中以外のデータは編集できません" };
   }
 
-  // 現在の会計年度を取得
-  const { data: fy } = await supabaseAdmin
+  const { data: fy } = await supabase
     .from("fiscal_years")
     .select("year")
     .eq("is_current", true)
     .single();
 
-  // 値の更新 (一般ユーザ/会計は、日付と会計グループの変更を無視)
-  const isEditing = true; // updateTransaction なので常にtrue
-
-  // Admin だけでなく、編集権限を持つ人全員が type, date, accounting_groupなどを変更できるようにする
   const effectiveType = values.type;
   const finalAmount =
     effectiveType === "expense"
       ? -Math.abs(values.amount)
       : Math.abs(values.amount);
 
-  // toISOString() は UTC 変換するため日付がズレる。ローカル日付の YYYY-MM-DD を使用。
   const dateObj = new Date(values.date);
   const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
 
-  const updates: any = {
+  const updates: Record<string, unknown> = {
     amount: finalAmount,
     description: values.description,
     fiscal_year_id: fy?.year ?? null,
@@ -222,73 +311,99 @@ export async function updateTransaction(
     updates.approval_status = values.approval_status;
   }
 
-  const { error } = await supabaseAdmin
+  const { error: updateError } = await supabase
     .from("transactions")
     .update(updates)
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
 
-  if (error) {
-    console.error(error);
-    return { error: "更新に失敗しました（データベースエラー）" };
+  if (updateError) {
+    console.error("[updateTransaction] Update error:", updateError);
+    return { error: "更新に失敗しました。しばらくしてから再試行してください。" };
   }
+
+  await logAuditEvent({
+    tableName: "transactions",
+    recordId: id,
+    action: "UPDATE",
+    oldData: {
+      amount: transaction.amount,
+      approval_status: transaction.approval_status,
+    },
+    newData: updates,
+    changedBy: profileId,
+  });
 
   revalidatePath("/ledger");
   return { success: true };
 }
 
 export async function deleteTransaction(id: string) {
-  const supabaseAdmin = createAdminClient();
+  // Validate id
+  const validation = deleteTransactionSchema.safeParse({ id });
+  if (!validation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  if (!user) return { error: "認証が必要です" };
 
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "Unauthorized" };
+  if (!profileId) return { error: "認証が必要です" };
 
-  // 取引情報取得
-  const { data: transaction } = await supabaseAdmin
+  const { data: transaction, error: txFetchError } = await supabase
     .from("transactions")
-    .select("created_by, approval_status")
+    .select("created_by, approval_status, amount, description, accounting_group_id")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
-  if (!transaction) return { error: "Data not found" };
+  if (txFetchError || !transaction) {
+    console.error("[deleteTransaction] Fetch error:", txFetchError);
+    return { error: "対象のデータが見つかりません" };
+  }
 
-  // ロールやユーザ情報のチェック
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("role")
-    .eq("id", profileId)
-    .maybeSingle();
-
-  const { data: userRoles } = await supabaseAdmin
+  const { data: userRoles } = await supabase
     .from("user_roles")
     .select("roles(name, type)")
     .eq("user_id", profileId);
 
-  const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-  const isGlobalAdmin = roles.some((r: any) => r.type === "admin");
-  const isAccountingUser =
-    profile?.role === "accounting" || roles.some((r: any) => r.name === "会計");
+  const roles = flattenRoles(userRoles as UserRoleRow[] | null);
+  const isGlobalAdmin = roles.some((r) => r.type === "admin");
 
-  // Admin のみ削除可能
   if (!isGlobalAdmin) {
     return { error: "削除する権限がありません。" };
   }
 
-  const { error } = await supabaseAdmin
+  const { error: deleteError } = await supabase
     .from("transactions")
-    .delete()
-    .eq("id", id);
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null);
 
-  if (error) {
-    console.error(error);
-    return { error: "削除できませんでした（データベースエラー）" };
+  if (deleteError) {
+    console.error("[deleteTransaction] Delete error:", deleteError);
+    return { error: "削除に失敗しました。しばらくしてから再試行してください。" };
   }
+
+  await logAuditEvent({
+    tableName: "transactions",
+    recordId: id,
+    action: "SOFT_DELETE",
+    oldData: {
+      created_by: transaction.created_by,
+      approval_status: transaction.approval_status,
+      amount: transaction.amount,
+      description: transaction.description,
+      accounting_group_id: transaction.accounting_group_id,
+    },
+    changedBy: profileId,
+  });
 
   revalidatePath("/ledger");
   return { success: true };

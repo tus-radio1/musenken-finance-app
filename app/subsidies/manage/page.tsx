@@ -4,14 +4,15 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
-import { createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 
 export default async function SubsidiesManagePage() {
-  const admin = createAdminClient();
+  // Uses createClient() with RLS - role-based access is enforced by RLS policies
+  const supabase = await createClient();
   const [result, profilesResult, groupsResult] = await Promise.all([
     fetchAllSubsidies(),
     fetchProfilesList(),
-    admin.from("accounting_groups").select("id, name").order("name"),
+    supabase.from("accounting_groups").select("id, name").order("name"),
   ]);
 
   if (result.error) {

@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Card,
   CardContent,
@@ -67,30 +66,7 @@ export function SettingsClient({ fullName }: { fullName: string }) {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* ユーザーアイコン設定 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>プロフィール画像</CardTitle>
-          <CardDescription>
-            あなたのユーザーアイコンは名前の頭文字を使用して自動生成されます。
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-6">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src="" alt={fullName} />
-              <AvatarFallback className="text-2xl">
-                {fullName?.slice(0, 2) || "U"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="text-sm text-muted-foreground">
-              現在の設定ではアイコン画像のアップロードは無効化されています。
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+    <div className="space-y-6">
       {/* パスワード設定 */}
       <Card>
         <CardHeader>

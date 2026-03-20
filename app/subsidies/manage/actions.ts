@@ -1,10 +1,28 @@
 "use server";
 
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
 } from "@/lib/account";
+import { logAuditEvent } from "@/lib/audit-log";
+import { getAccountingUserIdSync } from "@/lib/system-config";
+import {
+  updateSubsidyStatusSchema,
+  updateSubsidyItemSchema,
+  deleteSubsidyItemSchema,
+  validateInput,
+} from "@/lib/validations";
+
+// --- Role type ---
+type RoleRow = {
+  name?: string | null;
+  type?: string | null;
+};
+
+type UserRoleRow = {
+  roles?: RoleRow | null;
+};
 
 export async function fetchAllSubsidies() {
   const supabase = await createClient();
@@ -35,12 +53,12 @@ export async function fetchAllSubsidies() {
     return { error: "権限の確認に失敗しました", data: [] };
   }
 
-  const hasAccessRole = userRoles?.some(
-    (row: any) => row.roles?.name === "会計" || row.roles?.type === "admin",
+  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
+    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
   );
 
   const isAdmin =
-    userRoles?.some((row: any) => row.roles?.type === "admin") || false;
+    (userRoles as UserRoleRow[] || []).some((row) => row.roles?.type === "admin") || false;
 
   if (!hasAccessRole) {
     return {
@@ -51,12 +69,13 @@ export async function fetchAllSubsidies() {
   }
 
   // Fetch all subsidies including applicant name and transactions
-  const adminClient = createAdminClient();
-  const { data, error } = await adminClient
+  // Uses createClient() with RLS - role-based access is enforced by RLS policies
+  const { data, error } = await supabase
     .from("subsidy_items")
     .select(
       "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
     )
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -65,7 +84,28 @@ export async function fetchAllSubsidies() {
   }
 
   // Process data to calculate actual amounts
-  const processedData = data.map((item: any) => {
+  type SubsidyRow = {
+    id: string;
+    category: string;
+    term: number;
+    expense_type: string;
+    name: string;
+    applicant_id: string;
+    accounting_group_id: string;
+    requested_amount: number;
+    approved_amount: number | null;
+    actual_amount: number | null;
+    status: string;
+    created_at: string;
+    receipt_date: string | null;
+    receipt_url: string | null;
+    remarks: string | null;
+    profiles?: { name?: string | null } | null;
+    accounting_groups?: { name?: string | null } | null;
+  };
+
+  const accountingUserId = getAccountingUserIdSync();
+  const processedData = (data as unknown as SubsidyRow[]).map((item) => {
     return {
       id: item.id,
       category: item.category,
@@ -84,7 +124,7 @@ export async function fetchAllSubsidies() {
       receipt_date: item.receipt_date,
       receipt_url: item.receipt_url,
       applicant_name:
-        item.applicant_id === "9701edd2-bd9d-4d57-9dd6-7235686103bf"
+        item.applicant_id === accountingUserId
           ? "会計"
           : item.profiles?.name || "不明",
     };
@@ -94,11 +134,13 @@ export async function fetchAllSubsidies() {
 }
 
 export async function fetchProfilesList() {
-  const admin = createAdminClient();
+  // Uses createClient() with RLS - profile list access is controlled by RLS policies
+  const supabase = await createClient();
 
-  const { data, error } = await admin
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, name")
+    .is("deleted_at", null)
     .order("name");
 
   if (error) {
@@ -110,6 +152,14 @@ export async function fetchProfilesList() {
 }
 
 export async function updateSubsidyStatus(id: string, status: string) {
+  const inputValidation = validateInput(updateSubsidyStatusSchema, {
+    id,
+    status,
+  });
+  if (!inputValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
@@ -128,34 +178,60 @@ export async function updateSubsidyStatus(id: string, status: string) {
     .select("roles(name, type)")
     .eq("user_id", profileId);
 
-  const hasAccessRole = userRoles?.some(
-    (row: any) => row.roles?.name === "会計" || row.roles?.type === "admin",
+  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
+    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
   );
 
   if (!hasAccessRole) {
     return { error: "権限がありません" };
   }
 
-  const adminClient = createAdminClient();
-  const { error } = await adminClient
+  // Uses createClient() with RLS - authorization is enforced by RLS policies
+  const { error } = await supabase
     .from("subsidy_items")
     .update({ status })
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
     console.error("updateSubsidyStatus error:", error);
     return { error: "ステータスの更新に失敗しました" };
   }
 
+  await logAuditEvent({
+    tableName: "subsidy_items",
+    recordId: id,
+    action: "UPDATE",
+    newData: { status },
+    changedBy: profileId!,
+  });
+
   if (status === "unexecuted") {
-    const { error: txError } = await adminClient
+    // Soft delete related transactions instead of physical delete
+    const { data: relatedTx, error: txError } = await supabase
       .from("transactions")
-      .delete()
-      .eq("subsidy_item_id", id);
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("subsidy_item_id", id)
+      .is("deleted_at", null)
+      .select("id");
 
     if (txError) {
-      console.error("Failed to delete related transactions:", txError);
+      console.error("Failed to soft-delete related transactions:", txError);
       return { error: "関連する出納帳データの削除に失敗しました" };
+    }
+
+    // Log audit events for each soft-deleted transaction
+    if (relatedTx) {
+      for (const tx of relatedTx) {
+        await logAuditEvent({
+          tableName: "transactions",
+          recordId: tx.id,
+          action: "SOFT_DELETE",
+          oldData: { subsidy_item_id: id },
+          newData: { deleted_at: new Date().toISOString() },
+          changedBy: profileId!,
+        });
+      }
     }
   }
 
@@ -180,6 +256,14 @@ export async function updateSubsidyItem(
     remarks?: string;
   },
 ) {
+  const inputValidation = validateInput(updateSubsidyItemSchema, {
+    id,
+    updates,
+  });
+  if (!inputValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
@@ -198,29 +282,43 @@ export async function updateSubsidyItem(
     .select("roles(name, type)")
     .eq("user_id", profileId);
 
-  const hasAccessRole = userRoles?.some(
-    (row: any) => row.roles?.name === "会計" || row.roles?.type === "admin",
+  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
+    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
   );
 
   if (!hasAccessRole) {
     return { error: "権限がありません" };
   }
 
-  const adminClient = createAdminClient();
-  const { error } = await adminClient
+  // Uses createClient() with RLS - authorization is enforced by RLS policies
+  const { error } = await supabase
     .from("subsidy_items")
     .update(updates)
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
     console.error("updateSubsidyItem error:", error);
     return { error: "申請情報の更新に失敗しました" };
   }
 
+  await logAuditEvent({
+    tableName: "subsidy_items",
+    recordId: id,
+    action: "UPDATE",
+    newData: updates as Record<string, unknown>,
+    changedBy: profileId!,
+  });
+
   return { success: true };
 }
 
 export async function deleteSubsidyItem(id: string) {
+  const inputValidation = validateInput(deleteSubsidyItemSchema, { id });
+  if (!inputValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
@@ -239,24 +337,34 @@ export async function deleteSubsidyItem(id: string) {
     .select("roles(name, type)")
     .eq("user_id", profileId);
 
-  const hasAccessRole = userRoles?.some(
-    (row: any) => row.roles?.name === "会計" || row.roles?.type === "admin",
+  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
+    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
   );
 
   if (!hasAccessRole) {
     return { error: "権限がありません" };
   }
 
-  const adminClient = createAdminClient();
-  const { error } = await adminClient
+  // Soft delete instead of physical delete
+  // Uses createClient() with RLS - authorization is enforced by RLS policies
+  const { error } = await supabase
     .from("subsidy_items")
-    .delete()
-    .eq("id", id);
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
     console.error("deleteSubsidyItem error:", error);
     return { error: "申請の削除に失敗しました" };
   }
+
+  await logAuditEvent({
+    tableName: "subsidy_items",
+    recordId: id,
+    action: "SOFT_DELETE",
+    newData: { deleted_at: new Date().toISOString() },
+    changedBy: profileId!,
+  });
 
   return { success: true };
 }

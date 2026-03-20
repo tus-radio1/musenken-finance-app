@@ -10,10 +10,6 @@ interface YearSelectorProps {
 export function YearSelector({ fiscalYears, selectedYear }: YearSelectorProps) {
   const router = useRouter();
 
-  // デバッグ用ログ
-  console.log("YearSelector - fiscalYears:", fiscalYears);
-  console.log("YearSelector - selectedYear:", selectedYear);
-
   if (!fiscalYears || fiscalYears.length === 0) {
     return (
       <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import {
   Card,
@@ -20,14 +20,14 @@ export default async function MembersManagementPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
-  const { data: profiles } = await admin
+  const { data: profiles } = await supabase
     .from("profiles")
     .select("id, name, student_number, grade")
+    .is("deleted_at", null)
     .order("grade", { ascending: false })
     .order("student_number", { ascending: true });
 
-  const { data: allUserRoles } = await admin
+  const { data: allUserRoles } = await supabase
     .from("user_roles")
     .select("user_id, roles(name, accounting_group_id)");
 
@@ -38,7 +38,6 @@ export default async function MembersManagementPage() {
 
     const addRoleName = (role: any) => {
       if (!role) return;
-      if (role.accounting_group_id) return;
       const name: string | undefined = role.name;
       if (!name) return;
       const list = roleNamesByUser[userId] || [];

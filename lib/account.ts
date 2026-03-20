@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { z } from "zod";
 
 export const createUserSchema = z.object({
@@ -20,9 +21,14 @@ export function deriveEntryYearYY(studentNumber: string): string {
   return studentNumber.slice(2, 4);
 }
 
+/** @deprecated Predictable password derivation. Use generateSecurePassword() instead. */
 export function deriveInitialPassword(studentNumber: string): string {
   const yy = deriveEntryYearYY(studentNumber);
   return `${yy}rc${studentNumber}`;
+}
+
+export function generateSecurePassword(): string {
+  return randomBytes(12).toString("base64url").slice(0, 16);
 }
 
 export function deriveEmail(studentNumber: string, useCampusEmail: boolean) {
