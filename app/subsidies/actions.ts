@@ -9,6 +9,10 @@ import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
 } from "@/lib/account";
+import {
+  updateMySubsidyItemSchema,
+  validateInput,
+} from "@/lib/validations";
 
 export async function createSubsidyItem(
   values: z.infer<typeof subsidyFormSchema>,
@@ -37,7 +41,7 @@ export async function createSubsidyItem(
     category: values.category,
     term: values.term,
     expense_type: values.expense_type,
-    income_type: values.income_type as any, // 修正された型への対応
+    income_type: values.income_type as string | undefined,
     date: format(values.date, "yyyy-MM-dd"),
     accounting_group_id: values.accounting_group_id,
     applicant_id: profileId,
@@ -77,6 +81,7 @@ export async function fetchMySubsidyItems() {
       "id, category, term, expense_type, name, requested_amount, approved_amount, status, justification, evidence_url, receipt_url, created_at, accounting_group_id, accounting_groups(name)",
     )
     .eq("applicant_id", profileId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -106,6 +111,7 @@ export async function fetchPendingSubsidyItems() {
     )
     .eq("applicant_id", profileId)
     .eq("status", "pending")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(10);
 
@@ -127,6 +133,14 @@ export async function updateMySubsidyItem(
     receipt_url?: string | null;
   },
 ) {
+  const inputValidation = validateInput(updateMySubsidyItemSchema, {
+    id,
+    values,
+  });
+  if (!inputValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
@@ -149,6 +163,7 @@ export async function updateMySubsidyItem(
     .from("subsidy_items")
     .select("status, applicant_id")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (fetchError || !item) {
@@ -163,9 +178,9 @@ export async function updateMySubsidyItem(
     return { error: "受付中以外の申請は編集できません" };
   }
 
-  const updateData: any = { ...values };
-  if (updateData.date) {
-    updateData.date = format(updateData.date, "yyyy-MM-dd");
+  const updateData: Record<string, unknown> = { ...values };
+  if (values.date) {
+    updateData.date = format(values.date, "yyyy-MM-dd");
   }
 
   const { error: updateError } = await supabase

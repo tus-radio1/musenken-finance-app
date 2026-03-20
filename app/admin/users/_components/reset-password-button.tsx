@@ -5,29 +5,28 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { adminResetPassword } from "@/app/admin/create-user";
-import { deriveInitialPassword } from "@/lib/account";
 
 export function ResetPasswordButton({
   userId,
-  studentNumber,
 }: {
   userId: string;
-  studentNumber: string;
 }) {
   const [loading, setLoading] = useState(false);
 
   const onReset = async () => {
-    if (!confirm("初期パスワードにリセットします。よろしいですか？")) return;
+    if (!confirm("パスワードをリセットします。よろしいですか？")) return;
     setLoading(true);
     try {
-      const newPw = deriveInitialPassword(studentNumber);
-      const res = await adminResetPassword(userId, newPw);
-      if ((res as any).error) {
-        toast.error((res as any).error);
+      const res = await adminResetPassword(userId);
+      if ("error" in res) {
+        toast.error(res.error);
       } else {
-        toast.success("パスワードを初期値にリセットしました");
+        toast.success(
+          `パスワードをリセットしました。新しいパスワード: ${res.newPassword}`,
+          { duration: 15000 },
+        );
       }
-    } catch (e) {
+    } catch {
       toast.error("リセットに失敗しました");
     } finally {
       setLoading(false);
@@ -41,7 +40,7 @@ export function ResetPasswordButton({
       ) : (
         <RotateCcw className="mr-2 h-4 w-4" />
       )}
-      初期PWにリセット
+      PWリセット
     </Button>
   );
 }

@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
-import { createAdminClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import LedgerView from "@/components/ledger-view";
 import { MobileSidebar } from "@/components/mobile-sidebar";
@@ -19,11 +19,14 @@ type AccountingGroup = {
 
 export default async function LedgerPage() {
   const supabase = await createClient();
-  const admin = createAdminClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
 
   let isGlobalAdmin = false;
   let isAccountingUser = false;
@@ -32,21 +35,21 @@ export default async function LedgerPage() {
 
   if (user) {
     profileId = user.id;
-    const teamData = await getUserTeams(supabase, admin, profileId);
+    const teamData = await getUserTeams(supabase, supabase, profileId);
     isGlobalAdmin = teamData.isGlobalAdmin;
     isAccountingUser = teamData.isAccountingUser;
     myTeams = teamData.teams;
   }
 
-  // 年度決定 と profiles を並列取得
+  // 年度決定 と profiles を並列取得 (RLS handles authorization for SELECT)
   const [{ data: fyCurrent }, { data: profiles }] = await Promise.all([
-    admin.from("fiscal_years").select("year").eq("is_current", true).single(),
-    admin.from("profiles").select("id, name"),
+    supabase.from("fiscal_years").select("year").eq("is_current", true).single(),
+    supabase.from("profiles").select("id, name").is("deleted_at", null),
   ]);
 
   let fyYear: number | undefined = fyCurrent?.year as number | undefined;
   if (!fyYear) {
-    const { data: fyLatest } = await admin
+    const { data: fyLatest } = await supabase
       .from("fiscal_years")
       .select("year")
       .order("year", { ascending: false })

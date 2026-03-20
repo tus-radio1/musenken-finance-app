@@ -1,6 +1,11 @@
 "use server";
 
-import { createAdminClient, createClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
+import { getAccountingUserIdSync } from "@/lib/system-config";
+import {
+  fetchLedgerTransactionsSchema,
+  validateInput,
+} from "@/lib/validations";
 
 type Role = {
   name: string | null;
@@ -18,13 +23,17 @@ export async function fetchLedgerTransactions(params: {
   accountingGroupId: string;
   fyYear?: number;
 }) {
+  const validation = validateInput(fetchLedgerTransactionsSchema, params);
+  if (!validation.success) {
+    return { error: "入力データが不正です" as const };
+  }
+
   const supabase = await createClient();
-  const admin = createAdminClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" as const };
+  if (!user) return { error: "認証が必要です" as const };
 
   const profileId = user.id;
 
@@ -55,7 +64,7 @@ export async function fetchLedgerTransactions(params: {
   // general タイプのグループは全ユーザーに公開
   let isGeneralGroup = false;
   if (!isFullAccess) {
-    const { data: groupInfo } = await admin
+    const { data: groupInfo } = await supabase
       .from("accounting_groups")
       .select("type")
       .eq("id", requestedGroupId)
@@ -69,39 +78,44 @@ export async function fetchLedgerTransactions(params: {
   );
 
   if (!isFullAccess && !isGeneralGroup && !belongsToRequested) {
-    return { error: "Forbidden" as const };
+    return { error: "アクセス権限がありません" as const };
   }
 
-  // transactions, subsidy_items, profiles, budgets を並列取得
-  let txQuery = admin
+  // transactions, subsidy_items, profiles, budgets を並列取得 (RLS handles authorization)
+  let txQuery = supabase
     .from("transactions")
     .select(
       "id, date, amount, description, accounting_group_id, approval_status, receipt_url, created_by, approved_by, rejected_reason, remarks, subsidy_item_id",
     )
     .eq("accounting_group_id", requestedGroupId)
+    .is("deleted_at", null)
     .order("date", { ascending: false });
 
   if (typeof params.fyYear !== "undefined") {
     txQuery = txQuery.eq("fiscal_year_id", params.fyYear);
   }
 
-  let subsidyQuery = admin
+  let subsidyQuery = supabase
     .from("subsidy_items")
     .select(
       "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status",
     )
     .eq("accounting_group_id", requestedGroupId)
+    .is("deleted_at", null)
     .in("status", ["approved", "receipt_submitted", "paid"]);
 
   if (typeof params.fyYear !== "undefined") {
     subsidyQuery = subsidyQuery.eq("fiscal_year_id", params.fyYear);
   }
 
-  const profilesQuery = admin.from("profiles").select("id, name");
+  const profilesQuery = supabase
+    .from("profiles")
+    .select("id, name")
+    .is("deleted_at", null);
 
   const budgetQuery =
     typeof params.fyYear !== "undefined"
-      ? admin
+      ? supabase
           .from("budgets")
           .select("amount")
           .eq("accounting_group_id", requestedGroupId)
@@ -113,7 +127,8 @@ export async function fetchLedgerTransactions(params: {
     await Promise.all([txQuery, subsidyQuery, profilesQuery, budgetQuery]);
 
   if (txResult.error) {
-    return { error: "FetchFailed" as const };
+    console.error("[fetchLedgerTransactions] Transaction fetch error:", txResult.error);
+    return { error: "データの取得に失敗しました" as const };
   }
 
   const txRows: TransactionRow[] = (txResult.data ||
@@ -134,7 +149,7 @@ export async function fetchLedgerTransactions(params: {
       return [row.id, row.name || row.id];
     }),
   );
-  profileNameMap["9701edd2-bd9d-4d57-9dd6-7235686103bf"] = "会計";
+  profileNameMap[getAccountingUserIdSync()] = "会計";
 
   // 予算額
   const budgetAmount =

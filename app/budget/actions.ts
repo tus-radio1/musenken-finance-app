@@ -6,32 +6,63 @@ import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
 } from "@/lib/account";
+import {
+  upsertBudgetSchema,
+  createFiscalYearBudgetsSchema,
+  validateInput,
+} from "@/lib/validations";
+
+// --- Role type used in this file ---
+type RoleRow = {
+  type?: string | null;
+  name?: string | null;
+  accounting_group_id?: string | null;
+};
+
+type UserRoleRow = {
+  roles?: RoleRow | RoleRow[] | null;
+};
+
+function extractRoles(userRoles: UserRoleRow[] | null): RoleRow[] {
+  return (userRoles || [])
+    .map((ur) => ur.roles)
+    .filter((r): r is RoleRow => r != null && !Array.isArray(r));
+}
 
 export async function upsertBudget(
   accountingGroupId: string,
   amount: number,
   fiscalYear?: number,
 ) {
+  const validation = validateInput(upsertBudgetSchema, {
+    accountingGroupId,
+    amount,
+    fiscalYear,
+  });
+  if (!validation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  if (!user) return { error: "認証が必要です" };
 
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "Unauthorized" };
+  if (!profileId) return { error: "認証が必要です" };
 
   // 役割確認（グローバル管理者 or 当該グループのリーダーのみ編集可）
   const { data: userRoles } = await supabase
     .from("user_roles")
     .select("roles(type, accounting_group_id)")
     .eq("user_id", profileId);
-  const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-  const isGlobalAdmin = roles.some((r: any) => r.type === "admin");
+  const roles = extractRoles(userRoles as UserRoleRow[] | null);
+  const isGlobalAdmin = roles.some((r) => r.type === "admin");
   const isGroupLeader = roles.some(
-    (r: any) =>
+    (r) =>
       r.type === "leader" && r.accounting_group_id === accountingGroupId,
   );
 
@@ -65,25 +96,26 @@ export async function upsertBudget(
     .limit(1)
     .maybeSingle();
 
+  // createAdminClient needed to bypass RLS for budget writes (no RLS write policy for budgets table)
   const adminDb = createAdminClient();
-  let error = null as any;
+  let dbError: { message: string; code?: string } | null = null;
   if (existing?.id) {
     const res = await adminDb
       .from("budgets")
       .update({ amount })
       .eq("id", existing.id);
-    error = res.error;
+    dbError = res.error;
   } else {
     const res = await adminDb.from("budgets").insert({
       accounting_group_id: accountingGroupId,
       amount,
       fiscal_year_id: fiscalYearId,
     });
-    error = res.error;
+    dbError = res.error;
   }
 
-  if (error) {
-    console.error(error);
+  if (dbError) {
+    console.error("[upsertBudget] DB error:", dbError);
     return { error: "予算の保存に失敗しました" };
   }
 
@@ -95,25 +127,33 @@ export async function createFiscalYearBudgets(
   year: number,
   budgets: { groupId: string; amount: number }[],
 ) {
+  const validation = validateInput(createFiscalYearBudgetsSchema, {
+    year,
+    budgets,
+  });
+  if (!validation.success) {
+    return { error: "入力データが不正です" };
+  }
+
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  if (!user) return { error: "認証が必要です" };
 
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "Unauthorized" };
+  if (!profileId) return { error: "認証が必要です" };
 
   // 役割確認（グローバル管理者 or 会計ロールのみ）
   const { data: userRoles } = await supabase
     .from("user_roles")
     .select("roles(name, type)")
     .eq("user_id", profileId);
-  const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-  const isGlobalAdmin = roles.some((r: any) => r.type === "admin");
-  const hasAccountingRole = roles.some((r: any) => r.name === "会計");
+  const roles = extractRoles(userRoles as UserRoleRow[] | null);
+  const isGlobalAdmin = roles.some((r) => r.type === "admin");
+  const hasAccountingRole = roles.some((r) => r.name === "会計");
 
   if (!isGlobalAdmin && !hasAccountingRole) {
     return { error: "新規年度を作成する権限がありません" };
@@ -130,7 +170,7 @@ export async function createFiscalYearBudgets(
     return { error: `${year}年度は既に存在します` };
   }
 
-  // 年度作成
+  // 年度作成 - createAdminClient needed to bypass RLS for fiscal_years/budgets writes
   const adminDb = createAdminClient();
   const { error: fyError } = await adminDb.from("fiscal_years").insert({
     year,

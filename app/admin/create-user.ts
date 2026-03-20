@@ -1,17 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { createAdminClient } from "@/utils/supabase/server";
-import { createClient } from "@/utils/supabase/server";
+import { createAdminClient, createClient } from "@/utils/supabase/server";
 import {
   createUserSchema,
   deriveEmail,
-  deriveInitialPassword,
+  generateSecurePassword,
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
-  type CreateUserInput,
 } from "@/lib/account";
+import { adminResetPasswordSchema, validateInput } from "@/lib/validations";
+import { passwordResetRateLimiter } from "@/lib/rate-limit";
+import { headers } from "next/headers";
+
+// --- Role type ---
+type UserRoleRow = {
+  roles?: { type?: string | null } | null;
+};
 
 export async function adminCreateUser(raw: unknown) {
   // 呼び出しユーザーの権限確認（admin のみ許可）
@@ -19,27 +24,31 @@ export async function adminCreateUser(raw: unknown) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" } as const;
+  if (!user) return { error: "認証が必要です" } as const;
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "Unauthorized" } as const;
+  if (!profileId) return { error: "認証が必要です" } as const;
 
   const { data: userRoles } = await supabase
     .from("user_roles")
     .select("roles(type)")
     .eq("user_id", profileId);
-  const isAdmin = (userRoles || []).some(
-    (ur: any) => ur.roles?.type === "admin"
+  const isAdmin = (userRoles as UserRoleRow[] || []).some(
+    (ur) => ur.roles?.type === "admin"
   );
-  if (!isAdmin) return { error: "Forbidden" } as const;
+  if (!isAdmin) return { error: "管理者権限が必要です" } as const;
 
-  const input = createUserSchema.parse(raw);
+  const parsed = createUserSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: "入力データが不正です" } as const;
+  }
+  const input = parsed.data;
   const admin = createAdminClient();
 
   const email = deriveEmail(input.student_number, input.useCampusEmail);
-  const password = deriveInitialPassword(input.student_number);
+  const password = generateSecurePassword();
 
-  // 1) 認証ユーザー作成（メール確認は不要とする）
+  // 1) Auth user creation - requires admin client for auth.admin.*
   const { data: created, error: createErr } = await admin.auth.admin.createUser(
     {
       email,
@@ -59,8 +68,8 @@ export async function adminCreateUser(raw: unknown) {
 
   const userId = created.user.id;
 
-  // 2) profiles に同期
-  const { error: profileErr } = await admin.from("profiles").upsert(
+  // 2) profiles に同期 - uses RLS-respecting client
+  const { error: profileErr } = await supabase.from("profiles").upsert(
     {
       id: userId,
       name: input.name,
@@ -76,40 +85,59 @@ export async function adminCreateUser(raw: unknown) {
   }
 
   revalidatePath("/admin/users");
-  return { success: true, userId } as const;
+  return { success: true, userId, initialPassword: password } as const;
 }
 
-export async function adminResetPassword(userId: string, newPassword: string) {
+export async function adminResetPassword(userId: string) {
+  const validation = validateInput(adminResetPasswordSchema, { userId });
+  if (!validation.success) {
+    return { error: "入力データが不正です" } as const;
+  }
+
+  // Rate limiting: 3 attempts per 15 minutes per IP
+  const headersList = await headers();
+  const ip =
+    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    headersList.get("x-real-ip") ||
+    "unknown";
+  const rateLimitResult = passwordResetRateLimiter.check(ip);
+  if (!rateLimitResult.success) {
+    const retryMinutes = Math.ceil(
+      (rateLimitResult.resetAt - Date.now()) / 1000 / 60,
+    );
+    return {
+      error: `パスワードリセットの試行回数上限に達しました。${retryMinutes}分後に再試行してください。`,
+    } as const;
+  }
+
   // 呼び出しユーザーの権限確認
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" } as const;
+  if (!user) return { error: "認証が必要です" } as const;
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "Unauthorized" } as const;
+  if (!profileId) return { error: "認証が必要です" } as const;
 
   const { data: userRoles } = await supabase
     .from("user_roles")
     .select("roles(type)")
     .eq("user_id", profileId);
-  const isAdmin = (userRoles || []).some(
-    (ur: any) => ur.roles?.type === "admin"
+  const isAdmin = (userRoles as UserRoleRow[] || []).some(
+    (ur) => ur.roles?.type === "admin"
   );
-  if (!isAdmin) return { error: "Forbidden" } as const;
+  if (!isAdmin) return { error: "管理者権限が必要です" } as const;
 
-  const schema = z
-    .object({ userId: z.string().uuid(), newPassword: z.string().min(8) })
-    .parse({ userId, newPassword });
+  const newPassword = generateSecurePassword();
 
   const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(schema.userId, {
-    password: schema.newPassword,
+  const { error } = await admin.auth.admin.updateUserById(validation.data.userId, {
+    password: newPassword,
   });
   if (error) {
     console.error(error);
     return { error: "パスワードの更新に失敗しました" } as const;
   }
-  return { success: true } as const;
+  return { success: true, newPassword } as const;
 }

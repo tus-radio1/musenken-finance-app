@@ -40,8 +40,11 @@ export function AddMemberDialog() {
       const res = await addMember(form);
       if ("error" in res && res.error) {
         toast.error(res.error);
-      } else {
-        toast.success("部員を追加しました");
+      } else if ("initialPassword" in res) {
+        toast.success(
+          `部員を追加しました。初期パスワード: ${res.initialPassword}`,
+          { duration: 15000 },
+        );
         setForm({ name: "", student_number: "", grade: 1 });
         setOpen(false);
       }

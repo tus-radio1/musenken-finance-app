@@ -1,4 +1,5 @@
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
 import { TransactionForm } from "@/components/transaction-form";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ApplicationsTable } from "@/components/applications-table";
@@ -15,13 +16,11 @@ export default async function ApplicationsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return null;
+    redirect("/login");
   }
 
-  const admin = createAdminClient();
-
   // 会計グループ一覧を取得
-  const teamData = await getUserTeams(supabase, admin, user.id);
+  const teamData = await getUserTeams(supabase, supabase, user.id);
   const accountingGroups = teamData.teams;
 
   // 当該ユーザの過去の申請を取得（会計グループ名付き）
@@ -31,6 +30,7 @@ export default async function ApplicationsPage() {
       "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name)",
     )
     .eq("created_by", user.id)
+    .is("deleted_at", null)
     .order("date", { ascending: false });
 
   // テーブル用にデータを整形
