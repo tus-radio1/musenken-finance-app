@@ -19,6 +19,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import type { UserProfile } from "@/components/user-nav";
 import type { LucideIcon } from "lucide-react";
+import { ROLE_TYPES, ROLE_NAMES_JA, MANAGE_MEMBER_ROLE_NAMES } from "@/lib/roles/constants";
 
 export type NavItem = {
   href: string;
@@ -130,11 +131,12 @@ export function useSidebarData() {
   }, []);
 
   // 会計ロールを持つユーザーのみが見られるナビゲーション項目
-  const hasAccountingRole = roleNames.includes("会計");
+  const hasAccountingRole = roleNames.includes(ROLE_NAMES_JA.ACCOUNTING);
   // 部長・副部長・会計・Admin ロールを持つユーザーのみ部員管理を表示
   const hasManageRole =
-    roleNames.some((n) => ["部長", "副部長", "会計"].includes(n)) ||
-    roleTypes.includes("admin");
+    roleNames.some((n) =>
+      (MANAGE_MEMBER_ROLE_NAMES as readonly string[]).includes(n),
+    ) || roleTypes.includes(ROLE_TYPES.ADMIN);
 
   const navItems: NavItem[] = [
     { href: "/", label: "ホーム", icon: Home },
@@ -142,7 +144,7 @@ export function useSidebarData() {
     { href: "/subsidies", label: "支援金申請", icon: HandCoins },
     { href: "/ledger", label: "出納帳", icon: List },
     { href: "/members", label: "部員情報", icon: Users },
-    ...(hasAccountingRole || roleTypes.includes("admin")
+    ...(hasAccountingRole || roleTypes.includes(ROLE_TYPES.ADMIN)
       ? [
           { href: "/budget", label: "予算管理", icon: PieChart },
           { href: "/subsidies/manage", label: "支援金管理", icon: HandCoins },

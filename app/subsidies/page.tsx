@@ -39,7 +39,6 @@ export default async function SubsidiesPage() {
       "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, created_at, accounting_group_id, accounting_groups(name)",
     )
     .eq("applicant_id", profileId!)
-    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   // テーブル用にデータを整形

@@ -1,33 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, createAdminClient } from "@/utils/supabase/server";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
+import { createAdminClient } from "@/utils/supabase/server";
 import {
   upsertBudgetSchema,
   createFiscalYearBudgetsSchema,
   validateInput,
 } from "@/lib/validations";
-
-// --- Role type used in this file ---
-type RoleRow = {
-  type?: string | null;
-  name?: string | null;
-  accounting_group_id?: string | null;
-};
-
-type UserRoleRow = {
-  roles?: RoleRow | RoleRow[] | null;
-};
-
-function extractRoles(userRoles: UserRoleRow[] | null): RoleRow[] {
-  return (userRoles || [])
-    .map((ur) => ur.roles)
-    .filter((r): r is RoleRow => r != null && !Array.isArray(r));
-}
+import { resolveAuthContext } from "@/lib/auth/context";
+import { getUserRoleAccess, canManageBudget } from "@/lib/roles/access";
 
 export async function upsertBudget(
   accountingGroupId: string,
@@ -43,30 +24,13 @@ export async function upsertBudget(
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "認証が必要です" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "認証が必要です" };
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
   // 役割確認（グローバル管理者 or 当該グループのリーダーのみ編集可）
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(type, accounting_group_id)")
-    .eq("user_id", profileId);
-  const roles = extractRoles(userRoles as UserRoleRow[] | null);
-  const isGlobalAdmin = roles.some((r) => r.type === "admin");
-  const isGroupLeader = roles.some(
-    (r) =>
-      r.type === "leader" && r.accounting_group_id === accountingGroupId,
-  );
-
-  if (!isGlobalAdmin && !isGroupLeader) {
+  const access = await getUserRoleAccess(auth);
+  if (!canManageBudget(access, accountingGroupId)) {
     return { error: "予算の編集権限がありません" };
   }
 
@@ -75,7 +39,7 @@ export async function upsertBudget(
   if (fiscalYear) {
     fiscalYearId = fiscalYear;
   } else {
-    const { data: fy } = await supabase
+    const { data: fy } = await auth.supabase
       .from("fiscal_years")
       .select("year")
       .eq("is_current", true)
@@ -88,7 +52,7 @@ export async function upsertBudget(
   }
 
   // 既存レコード確認
-  const { data: existing } = await supabase
+  const { data: existing } = await auth.supabase
     .from("budgets")
     .select("id")
     .eq("accounting_group_id", accountingGroupId)
@@ -135,32 +99,18 @@ export async function createFiscalYearBudgets(
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "認証が必要です" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "認証が必要です" };
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
   // 役割確認（グローバル管理者 or 会計ロールのみ）
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(name, type)")
-    .eq("user_id", profileId);
-  const roles = extractRoles(userRoles as UserRoleRow[] | null);
-  const isGlobalAdmin = roles.some((r) => r.type === "admin");
-  const hasAccountingRole = roles.some((r) => r.name === "会計");
-
-  if (!isGlobalAdmin && !hasAccountingRole) {
+  const access = await getUserRoleAccess(auth);
+  if (!access.isAdmin && !access.hasAccountingRole) {
     return { error: "新規年度を作成する権限がありません" };
   }
 
   // 年度の重複チェック
-  const { data: existing } = await supabase
+  const { data: existing } = await auth.supabase
     .from("fiscal_years")
     .select("year")
     .eq("year", year)

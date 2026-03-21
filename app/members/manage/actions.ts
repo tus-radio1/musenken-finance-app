@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/server";
 import {
   createUserSchema,
   deriveEmail,
   generateSecurePassword,
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
 } from "@/lib/account";
+import { resolveAuthContext } from "@/lib/auth/context";
+import { verifyAdmin, verifyManageMembersPermission } from "@/lib/auth/permissions";
+import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { logAuditEvent } from "@/lib/audit-log";
 import { passwordResetRateLimiter } from "@/lib/rate-limit";
 import { headers } from "next/headers";
@@ -18,48 +19,6 @@ import {
   memberIdSchema,
   validateInput,
 } from "@/lib/validations";
-
-// --- Role type ---
-type RoleRow = {
-  name?: string | null;
-  type?: string | null;
-};
-
-type UserRoleRow = {
-  roles?: RoleRow | null;
-};
-
-// --- 権限チェック ---
-async function checkManagePermission(): Promise<{
-  ok: boolean;
-  error?: string;
-}> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "認証が必要です" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { ok: false, error: "認証が必要です" };
-
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(name, type)")
-    .eq("user_id", profileId);
-
-  const hasAccess = (userRoles as UserRoleRow[] || []).some((ur) => {
-    const role = ur.roles;
-    if (!role) return false;
-    if (role.type === "admin") return true;
-    if (role.name && ["部長", "副部長", "会計"].includes(role.name)) return true;
-    return false;
-  });
-
-  if (!hasAccess) return { ok: false, error: "権限がありません" };
-  return { ok: true };
-}
 
 // --- 部員追加 ---
 export async function addMember(raw: {
@@ -72,7 +31,11 @@ export async function addMember(raw: {
     return { error: "入力データが不正です" } as const;
   }
 
-  const perm = await checkManagePermission();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error } as const;
+
+  const auth = authResult.context;
+  const perm = await verifyManageMembersPermission(auth);
   if (!perm.ok) return { error: perm.error } as const;
 
   const parsed = createUserSchema.safeParse({ ...raw, useCampusEmail: true });
@@ -81,7 +44,6 @@ export async function addMember(raw: {
   }
   const input = parsed.data;
   const admin = createAdminClient();
-  const supabase = await createClient();
 
   const email = deriveEmail(input.student_number, true);
   const password = generateSecurePassword();
@@ -107,7 +69,7 @@ export async function addMember(raw: {
   const userId = created.user.id;
 
   // 2) profiles に同期 - uses RLS-respecting client
-  const { error: profileErr } = await supabase.from("profiles").upsert(
+  const { error: profileErr } = await auth.supabase.from("profiles").upsert(
     {
       id: userId,
       name: input.name,
@@ -123,15 +85,15 @@ export async function addMember(raw: {
   }
 
   // 3) 「仮部員」ロールを自動付与 - uses RLS-respecting client
-  const { data: kariRole } = await supabase
+  const { data: kariRole } = await auth.supabase
     .from("roles")
     .select("id")
-    .eq("name", "仮部員")
+    .eq("name", ROLE_NAMES_JA.PROVISIONAL_MEMBER)
     .is("accounting_group_id", null)
     .single();
 
   if (kariRole) {
-    const { error: roleAssignErr } = await supabase
+    const { error: roleAssignErr } = await auth.supabase
       .from("user_roles")
       .insert({ user_id: userId, role_id: kariRole.id });
     if (roleAssignErr) {
@@ -160,14 +122,17 @@ export async function updateMember(
     return { error: "入力データが不正です" } as const;
   }
 
-  const perm = await checkManagePermission();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error } as const;
+
+  const auth = authResult.context;
+  const perm = await verifyManageMembersPermission(auth);
   if (!perm.ok) return { error: perm.error } as const;
 
   const admin = createAdminClient();
-  const supabase = await createClient();
 
   // 1) profiles 更新 - uses RLS-respecting client
-  const { error: profileErr } = await supabase
+  const { error: profileErr } = await auth.supabase
     .from("profiles")
     .update({
       name: data.name,
@@ -196,7 +161,7 @@ export async function updateMember(
   }
 
   // 3) ロール同期: 既存の全ロール割り当てを削除して再割り当て - uses RLS-respecting client
-  const { error: roleDelErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
+  const { error: roleDelErr } = await auth.supabase.from("user_roles").delete().eq("user_id", userId);
   if (roleDelErr) {
     console.error("[updateMember] Role deletion error:", roleDelErr);
     return { error: "ロールの更新に失敗しました" } as const;
@@ -208,7 +173,7 @@ export async function updateMember(
       user_id: userId,
       role_id: roleId,
     }));
-    const { error: insertErr } = await supabase.from("user_roles").insert(inserts);
+    const { error: insertErr } = await auth.supabase.from("user_roles").insert(inserts);
     if (insertErr) {
       console.error(insertErr);
       return { error: "ロール更新に失敗しました" } as const;
@@ -227,14 +192,17 @@ export async function retireMember(userId: string) {
     return { error: "入力データが不正です" } as const;
   }
 
-  const perm = await checkManagePermission();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error } as const;
+
+  const auth = authResult.context;
+  const perm = await verifyManageMembersPermission(auth);
   if (!perm.ok) return { error: perm.error } as const;
 
   const admin = createAdminClient();
-  const supabase = await createClient();
 
   // 1) grade を 0 に変更 - uses RLS-respecting client
-  const { error: profileErr } = await supabase
+  const { error: profileErr } = await auth.supabase
     .from("profiles")
     .update({ grade: 0, updated_at: new Date().toISOString() })
     .eq("id", userId)
@@ -245,21 +213,21 @@ export async function retireMember(userId: string) {
   }
 
   // 2) 既存ロールを全削除 - uses RLS-respecting client
-  const { error: roleDelErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
+  const { error: roleDelErr } = await auth.supabase.from("user_roles").delete().eq("user_id", userId);
   if (roleDelErr) {
     console.error("[retireMember] Role deletion error:", roleDelErr);
     return { error: "ロールの削除に失敗しました" } as const;
   }
 
   // 3) OB・OG ロールを付与 - uses RLS-respecting client
-  const { data: obRole } = await supabase
+  const { data: obRole } = await auth.supabase
     .from("roles")
     .select("id")
-    .eq("name", "OB・OG")
+    .eq("name", ROLE_NAMES_JA.ALUMNI)
     .single();
 
   if (obRole) {
-    const { error: obRoleErr } = await supabase
+    const { error: obRoleErr } = await auth.supabase
       .from("user_roles")
       .insert({ user_id: userId, role_id: obRole.id });
     if (obRoleErr) {
@@ -289,14 +257,17 @@ export async function deleteMember(userId: string) {
     return { error: "入力データが不正です" } as const;
   }
 
-  const perm = await checkManagePermission();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error } as const;
+
+  const auth = authResult.context;
+  const perm = await verifyManageMembersPermission(auth);
   if (!perm.ok) return { error: perm.error } as const;
 
-  const supabase = await createClient();
   const admin = createAdminClient();
 
   // Fetch current profile data for audit log before soft delete
-  const { data: oldProfile } = await supabase
+  const { data: oldProfile } = await auth.supabase
     .from("profiles")
     .select("*")
     .eq("id", userId)
@@ -309,7 +280,7 @@ export async function deleteMember(userId: string) {
 
   // 1) user_roles: Physical delete is acceptable for junction table rows.
   //    These are not financial records and will be recreated if the user is restored.
-  const { error: roleDelErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
+  const { error: roleDelErr } = await auth.supabase.from("user_roles").delete().eq("user_id", userId);
   if (roleDelErr) {
     console.error("[deleteMember] Role deletion error:", roleDelErr);
     return { error: "ロールの削除に失敗しました" } as const;
@@ -318,7 +289,7 @@ export async function deleteMember(userId: string) {
   // 2) profiles: Soft delete by setting deleted_at instead of physical deletion.
   //    This preserves financial record references (transactions, subsidies).
   const deletedAt = new Date().toISOString();
-  const { error: profileErr } = await supabase
+  const { error: profileErr } = await auth.supabase
     .from("profiles")
     .update({ deleted_at: deletedAt, updated_at: deletedAt })
     .eq("id", userId)
@@ -338,27 +309,15 @@ export async function deleteMember(userId: string) {
     return { error: "認証ユーザー削除に失敗しました" } as const;
   }
 
-  // 4) Audit log: Record the soft delete event
-  const {
-    data: { user: currentUser },
-  } = await supabase.auth.getUser();
-  if (currentUser) {
-    const currentStudentNumber = extractStudentNumberFromUser(currentUser);
-    const currentProfileId = await findProfileIdByStudentNumber(
-      supabase,
-      currentStudentNumber,
-    );
-    if (currentProfileId) {
-      await logAuditEvent({
-        tableName: "profiles",
-        recordId: userId,
-        action: "SOFT_DELETE",
-        oldData: oldProfile as Record<string, unknown>,
-        newData: { deleted_at: deletedAt },
-        changedBy: currentProfileId,
-      });
-    }
-  }
+  // 4) Audit log: Record the soft delete event using auth.profileId
+  await logAuditEvent({
+    tableName: "profiles",
+    recordId: userId,
+    action: "SOFT_DELETE",
+    oldData: oldProfile as Record<string, unknown>,
+    newData: { deleted_at: deletedAt },
+    changedBy: auth.profileId,
+  });
 
   revalidatePath("/members/manage");
   revalidatePath("/members");
@@ -389,25 +348,12 @@ export async function resetPasswordMember(userId: string) {
   }
 
   // Adminのみリセット可能
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "認証が必要です" } as const;
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error } as const;
 
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "認証が必要です" } as const;
-
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(type)")
-    .eq("user_id", profileId);
-
-  const isAdmin = (userRoles as UserRoleRow[] || []).some(
-    (ur) => ur.roles?.type === "admin",
-  );
-  if (!isAdmin) return { error: "管理者権限が必要です" } as const;
+  const auth = authResult.context;
+  const adminCheck = await verifyAdmin(auth);
+  if (!adminCheck.ok) return { error: adminCheck.error } as const;
 
   const newPassword = generateSecurePassword();
 

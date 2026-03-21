@@ -1,10 +1,6 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getAccountingUserIdSync } from "@/lib/system-config";
 import {
@@ -13,52 +9,17 @@ import {
   deleteSubsidyItemSchema,
   validateInput,
 } from "@/lib/validations";
-
-// --- Role type ---
-type RoleRow = {
-  name?: string | null;
-  type?: string | null;
-};
-
-type UserRoleRow = {
-  roles?: RoleRow | null;
-};
+import { resolveAuthContext } from "@/lib/auth/context";
+import { getUserRoleAccess } from "@/lib/roles/access";
 
 export async function fetchAllSubsidies() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "認証が必要です", data: [] };
-  }
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-
-  if (!profileId) {
-    return { error: "プロファイルが見つかりません", data: [] };
-  }
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error, data: [] };
+  const auth = authResult.context;
 
   // Role validation: Accounting or Admin only
-  const { data: userRoles, error: rolesError } = await supabase
-    .from("user_roles")
-    .select("roles(name, type)")
-    .eq("user_id", profileId);
-
-  if (rolesError) {
-    console.error("Fetch roles error:", rolesError);
-    return { error: "権限の確認に失敗しました", data: [] };
-  }
-
-  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
-    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
-  );
-
-  const isAdmin =
-    (userRoles as UserRoleRow[] || []).some((row) => row.roles?.type === "admin") || false;
+  const access = await getUserRoleAccess(auth);
+  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
 
   if (!hasAccessRole) {
     return {
@@ -70,12 +31,11 @@ export async function fetchAllSubsidies() {
 
   // Fetch all subsidies including applicant name and transactions
   // Uses createClient() with RLS - role-based access is enforced by RLS policies
-  const { data, error } = await supabase
+  const { data, error } = await auth.supabase
     .from("subsidy_items")
     .select(
       "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
     )
-    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -130,7 +90,7 @@ export async function fetchAllSubsidies() {
     };
   });
 
-  return { success: true, data: processedData, isAdmin };
+  return { success: true, data: processedData, isAdmin: access.isAdmin };
 }
 
 export async function fetchProfilesList() {
@@ -160,38 +120,22 @@ export async function updateSubsidyStatus(id: string, status: string) {
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "認証が必要です" };
-  }
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(name, type)")
-    .eq("user_id", profileId);
-
-  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
-    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
-  );
+  const access = await getUserRoleAccess(auth);
+  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
 
   if (!hasAccessRole) {
     return { error: "権限がありません" };
   }
 
   // Uses createClient() with RLS - authorization is enforced by RLS policies
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from("subsidy_items")
     .update({ status })
-    .eq("id", id)
-    .is("deleted_at", null);
+    .eq("id", id);
 
   if (error) {
     console.error("updateSubsidyStatus error:", error);
@@ -203,16 +147,15 @@ export async function updateSubsidyStatus(id: string, status: string) {
     recordId: id,
     action: "UPDATE",
     newData: { status },
-    changedBy: profileId!,
+    changedBy: auth.profileId,
   });
 
   if (status === "unexecuted") {
-    // Soft delete related transactions instead of physical delete
-    const { data: relatedTx, error: txError } = await supabase
+    // Physical delete related transactions
+    const { data: relatedTx, error: txError } = await auth.supabase
       .from("transactions")
-      .update({ deleted_at: new Date().toISOString() })
+      .delete()
       .eq("subsidy_item_id", id)
-      .is("deleted_at", null)
       .select("id");
 
     if (txError) {
@@ -220,18 +163,19 @@ export async function updateSubsidyStatus(id: string, status: string) {
       return { error: "関連する出納帳データの削除に失敗しました" };
     }
 
-    // Log audit events for each soft-deleted transaction
+    // Log audit events for all deleted transactions in parallel
     if (relatedTx) {
-      for (const tx of relatedTx) {
-        await logAuditEvent({
-          tableName: "transactions",
-          recordId: tx.id,
-          action: "SOFT_DELETE",
-          oldData: { subsidy_item_id: id },
-          newData: { deleted_at: new Date().toISOString() },
-          changedBy: profileId!,
-        });
-      }
+      await Promise.all(
+        relatedTx.map((tx) =>
+          logAuditEvent({
+            tableName: "transactions",
+            recordId: tx.id,
+            action: "DELETE",
+            oldData: { subsidy_item_id: id },
+            changedBy: auth.profileId,
+          }),
+        ),
+      );
     }
   }
 
@@ -264,38 +208,22 @@ export async function updateSubsidyItem(
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "認証が必要です" };
-  }
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(name, type)")
-    .eq("user_id", profileId);
-
-  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
-    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
-  );
+  const access = await getUserRoleAccess(auth);
+  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
 
   if (!hasAccessRole) {
     return { error: "権限がありません" };
   }
 
   // Uses createClient() with RLS - authorization is enforced by RLS policies
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from("subsidy_items")
     .update(updates)
-    .eq("id", id)
-    .is("deleted_at", null);
+    .eq("id", id);
 
   if (error) {
     console.error("updateSubsidyItem error:", error);
@@ -307,7 +235,7 @@ export async function updateSubsidyItem(
     recordId: id,
     action: "UPDATE",
     newData: updates as Record<string, unknown>,
-    changedBy: profileId!,
+    changedBy: auth.profileId,
   });
 
   return { success: true };
@@ -319,27 +247,12 @@ export async function deleteSubsidyItem(id: string) {
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "認証が必要です" };
-  }
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(name, type)")
-    .eq("user_id", profileId);
-
-  const hasAccessRole = (userRoles as UserRoleRow[] || []).some(
-    (row) => row.roles?.name === "会計" || row.roles?.type === "admin",
-  );
+  const access = await getUserRoleAccess(auth);
+  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
 
   if (!hasAccessRole) {
     return { error: "権限がありません" };
@@ -347,11 +260,11 @@ export async function deleteSubsidyItem(id: string) {
 
   // Soft delete instead of physical delete
   // Uses createClient() with RLS - authorization is enforced by RLS policies
-  const { error } = await supabase
+  const deletedAt = new Date().toISOString();
+  const { error } = await auth.supabase
     .from("subsidy_items")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id)
-    .is("deleted_at", null);
+    .update({ deleted_at: deletedAt })
+    .eq("id", id);
 
   if (error) {
     console.error("deleteSubsidyItem error:", error);
@@ -362,8 +275,8 @@ export async function deleteSubsidyItem(id: string) {
     tableName: "subsidy_items",
     recordId: id,
     action: "SOFT_DELETE",
-    newData: { deleted_at: new Date().toISOString() },
-    changedBy: profileId!,
+    newData: { deleted_at: deletedAt },
+    changedBy: auth.profileId,
   });
 
   return { success: true };

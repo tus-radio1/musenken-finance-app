@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { assignGroupRole, removeGroupRole } from "@/app/admin/actions";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { ROLE_TYPES } from "@/lib/roles/constants";
 
 type Props = {
   userId: string;
@@ -31,7 +32,7 @@ type Props = {
 export function TeamManager({ userId, currentTeams, allCategories }: Props) {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedRole, setSelectedRole] = useState<"general" | "leader">(
-    "general"
+    ROLE_TYPES.GENERAL as "general"
   );
   const [loading, setLoading] = useState(false);
 
@@ -95,8 +96,8 @@ export function TeamManager({ userId, currentTeams, allCategories }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="general">メンバー</SelectItem>
-                  <SelectItem value="leader">リーダー</SelectItem>
+                  <SelectItem value={ROLE_TYPES.GENERAL}>メンバー</SelectItem>
+                  <SelectItem value={ROLE_TYPES.LEADER}>リーダー</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -119,10 +120,10 @@ export function TeamManager({ userId, currentTeams, allCategories }: Props) {
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{tm.name}</span>
                     <Badge
-                      variant={tm.type === "leader" ? "default" : "secondary"}
+                      variant={tm.type === ROLE_TYPES.LEADER ? "default" : "secondary"}
                       className="text-[10px]"
                     >
-                      {tm.type === "leader" ? "リーダー" : "メンバー"}
+                      {tm.type === ROLE_TYPES.LEADER ? "リーダー" : "メンバー"}
                     </Badge>
                   </div>
                   <Button

@@ -1,14 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/utils/supabase/server";
 import { z } from "zod";
 import { format } from "date-fns";
 import { subsidyFormSchema } from "@/lib/schema";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
+import { resolveAuthContext } from "@/lib/auth/context";
 import {
   updateMySubsidyItemSchema,
   validateInput,
@@ -17,19 +13,12 @@ import {
 export async function createSubsidyItem(
   values: z.infer<typeof subsidyFormSchema>,
 ) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "ログインしてください" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "プロファイルが見つかりません" };
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
   // 現在の会計年度を取得
-  const { data: fy } = await supabase
+  const { data: fy } = await auth.supabase
     .from("fiscal_years")
     .select("year")
     .eq("is_current", true)
@@ -37,14 +26,14 @@ export async function createSubsidyItem(
 
   if (!fy) return { error: "現在の会計年度が設定されていません" };
 
-  const { error } = await supabase.from("subsidy_items").insert({
+  const { error } = await auth.supabase.from("subsidy_items").insert({
     category: values.category,
     term: values.term,
     expense_type: values.expense_type,
     income_type: values.income_type as string | undefined,
     date: format(values.date, "yyyy-MM-dd"),
     accounting_group_id: values.accounting_group_id,
-    applicant_id: profileId,
+    applicant_id: auth.profileId,
     fiscal_year_id: fy.year,
     name: values.name,
     requested_amount: values.requested_amount,
@@ -64,24 +53,16 @@ export async function createSubsidyItem(
 }
 
 export async function fetchMySubsidyItems() {
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "ログインしてください" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "プロファイルが見つかりません" };
-
-  const { data, error } = await supabase
+  const { data, error } = await auth.supabase
     .from("subsidy_items")
     .select(
       "id, category, term, expense_type, name, requested_amount, approved_amount, status, justification, evidence_url, receipt_url, created_at, accounting_group_id, accounting_groups(name)",
     )
-    .eq("applicant_id", profileId)
-    .is("deleted_at", null)
+    .eq("applicant_id", auth.profileId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -93,25 +74,17 @@ export async function fetchMySubsidyItems() {
 }
 
 export async function fetchPendingSubsidyItems() {
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { data: [] };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { data: [] };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { data: [] };
-
-  const { data, error } = await supabase
+  const { data, error } = await auth.supabase
     .from("subsidy_items")
     .select(
       "id, category, term, expense_type, name, requested_amount, status, accounting_groups(name)",
     )
-    .eq("applicant_id", profileId)
+    .eq("applicant_id", auth.profileId)
     .eq("status", "pending")
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(10);
 
@@ -141,36 +114,22 @@ export async function updateMySubsidyItem(
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "認証が必要です" };
-  }
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-
-  if (!profileId) {
-    return { error: "プロファイルが見つかりません" };
-  }
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
   // Ensure the user actually owns this subsidy item and it is currently 'pending'
-  const { data: item, error: fetchError } = await supabase
+  const { data: item, error: fetchError } = await auth.supabase
     .from("subsidy_items")
     .select("status, applicant_id")
     .eq("id", id)
-    .is("deleted_at", null)
     .single();
 
   if (fetchError || !item) {
     return { error: "支援金申請情報の取得に失敗しました" };
   }
 
-  if (item.applicant_id !== profileId) {
+  if (item.applicant_id !== auth.profileId) {
     return { error: "他人の申請は編集できません" };
   }
 
@@ -183,7 +142,7 @@ export async function updateMySubsidyItem(
     updateData.date = format(values.date, "yyyy-MM-dd");
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await auth.supabase
     .from("subsidy_items")
     .update(updateData)
     .eq("id", id);

@@ -30,7 +30,6 @@ export default async function ApplicationsPage() {
       "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name)",
     )
     .eq("created_by", user.id)
-    .is("deleted_at", null)
     .order("date", { ascending: false });
 
   // テーブル用にデータを整形
