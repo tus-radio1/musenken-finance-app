@@ -120,7 +120,7 @@ export async function fetchLedgerTransactions(params: {
 
   const txRows: TransactionRow[] = (txResult.data ||
     []) as unknown as TransactionRow[];
-  const subsidyData = subsidyResult.data;
+  const subsidyData = subsidyResult.data ?? [];
 
   // TransactionRow と 仮想行 を結合
   const combinedRows = synthesizeLedgerRows(

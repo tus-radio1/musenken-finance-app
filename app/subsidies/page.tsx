@@ -25,6 +25,32 @@ export default async function SubsidiesPage() {
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
 
+  if (!profileId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="flex h-screen">
+          <AppSidebar />
+          <div className="flex-1 flex flex-col">
+            <main className="flex-1 flex items-center justify-center p-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>プロフィールが見つかりません</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">
+                    ユーザープロフィールが登録されていません。管理者に連絡してください。
+                  </p>
+                </CardContent>
+              </Card>
+            </main>
+          </div>
+        </div>
+        <MobileSidebar />
+        <MobileBottomNav />
+      </div>
+    );
+  }
+
   // 会計グループ一覧を取得
   const { data: accountingGroups } = await supabase
     .from("accounting_groups")
@@ -38,7 +64,7 @@ export default async function SubsidiesPage() {
     .select(
       "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, created_at, accounting_group_id, accounting_groups(name)",
     )
-    .eq("applicant_id", profileId!)
+    .eq("applicant_id", profileId)
     .order("created_at", { ascending: false });
 
   // テーブル用にデータを整形

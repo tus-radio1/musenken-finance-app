@@ -29,7 +29,7 @@ export async function setGlobalAdmin(userId: string, enable: boolean) {
     .select("id")
     .eq("type", ROLE_TYPES.ADMIN)
     .is("accounting_group_id", null);
-  let roleId = globalAdminRoles?.[0]?.id as string | undefined;
+  let roleId = globalAdminRoles?.[0]?.id ?? undefined;
   if (!roleId) {
     const { data: created, error: roleErr } = await auth.supabase
       .from("roles")
@@ -100,7 +100,7 @@ export async function assignGroupRole(
   type ExistingRoleRow = { id: string; type: string };
   let targetRoleId = (existingRoles as ExistingRoleRow[] | null)?.find(
     (r) => r.type === roleType,
-  )?.id as string | undefined;
+  )?.id ?? undefined;
 
   if (!targetRoleId) {
     const { data: created, error: roleErr } = await auth.supabase

@@ -17,7 +17,7 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name")
+    .select("name")
     .eq("id", user.id)
     .single();
 
@@ -36,7 +36,7 @@ export default async function SettingsPage() {
                   </p>
                 </div>
               </div>
-              <SettingsClient fullName={profile?.full_name || ""} />
+              <SettingsClient fullName={profile?.name || ""} />
             </div>
           </main>
         </div>

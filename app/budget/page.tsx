@@ -111,9 +111,9 @@ export default async function BudgetPage({
     fyYear = parseInt(selectedYearParam, 10);
   } else {
     const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
-    fyYear = currentFY?.year as number | undefined;
+    fyYear = currentFY?.year ?? undefined;
     if (!fyYear && fiscalYears && fiscalYears.length > 0) {
-      fyYear = fiscalYears[0]?.year as number | undefined;
+      fyYear = fiscalYears[0]?.year ?? undefined;
     }
   }
 

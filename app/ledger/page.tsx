@@ -47,14 +47,14 @@ export default async function LedgerPage() {
     supabase.from("profiles").select("id, name").is("deleted_at", null),
   ]);
 
-  let fyYear: number | undefined = fyCurrent?.year as number | undefined;
+  let fyYear: number | undefined = fyCurrent?.year ?? undefined;
   if (!fyYear) {
     const { data: fyLatest } = await supabase
       .from("fiscal_years")
       .select("year")
       .order("year", { ascending: false })
       .limit(1);
-    fyYear = fyLatest?.[0]?.year as number | undefined;
+    fyYear = fyLatest?.[0]?.year ?? undefined;
   }
 
   return (
