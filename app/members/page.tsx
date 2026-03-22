@@ -53,7 +53,7 @@ export default async function MembersManagementPage() {
     };
 
     if (Array.isArray(roles)) roles.forEach(addRoleName);
-    else addRoleName(roles);
+    else if (roles) addRoleName(roles);
   });
 
   const members: MemberRow[] = profiles
