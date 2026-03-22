@@ -56,7 +56,7 @@ function extractRoleInfo(rows: RoleInfoRow[] | null | undefined) {
   (rows || []).forEach((row) => {
     const roles = row?.roles;
     if (Array.isArray(roles)) roles.forEach(pushRole);
-    else pushRole(roles);
+    else if (roles) pushRole(roles);
   });
   return { names, types };
 }
