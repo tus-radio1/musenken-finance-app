@@ -45,3 +45,6 @@ docs/
 
 # Supabase CLI cache
 supabase/.temp/
+
+# AI Agents
+.claude/logs/*
