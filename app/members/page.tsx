@@ -45,7 +45,7 @@ export default async function MembersManagementPage() {
 
     const addRoleName = (role: MemberRole) => {
       if (!role) return;
-      const name: string | undefined = role.name;
+      const name = role.name;
       if (!name) return;
       const list = roleNamesByUser[userId] || [];
       if (!list.includes(name)) list.push(name);
