@@ -48,6 +48,7 @@ import {
 import { formSchema } from "@/lib/schema";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
+import { ROLE_TYPES } from "@/lib/roles/constants";
 
 const ACCOUNTING_USER_ID =
   process.env.NEXT_PUBLIC_ACCOUNTING_SYSTEM_USER_ID ??
@@ -420,7 +421,7 @@ export function TransactionForm({
             />
 
             {/* Admin用: 申請者変更 */}
-            {initialData && userRole === "admin" && users && (
+            {initialData && userRole === ROLE_TYPES.ADMIN && users && (
               <FormField
                 control={form.control}
                 name="created_by"
@@ -465,7 +466,7 @@ export function TransactionForm({
 
             {/* Admin/Accounting用: 承認ステータス変更 */}
             {initialData &&
-              (userRole === "admin" || userRole === "accounting") && (
+              (userRole === ROLE_TYPES.ADMIN || userRole === ROLE_TYPES.ACCOUNTING) && (
                 <FormField
                   control={form.control}
                   name="approval_status"
@@ -518,7 +519,7 @@ export function TransactionForm({
               )}
 
             {/* Admin用: 承認者変更 */}
-            {initialData && userRole === "admin" && users && (
+            {initialData && userRole === ROLE_TYPES.ADMIN && users && (
               <FormField
                 control={form.control}
                 name="approved_by"

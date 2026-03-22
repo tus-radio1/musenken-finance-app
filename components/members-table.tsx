@@ -25,7 +25,7 @@ export type MemberRow = {
   id: string;
   name: string;
   student_number: string;
-  grade: number;
+  grade: number | null;
   roles: string;
 };
 
@@ -77,7 +77,9 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
   const [filterGrade, setFilterGrade] = useState<string>("all");
 
   const grades = useMemo(() => {
-    const set = new Set(members.map((m) => m.grade));
+    const set = new Set(
+      members.map((m) => m.grade).filter((g): g is number => g !== null),
+    );
     return Array.from(set).sort((a, b) => a - b);
   }, [members]);
 
@@ -122,7 +124,7 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
       let cmp = 0;
 
       if (key === "grade") {
-        cmp = a.grade - b.grade;
+        cmp = (a.grade ?? 0) - (b.grade ?? 0);
       } else {
         cmp = (a[key] ?? "").localeCompare(b[key] ?? "", "ja");
       }

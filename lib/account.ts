@@ -52,6 +52,9 @@ export function extractStudentNumberFromUser(
   return match ? match[1] : null;
 }
 
+/**
+ * @deprecated profileId === user.id. Use resolveAuthContext() from lib/auth/context.ts instead.
+ */
 export async function findProfileIdByStudentNumber(
   supabase: any,
   _studentNumber: string | null

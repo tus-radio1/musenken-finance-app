@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { setGlobalAdmin } from "@/app/admin/actions";
 import { toast } from "sonner";
+import { ROLE_TYPES } from "@/lib/roles/constants";
 
 export function UserRoleManager({
   userId,
@@ -18,15 +19,15 @@ export function UserRoleManager({
   userId: string;
   isAdmin: boolean;
 }) {
-  const [value, setValue] = useState(isAdmin ? "admin" : "general");
+  const [value, setValue] = useState<string>(isAdmin ? ROLE_TYPES.ADMIN : ROLE_TYPES.GENERAL);
   const [loading, setLoading] = useState(false);
 
   const handleChange = async (newValue: string) => {
     setLoading(true);
-    const result = await setGlobalAdmin(userId, newValue === "admin");
+    const result = await setGlobalAdmin(userId, newValue === ROLE_TYPES.ADMIN);
     if ((result as any).error) {
       toast.error("更新失敗");
-      setValue(isAdmin ? "admin" : "general");
+      setValue(isAdmin ? ROLE_TYPES.ADMIN : ROLE_TYPES.GENERAL);
     } else {
       toast.success("権限を更新しました");
       setValue(newValue);
@@ -40,8 +41,8 @@ export function UserRoleManager({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="general">一般</SelectItem>
-        <SelectItem value="admin">管理者</SelectItem>
+        <SelectItem value={ROLE_TYPES.GENERAL}>一般</SelectItem>
+        <SelectItem value={ROLE_TYPES.ADMIN}>管理者</SelectItem>
       </SelectContent>
     </Select>
   );

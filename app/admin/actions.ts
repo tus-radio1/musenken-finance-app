@@ -1,52 +1,14 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
+import { resolveAuthContext } from "@/lib/auth/context";
+import { verifyAdmin } from "@/lib/auth/permissions";
+import { ROLE_TYPES } from "@/lib/roles/constants";
 import {
   setGlobalAdminSchema,
   assignGroupRoleSchema,
   removeGroupRoleSchema,
 } from "@/lib/validations";
-
-// --- Role type ---
-type RoleRow = {
-  type?: string | null;
-};
-
-type UserRoleRow = {
-  roles?: RoleRow | null;
-};
-
-async function verifyAdmin(): Promise<{
-  ok: boolean;
-  error?: string;
-  profileId?: string;
-}> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "認証が必要です" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { ok: false, error: "認証が必要です" };
-
-  const { data: ur } = await supabase
-    .from("user_roles")
-    .select("roles(type)")
-    .eq("user_id", profileId);
-  const isAdmin = (ur as UserRoleRow[] || []).some(
-    (x) => x.roles?.type === "admin",
-  );
-  if (!isAdmin) return { ok: false, error: "管理者権限が必要です" };
-
-  return { ok: true, profileId };
-}
 
 // グローバル管理者権限の付与/解除
 export async function setGlobalAdmin(userId: string, enable: boolean) {
@@ -55,23 +17,25 @@ export async function setGlobalAdmin(userId: string, enable: boolean) {
     return { error: "入力データが不正です" };
   }
 
-  const adminCheck = await verifyAdmin();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+
+  const auth = authResult.context;
+  const adminCheck = await verifyAdmin(auth);
   if (!adminCheck.ok) return { error: adminCheck.error };
 
-  const supabase = await createClient();
-
-  const { data: globalAdminRoles } = await supabase
+  const { data: globalAdminRoles } = await auth.supabase
     .from("roles")
     .select("id")
-    .eq("type", "admin")
+    .eq("type", ROLE_TYPES.ADMIN)
     .is("accounting_group_id", null);
-  let roleId = globalAdminRoles?.[0]?.id as string | undefined;
+  let roleId = globalAdminRoles?.[0]?.id ?? undefined;
   if (!roleId) {
-    const { data: created, error: roleErr } = await supabase
+    const { data: created, error: roleErr } = await auth.supabase
       .from("roles")
       .insert({
         name: "Global Admin",
-        type: "admin",
+        type: ROLE_TYPES.ADMIN,
         accounting_group_id: null,
       })
       .select("id")
@@ -84,7 +48,7 @@ export async function setGlobalAdmin(userId: string, enable: boolean) {
   }
 
   if (enable) {
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from("user_roles")
       .insert({ user_id: userId, role_id: roleId });
     if (error) {
@@ -92,7 +56,7 @@ export async function setGlobalAdmin(userId: string, enable: boolean) {
       return { error: "権限付与に失敗しました" };
     }
   } else {
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from("user_roles")
       .delete()
       .match({ user_id: userId, role_id: roleId });
@@ -121,12 +85,14 @@ export async function assignGroupRole(
     return { error: "入力データが不正です" };
   }
 
-  const adminCheck = await verifyAdmin();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+
+  const auth = authResult.context;
+  const adminCheck = await verifyAdmin(auth);
   if (!adminCheck.ok) return { error: adminCheck.error };
 
-  const supabase = await createClient();
-
-  const { data: existingRoles } = await supabase
+  const { data: existingRoles } = await auth.supabase
     .from("roles")
     .select("id, type")
     .eq("accounting_group_id", groupId);
@@ -134,10 +100,10 @@ export async function assignGroupRole(
   type ExistingRoleRow = { id: string; type: string };
   let targetRoleId = (existingRoles as ExistingRoleRow[] | null)?.find(
     (r) => r.type === roleType,
-  )?.id as string | undefined;
+  )?.id ?? undefined;
 
   if (!targetRoleId) {
-    const { data: created, error: roleErr } = await supabase
+    const { data: created, error: roleErr } = await auth.supabase
       .from("roles")
       .insert({ name: roleType, type: roleType, accounting_group_id: groupId })
       .select("id")
@@ -153,7 +119,7 @@ export async function assignGroupRole(
     (r) => r.id,
   );
   if (roleIdsOfGroup.length > 0) {
-    const { error: delErr } = await supabase
+    const { error: delErr } = await auth.supabase
       .from("user_roles")
       .delete()
       .eq("user_id", userId)
@@ -164,7 +130,7 @@ export async function assignGroupRole(
     }
   }
 
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from("user_roles")
     .insert({ user_id: userId, role_id: targetRoleId });
   if (error) {
@@ -183,12 +149,14 @@ export async function removeGroupRole(userId: string, groupId: string) {
     return { error: "入力データが不正です" };
   }
 
-  const adminCheck = await verifyAdmin();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+
+  const auth = authResult.context;
+  const adminCheck = await verifyAdmin(auth);
   if (!adminCheck.ok) return { error: adminCheck.error };
 
-  const supabase = await createClient();
-
-  const { data: rolesOfGroup } = await supabase
+  const { data: rolesOfGroup } = await auth.supabase
     .from("roles")
     .select("id")
     .eq("accounting_group_id", groupId);
@@ -200,7 +168,7 @@ export async function removeGroupRole(userId: string, groupId: string) {
     return { success: true };
   }
 
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from("user_roles")
     .delete()
     .eq("user_id", userId)

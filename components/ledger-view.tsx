@@ -32,6 +32,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { ApprovalActions } from "@/components/approval-actions";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { ROLE_TYPES } from "@/lib/roles/constants";
 
 type Team = { id: string; name: string; type: "general" | "leader" };
 
@@ -141,10 +142,10 @@ export default function LedgerView({
   const isAdminOrAccounting = isAccountingUser || isGlobalAdmin;
 
   const userRoleStr = isGlobalAdmin
-    ? "admin"
+    ? ROLE_TYPES.ADMIN
     : isAccountingUser
-      ? "accounting"
-      : "general";
+      ? ROLE_TYPES.ACCOUNTING
+      : ROLE_TYPES.GENERAL;
 
   const handleSort = useCallback(
     (key: SortKey) => {

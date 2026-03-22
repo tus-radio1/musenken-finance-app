@@ -11,6 +11,18 @@ import {
 import { MembersTable, type MemberRow } from "@/components/members-table";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { ROLE_NAMES_JA } from "@/lib/roles/constants";
+import { fetchMemberProfiles, type MemberProfileRow } from "@/lib/profiles";
+
+type MemberRole = {
+  accounting_group_id?: string | null;
+  name?: string | null;
+};
+
+type MemberRoleRow = {
+  roles: MemberRole | MemberRole[] | null;
+  user_id: string;
+};
 
 export default async function MembersManagementPage() {
   const supabase = await createClient();
@@ -20,25 +32,20 @@ export default async function MembersManagementPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, name, student_number, grade")
-    .is("deleted_at", null)
-    .order("grade", { ascending: false })
-    .order("student_number", { ascending: true });
+  const profiles = await fetchMemberProfiles(supabase);
 
   const { data: allUserRoles } = await supabase
     .from("user_roles")
     .select("user_id, roles(name, accounting_group_id)");
 
   const roleNamesByUser: Record<string, string[]> = {};
-  (allUserRoles || []).forEach((row: any) => {
+  (allUserRoles as MemberRoleRow[] | null | undefined)?.forEach((row) => {
     const userId: string = row.user_id;
     const roles = row.roles;
 
-    const addRoleName = (role: any) => {
+    const addRoleName = (role: MemberRole) => {
       if (!role) return;
-      const name: string | undefined = role.name;
+      const name = role.name;
       if (!name) return;
       const list = roleNamesByUser[userId] || [];
       if (!list.includes(name)) list.push(name);
@@ -46,16 +53,16 @@ export default async function MembersManagementPage() {
     };
 
     if (Array.isArray(roles)) roles.forEach(addRoleName);
-    else addRoleName(roles);
+    else if (roles) addRoleName(roles);
   });
 
-  const members: MemberRow[] = (profiles || [])
-    .filter((profile: any) => {
+  const members: MemberRow[] = profiles
+    .filter((profile: MemberProfileRow) => {
       // 「会計」ロールのみを持つアカウントを除外
       const names = roleNamesByUser[profile.id] || [];
-      return !(names.length === 1 && names[0] === "会計");
+      return !(names.length === 1 && names[0] === ROLE_NAMES_JA.ACCOUNTING);
     })
-    .map((profile: any) => {
+    .map((profile: MemberProfileRow) => {
       const names = roleNamesByUser[profile.id] || [];
       return {
         id: profile.id,

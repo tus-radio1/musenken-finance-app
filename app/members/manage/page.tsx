@@ -19,11 +19,35 @@ import {
 import type { RoleOption } from "./_components/edit-member-dialog";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { ROLE_TYPES, MANAGE_MEMBER_ROLE_NAMES } from "@/lib/roles/constants";
+import {
+  fetchMemberProfiles,
+  type MemberProfileRow,
+} from "@/lib/profiles";
 
-function extractRoleInfo(rows: any[] | null | undefined) {
+type RoleInfo = {
+  name?: string | null;
+  type?: string | null;
+};
+
+type RoleInfoRow = {
+  roles: RoleInfo | RoleInfo[] | null;
+};
+
+type RoleAssignment = {
+  name?: string | null;
+};
+
+type UserRoleAssignmentRow = {
+  role_id: string;
+  roles: RoleAssignment | RoleAssignment[] | null;
+  user_id: string;
+};
+
+function extractRoleInfo(rows: RoleInfoRow[] | null | undefined) {
   const names: string[] = [];
   const types: string[] = [];
-  const pushRole = (role: any) => {
+  const pushRole = (role: RoleInfo) => {
     const name = role?.name;
     const type = role?.type;
     if (name && !names.includes(name)) names.push(name);
@@ -32,7 +56,7 @@ function extractRoleInfo(rows: any[] | null | undefined) {
   (rows || []).forEach((row) => {
     const roles = row?.roles;
     if (Array.isArray(roles)) roles.forEach(pushRole);
-    else pushRole(roles);
+    else if (roles) pushRole(roles);
   });
   return { names, types };
 }
@@ -48,19 +72,20 @@ export default async function MembersManagePage() {
   const studentNumber = extractStudentNumberFromUser(user);
   const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
 
-  let myRoleRows: any[] | null | undefined;
+  let myRoleRows: RoleInfoRow[] | null | undefined;
   if (profileId) {
     const { data } = await supabase
       .from("user_roles")
       .select("roles(name, type)")
       .eq("user_id", profileId);
-    myRoleRows = data;
+    myRoleRows = data as RoleInfoRow[] | null;
   }
 
   const roleInfo = extractRoleInfo(myRoleRows);
   const hasAccess =
-    roleInfo.names.some((name) => ["部長", "副部長", "会計"].includes(name)) ||
-    roleInfo.types.includes("admin");
+    roleInfo.names.some((name) =>
+      (MANAGE_MEMBER_ROLE_NAMES as readonly string[]).includes(name),
+    ) || roleInfo.types.includes(ROLE_TYPES.ADMIN);
 
   if (!hasAccess) {
     return (
@@ -87,12 +112,7 @@ export default async function MembersManagePage() {
   }
 
   // --- データ取得（RLS-respecting client）---
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, name, student_number, grade")
-    .is("deleted_at", null)
-    .order("grade", { ascending: false })
-    .order("student_number", { ascending: true });
+  const profiles = await fetchMemberProfiles(supabase);
 
   // 全ロール一覧
   const { data: rolesData } = await supabase
@@ -100,7 +120,9 @@ export default async function MembersManagePage() {
     .select("id, name")
     .order("name");
 
-  const allRoles: RoleOption[] = (rolesData || []).map((r: any) => ({
+  const allRoles: RoleOption[] = (
+    (rolesData as Array<{ id: string; name: string }> | null) || []
+  ).map((r) => ({
     id: r.id,
     name: r.name,
   }));
@@ -112,21 +134,22 @@ export default async function MembersManagePage() {
 
   // ユーザーごとのロール情報をマップ
   const rolesByUser: Record<string, { names: string[]; ids: string[] }> = {};
-  (allUserRoles || []).forEach((ur: any) => {
+  ((allUserRoles as UserRoleAssignmentRow[] | null) || []).forEach((ur) => {
     const userId: string = ur.user_id;
-    const role = ur.roles;
-    if (!role) return;
     const entry = rolesByUser[userId] || { names: [], ids: [] };
-    if (role.name && !entry.names.includes(role.name)) {
-      entry.names.push(role.name);
-    }
+    const roles = Array.isArray(ur.roles) ? ur.roles : ur.roles ? [ur.roles] : [];
+    roles.forEach((role) => {
+      if (role.name && !entry.names.includes(role.name)) {
+        entry.names.push(role.name);
+      }
+    });
     if (ur.role_id && !entry.ids.includes(ur.role_id)) {
       entry.ids.push(ur.role_id);
     }
     rolesByUser[userId] = entry;
   });
 
-  const members: MemberManageRow[] = (profiles || []).map((p: any) => {
+  const members: MemberManageRow[] = profiles.map((p: MemberProfileRow) => {
     const userRoles = rolesByUser[p.id] || { names: [], ids: [] };
     return {
       id: p.id,
@@ -138,7 +161,7 @@ export default async function MembersManagePage() {
     };
   });
 
-  const isAdmin = roleInfo.types.includes("admin");
+  const isAdmin = roleInfo.types.includes(ROLE_TYPES.ADMIN);
 
   return (
     <div className="min-h-screen bg-background">

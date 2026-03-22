@@ -21,6 +21,7 @@ import {
 } from "@/lib/ledger";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("ja-JP", {
@@ -55,8 +56,10 @@ export default async function BudgetPage({
       .select("roles(name, type, accounting_group_id)")
       .eq("user_id", user.id);
     const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-    isGlobalAdmin = roles.some((r: any) => r.type === "admin");
-    hasAccountingRole = roles.some((r: any) => r.name === "会計");
+    isGlobalAdmin = roles.some((r: any) => r.type === ROLE_TYPES.ADMIN);
+    hasAccountingRole = roles.some(
+      (r: any) => r.name === ROLE_NAMES_JA.ACCOUNTING,
+    );
     roles.forEach((r: any) => {
       if (r?.accounting_group_id && r?.type) {
         myGroupRoles[r.accounting_group_id] = r.type;
@@ -108,9 +111,9 @@ export default async function BudgetPage({
     fyYear = parseInt(selectedYearParam, 10);
   } else {
     const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
-    fyYear = currentFY?.year as number | undefined;
+    fyYear = currentFY?.year ?? undefined;
     if (!fyYear && fiscalYears && fiscalYears.length > 0) {
-      fyYear = fiscalYears[0]?.year as number | undefined;
+      fyYear = fiscalYears[0]?.year ?? undefined;
     }
   }
 
@@ -133,10 +136,7 @@ export default async function BudgetPage({
     console.error("budgets取得エラー:", budgetsError);
   }
   // 取引集計（支出のみ）
-  let txQuery = supabase
-    .from("transactions")
-    .select("*")
-    .is("deleted_at", null);
+  let txQuery = supabase.from("transactions").select("*");
   if (typeof fyYear !== "undefined") {
     txQuery = txQuery.eq("fiscal_year_id", fyYear);
   }
@@ -147,7 +147,6 @@ export default async function BudgetPage({
     .select(
       "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status, accounting_group_id",
     )
-    .is("deleted_at", null)
     .in("status", ["approved", "receipt_submitted", "paid"]);
 
   if (typeof fyYear !== "undefined") {
@@ -236,7 +235,7 @@ export default async function BudgetPage({
   const canEdit =
     isGlobalAdmin ||
     hasAccountingRole ||
-    Object.values(myGroupRoles).includes("leader");
+    Object.values(myGroupRoles).includes(ROLE_TYPES.LEADER);
 
   return (
     <div className="min-h-screen bg-background">

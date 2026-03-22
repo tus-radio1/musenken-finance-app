@@ -24,6 +24,7 @@ import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
 } from "@/lib/account";
+import { ROLE_TYPES, ROLE_NAMES_JA, MANAGE_MEMBER_ROLE_NAMES } from "@/lib/roles/constants";
 
 function extractRoleNames(rows: any[] | null | undefined) {
   const names: string[] = [];
@@ -61,7 +62,7 @@ export default async function AdminUsersPage() {
 
   const myRoleNames = extractRoleNames(myRoleRows);
   const hasAccess = myRoleNames.some((name) =>
-    ["会計", "部長", "副部長"].includes(name)
+    (MANAGE_MEMBER_ROLE_NAMES as readonly string[]).includes(name)
   );
 
   if (!hasAccess) {
@@ -152,7 +153,7 @@ export default async function AdminUsersPage() {
                       <UserRoleManager
                         userId={profile.id}
                         isAdmin={(rolesByUser[profile.id] || []).some(
-                          (r) => r.type === "admin"
+                          (r) => r.type === ROLE_TYPES.ADMIN
                         )}
                       />
                     </TableCell>
@@ -183,7 +184,7 @@ export default async function AdminUsersPage() {
                               return {
                                 id: r.accounting_group_id as string,
                                 name: g?.name || "",
-                                type: r.type as "general" | "leader",
+                                type: r.type as typeof ROLE_TYPES.GENERAL | typeof ROLE_TYPES.LEADER,
                               };
                             })}
                           allCategories={(accountingGroups || []).map(

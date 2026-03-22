@@ -1,17 +1,13 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
 import { getAccountingUserIdSync } from "@/lib/system-config";
 import {
   fetchLedgerTransactionsSchema,
   validateInput,
 } from "@/lib/validations";
-
-type Role = {
-  name: string | null;
-  type: string | null;
-  accounting_group_id: string | null;
-};
+import { resolveAuthContext } from "@/lib/auth/context";
+import { getUserRoleAccess } from "@/lib/roles/access";
+import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 
 import {
   TransactionRow,
@@ -28,43 +24,36 @@ export async function fetchLedgerTransactions(params: {
     return { error: "入力データが不正です" as const };
   }
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "認証が必要です" as const };
-
-  const profileId = user.id;
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
   // profile と roles を並列取得
-  const [{ data: profile }, { data: userRoles }] = await Promise.all([
-    supabase.from("profiles").select("role").eq("id", profileId).maybeSingle(),
-    supabase
-      .from("user_roles")
-      .select("roles(name, type, accounting_group_id)")
-      .eq("user_id", profileId),
+  const [{ data: profile }, access] = await Promise.all([
+    auth.supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", auth.profileId)
+      .maybeSingle(),
+    getUserRoleAccess(auth),
   ]);
 
-  const roles: Role[] = (userRoles || []).flatMap((ur) => {
-    const rr = (ur as unknown as { roles?: Role | Role[] | null }).roles;
-    if (Array.isArray(rr)) return rr;
-    return rr ? [rr] : [];
-  });
-  const isGlobalAdmin = roles.some((r) => r?.type === "admin");
   const isAccountingUser =
-    profile?.role === "accounting" || roles.some((r) => r?.name === "会計");
+    profile?.role === "accounting" || access.hasAccountingRole;
   const isFullAccess =
-    isGlobalAdmin ||
+    access.isAdmin ||
     isAccountingUser ||
-    roles.some((r) => r?.name === "部長" || r?.name === "副部長");
+    access.roles.some(
+      (r) =>
+        r.name === ROLE_NAMES_JA.CHAIR || r.name === ROLE_NAMES_JA.VICE_CHAIR,
+    );
 
   const requestedGroupId = params.accountingGroupId;
 
   // general タイプのグループは全ユーザーに公開
   let isGeneralGroup = false;
   if (!isFullAccess) {
-    const { data: groupInfo } = await supabase
+    const { data: groupInfo } = await auth.supabase
       .from("accounting_groups")
       .select("type")
       .eq("id", requestedGroupId)
@@ -73,8 +62,8 @@ export async function fetchLedgerTransactions(params: {
       (groupInfo as unknown as { type?: string } | null)?.type === "general";
   }
 
-  const belongsToRequested = roles.some(
-    (r) => r?.accounting_group_id && r.accounting_group_id === requestedGroupId,
+  const belongsToRequested = access.roles.some(
+    (r) => r.accountingGroupId && r.accountingGroupId === requestedGroupId,
   );
 
   if (!isFullAccess && !isGeneralGroup && !belongsToRequested) {
@@ -82,40 +71,38 @@ export async function fetchLedgerTransactions(params: {
   }
 
   // transactions, subsidy_items, profiles, budgets を並列取得 (RLS handles authorization)
-  let txQuery = supabase
+  let txQuery = auth.supabase
     .from("transactions")
     .select(
       "id, date, amount, description, accounting_group_id, approval_status, receipt_url, created_by, approved_by, rejected_reason, remarks, subsidy_item_id",
     )
     .eq("accounting_group_id", requestedGroupId)
-    .is("deleted_at", null)
     .order("date", { ascending: false });
 
   if (typeof params.fyYear !== "undefined") {
     txQuery = txQuery.eq("fiscal_year_id", params.fyYear);
   }
 
-  let subsidyQuery = supabase
+  let subsidyQuery = auth.supabase
     .from("subsidy_items")
     .select(
       "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status",
     )
     .eq("accounting_group_id", requestedGroupId)
-    .is("deleted_at", null)
     .in("status", ["approved", "receipt_submitted", "paid"]);
 
   if (typeof params.fyYear !== "undefined") {
     subsidyQuery = subsidyQuery.eq("fiscal_year_id", params.fyYear);
   }
 
-  const profilesQuery = supabase
+  const profilesQuery = auth.supabase
     .from("profiles")
     .select("id, name")
     .is("deleted_at", null);
 
   const budgetQuery =
     typeof params.fyYear !== "undefined"
-      ? supabase
+      ? auth.supabase
           .from("budgets")
           .select("amount")
           .eq("accounting_group_id", requestedGroupId)
@@ -133,7 +120,7 @@ export async function fetchLedgerTransactions(params: {
 
   const txRows: TransactionRow[] = (txResult.data ||
     []) as unknown as TransactionRow[];
-  const subsidyData = subsidyResult.data;
+  const subsidyData = subsidyResult.data ?? [];
 
   // TransactionRow と 仮想行 を結合
   const combinedRows = synthesizeLedgerRows(

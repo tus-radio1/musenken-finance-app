@@ -31,14 +31,14 @@ export default async function Home() {
     .eq("is_current", true)
     .single();
 
-  let fyYear: number | undefined = fyCurrent?.year as number | undefined;
+  let fyYear: number | undefined = fyCurrent?.year ?? undefined;
   if (!fyYear) {
     const { data: fyLatest } = await supabase
       .from("fiscal_years")
       .select("year")
       .order("year", { ascending: false })
       .limit(1);
-    fyYear = fyLatest?.[0]?.year as number | undefined;
+    fyYear = fyLatest?.[0]?.year ?? undefined;
   }
 
   // 会計グループ一覧（FAB用）
@@ -52,7 +52,6 @@ export default async function Home() {
   let myTxQuery = supabase
     .from("transactions")
     .select("id, date, description, amount, approval_status, created_at")
-    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (profileId) {
@@ -68,7 +67,6 @@ export default async function Home() {
   let mySubQuery = supabase
     .from("subsidy_items")
     .select("id, name, requested_amount, status, created_at")
-    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (profileId) {
@@ -95,19 +93,19 @@ export default async function Home() {
 
   const txItems: RecentItem[] = txList.map((tx) => ({
     id: tx.id,
-    date: tx.date || tx.created_at,
-    description: tx.description,
+    date: tx.date ?? tx.created_at ?? "",
+    description: tx.description ?? "",
     amount: tx.amount,
-    approval_status: tx.approval_status as string,
+    approval_status: (tx.approval_status as string) ?? "",
     source: "transaction" as const,
   }));
 
   const subItems: RecentItem[] = subList.map((s) => ({
     id: s.id,
-    date: s.created_at,
-    description: s.name,
+    date: s.created_at ?? "",
+    description: s.name ?? "",
     amount: -(s.requested_amount as number),
-    approval_status: s.status as string,
+    approval_status: (s.status as string) ?? "",
     source: "subsidy" as const,
   }));
 

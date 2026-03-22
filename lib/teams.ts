@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
 
 export type TeamInfo = {
   id: string;
@@ -32,7 +33,7 @@ export async function getUserTeams(
         .order("name"),
     ]);
 
-  isAccountingUser = profile?.role === "accounting";
+  isAccountingUser = profile?.role === ROLE_TYPES.ACCOUNTING;
 
   type Role = {
     name: string | null;
@@ -46,9 +47,9 @@ export async function getUserTeams(
     return rr ? [rr] : [];
   });
 
-  isGlobalAdmin = roles.some((r) => r.type === "admin");
+  isGlobalAdmin = roles.some((r) => r.type === ROLE_TYPES.ADMIN);
   if (!isAccountingUser) {
-    isAccountingUser = roles.some((r) => r?.name === "会計");
+    isAccountingUser = roles.some((r) => r?.name === ROLE_NAMES_JA.ACCOUNTING);
   }
 
   const safeCategories = ((categories || []) as any[]).filter(
@@ -58,24 +59,24 @@ export async function getUserTeams(
   const isFullAccess =
     isAccountingUser ||
     isGlobalAdmin ||
-    roles.some((r) => r?.name === "部長" || r?.name === "副部長");
+    roles.some((r) => r?.name === ROLE_NAMES_JA.CHAIR || r?.name === ROLE_NAMES_JA.VICE_CHAIR);
 
   if (isFullAccess) {
     safeCategories.forEach((c) => {
-      myTeams.push({ id: c.id, name: c.name, type: "general" });
+      myTeams.push({ id: c.id, name: c.name, type: ROLE_TYPES.GENERAL as "general" });
     });
   } else {
     // 全ユーザーに general タイプのグループを表示
     const { data: generalGroups } = await admin
       .from("accounting_groups")
       .select("id, name, type")
-      .eq("type", "general")
+      .eq("type", ROLE_TYPES.GENERAL)
       .eq("is_active", true)
       .order("name");
 
     (generalGroups || []).forEach((g: any) => {
       if (!myTeams.some((t) => t.id === g.id)) {
-        myTeams.push({ id: g.id, name: g.name, type: "general" });
+        myTeams.push({ id: g.id, name: g.name, type: ROLE_TYPES.GENERAL as "general" });
       }
     });
 
@@ -87,7 +88,7 @@ export async function getUserTeams(
       if (!cat) return;
       if (myTeams.some((t) => t.id === gid)) return;
       const type: "general" | "leader" =
-        r.type === "leader" ? "leader" : "general";
+        r.type === ROLE_TYPES.LEADER ? (ROLE_TYPES.LEADER as "leader") : (ROLE_TYPES.GENERAL as "general");
       myTeams.push({ id: gid, name: cat.name, type });
     });
   }

@@ -2,55 +2,35 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient, createAdminClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/server";
 import { z } from "zod";
 import { formSchema } from "@/lib/schema";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
 import { logAuditEvent } from "@/lib/audit-log";
 import { uploadRateLimiter } from "@/lib/rate-limit";
 import {
   updateTransactionStatusSchema,
   deleteTransactionSchema,
 } from "@/lib/validations";
-
-// --- Role type used across this file ---
-type RoleRow = {
-  name?: string | null;
-  type?: string | null;
-  accounting_group_id?: string | null;
-};
-
-type UserRoleRow = {
-  roles?: RoleRow | RoleRow[] | null;
-};
-
-function flattenRoles(userRoles: UserRoleRow[] | null): RoleRow[] {
-  return (userRoles || [])
-    .map((ur) => ur.roles)
-    .filter((r): r is RoleRow => r != null && !Array.isArray(r));
-}
+import { resolveAuthContext } from "@/lib/auth/context";
+import { getUserRoleAccess } from "@/lib/roles/access";
+import { ROLE_TYPES } from "@/lib/roles/constants";
 
 export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  const authResult = await resolveAuthContext();
+  if (authResult.ok) {
+    await authResult.context.supabase.auth.signOut();
+  }
   redirect("/login");
 }
 
 export async function uploadReceiptAction(formData: FormData) {
   // Authentication check
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: "認証が必要です" };
-  }
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
   // Rate limiting: 10 uploads per hour per user
-  const rateLimitResult = uploadRateLimiter.check(user.id);
+  const rateLimitResult = uploadRateLimiter.check(auth.userId);
   if (!rateLimitResult.success) {
     const retryMinutes = Math.ceil(
       (rateLimitResult.resetAt - Date.now()) / 1000 / 60,
@@ -113,22 +93,16 @@ export async function updateTransactionStatus(
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "認証が必要です" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "認証が必要です" };
-
-  const { data: transaction, error: txFetchError } = await supabase
+  const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
-    .select("accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason")
+    .select(
+      "accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason",
+    )
     .eq("id", transactionId)
-    .is("deleted_at", null)
     .single();
 
   if (txFetchError || !transaction) {
@@ -136,39 +110,33 @@ export async function updateTransactionStatus(
     return { error: "対象のデータが見つかりません" };
   }
 
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(type, accounting_group_id)")
-    .eq("user_id", profileId);
-
-  const roles = flattenRoles(userRoles as UserRoleRow[] | null);
-  const isGlobalAdmin = roles.some((r) => r.type === "admin");
-  const isGroupLeader = roles.some(
+  const access = await getUserRoleAccess(auth);
+  const isGlobalAdmin = access.isAdmin;
+  const isGroupLeader = access.roles.some(
     (r) =>
-      r.type === "leader" &&
-      r.accounting_group_id === transaction.accounting_group_id,
+      r.type === ROLE_TYPES.LEADER &&
+      r.accountingGroupId === transaction.accounting_group_id,
   );
 
   if (!isGlobalAdmin && !isGroupLeader) {
     return { error: "承認権限がありません" };
   }
 
-  if (transaction.created_by === profileId) {
+  if (transaction.created_by === auth.profileId) {
     return { error: "自分の申請を承認することはできません" };
   }
 
   const newStatusData = {
     approval_status: status,
-    approved_by: profileId,
+    approved_by: auth.profileId,
     approved_at: new Date().toISOString(),
     rejected_reason: reason || null,
   };
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await auth.supabase
     .from("transactions")
     .update(newStatusData)
-    .eq("id", transactionId)
-    .is("deleted_at", null);
+    .eq("id", transactionId);
 
   if (updateError) {
     console.error("[updateTransactionStatus] Update error:", updateError);
@@ -186,7 +154,7 @@ export async function updateTransactionStatus(
       rejected_reason: transaction.rejected_reason,
     },
     newData: newStatusData,
-    changedBy: profileId,
+    changedBy: auth.profileId,
   });
 
   revalidatePath("/ledger");
@@ -203,22 +171,14 @@ export async function updateTransaction(
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "認証が必要です" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "認証が必要です" };
-
-  const { data: transaction, error: txFetchError } = await supabase
+  const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
     .select("accounting_group_id, created_by, approval_status, amount")
     .eq("id", id)
-    .is("deleted_at", null)
     .single();
 
   if (txFetchError || !transaction) {
@@ -226,30 +186,25 @@ export async function updateTransaction(
     return { error: "対象のデータが見つかりません" };
   }
 
-  const { data: profile } = await supabase
+  const { data: profile } = await auth.supabase
     .from("profiles")
     .select("role")
-    .eq("id", profileId)
+    .eq("id", auth.profileId)
     .is("deleted_at", null)
     .maybeSingle();
 
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(name, type, accounting_group_id)")
-    .eq("user_id", profileId);
-
-  const roles = flattenRoles(userRoles as UserRoleRow[] | null);
-  const isGlobalAdmin = roles.some((r) => r.type === "admin");
+  const access = await getUserRoleAccess(auth);
+  const isGlobalAdmin = access.isAdmin;
   const isAccountingUser =
-    profile?.role === "accounting" || roles.some((r) => r.name === "会計");
-  const isGroupLeader = roles.some(
+    profile?.role === "accounting" || access.hasAccountingRole;
+  const isGroupLeader = access.roles.some(
     (r) =>
-      r.type === "leader" &&
-      r.accounting_group_id === transaction.accounting_group_id,
+      r.type === ROLE_TYPES.LEADER &&
+      r.accountingGroupId === transaction.accounting_group_id,
   );
 
   const canEdit =
-    transaction.created_by === profileId ||
+    transaction.created_by === auth.profileId ||
     isGlobalAdmin ||
     isAccountingUser ||
     isGroupLeader;
@@ -264,7 +219,7 @@ export async function updateTransaction(
     return { error: "受付中以外のデータは編集できません" };
   }
 
-  const { data: fy } = await supabase
+  const { data: fy } = await auth.supabase
     .from("fiscal_years")
     .select("year")
     .eq("is_current", true)
@@ -311,11 +266,10 @@ export async function updateTransaction(
     updates.approval_status = values.approval_status;
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await auth.supabase
     .from("transactions")
     .update(updates)
-    .eq("id", id)
-    .is("deleted_at", null);
+    .eq("id", id);
 
   if (updateError) {
     console.error("[updateTransaction] Update error:", updateError);
@@ -331,7 +285,7 @@ export async function updateTransaction(
       approval_status: transaction.approval_status,
     },
     newData: updates,
-    changedBy: profileId,
+    changedBy: auth.profileId,
   });
 
   revalidatePath("/ledger");
@@ -345,22 +299,16 @@ export async function deleteTransaction(id: string) {
     return { error: "入力データが不正です" };
   }
 
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "認証が必要です" };
-
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  if (!profileId) return { error: "認証が必要です" };
-
-  const { data: transaction, error: txFetchError } = await supabase
+  const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
-    .select("created_by, approval_status, amount, description, accounting_group_id")
+    .select(
+      "created_by, approval_status, amount, description, accounting_group_id",
+    )
     .eq("id", id)
-    .is("deleted_at", null)
     .single();
 
   if (txFetchError || !transaction) {
@@ -368,23 +316,15 @@ export async function deleteTransaction(id: string) {
     return { error: "対象のデータが見つかりません" };
   }
 
-  const { data: userRoles } = await supabase
-    .from("user_roles")
-    .select("roles(name, type)")
-    .eq("user_id", profileId);
-
-  const roles = flattenRoles(userRoles as UserRoleRow[] | null);
-  const isGlobalAdmin = roles.some((r) => r.type === "admin");
-
-  if (!isGlobalAdmin) {
+  const access = await getUserRoleAccess(auth);
+  if (!access.isAdmin) {
     return { error: "削除する権限がありません。" };
   }
 
-  const { error: deleteError } = await supabase
+  const { error: deleteError } = await auth.supabase
     .from("transactions")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id)
-    .is("deleted_at", null);
+    .delete()
+    .eq("id", id);
 
   if (deleteError) {
     console.error("[deleteTransaction] Delete error:", deleteError);
@@ -394,7 +334,7 @@ export async function deleteTransaction(id: string) {
   await logAuditEvent({
     tableName: "transactions",
     recordId: id,
-    action: "SOFT_DELETE",
+    action: "DELETE",
     oldData: {
       created_by: transaction.created_by,
       approval_status: transaction.approval_status,
@@ -402,7 +342,7 @@ export async function deleteTransaction(id: string) {
       description: transaction.description,
       accounting_group_id: transaction.accounting_group_id,
     },
-    changedBy: profileId,
+    changedBy: auth.profileId,
   });
 
   revalidatePath("/ledger");

@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Antigravity
 docs/
+
+# Supabase CLI cache
+supabase/.temp/
+
+# AI Agents
+.claude/logs/*
