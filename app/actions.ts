@@ -186,17 +186,9 @@ export async function updateTransaction(
     return { error: "対象のデータが見つかりません" };
   }
 
-  const { data: profile } = await auth.supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", auth.profileId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
   const access = await getUserRoleAccess(auth);
   const isGlobalAdmin = access.isAdmin;
-  const isAccountingUser =
-    profile?.role === "accounting" || access.hasAccountingRole;
+  const isAccountingUser = access.hasAccountingRole;
   const isGroupLeader = access.roles.some(
     (r) =>
       r.type === ROLE_TYPES.LEADER &&
