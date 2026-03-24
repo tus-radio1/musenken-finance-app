@@ -1,6 +1,5 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getAccountingUserIdSync } from "@/lib/system-config";
 import {
@@ -94,17 +93,18 @@ export async function fetchAllSubsidies() {
 }
 
 export async function fetchProfilesList() {
-  // Uses createClient() with RLS - profile list access is controlled by RLS policies
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error, data: [] };
+  const auth = authResult.context;
 
-  const { data, error } = await supabase
+  const { data, error } = await auth.supabase
     .from("profiles")
     .select("id, name")
     .is("deleted_at", null)
     .order("name");
 
   if (error) {
-    console.error("fetchProfilesList error:", error);
+    console.error("fetchProfilesList error:", JSON.stringify(error, null, 2));
     return { error: "ユーザー一覧の取得に失敗しました", data: [] };
   }
 
@@ -138,7 +138,7 @@ export async function updateSubsidyStatus(id: string, status: string) {
     .eq("id", id);
 
   if (error) {
-    console.error("updateSubsidyStatus error:", error);
+    console.error("updateSubsidyStatus error:", JSON.stringify(error, null, 2));
     return { error: "ステータスの更新に失敗しました" };
   }
 
@@ -226,7 +226,7 @@ export async function updateSubsidyItem(
     .eq("id", id);
 
   if (error) {
-    console.error("updateSubsidyItem error:", error);
+    console.error("updateSubsidyItem error:", JSON.stringify(error, null, 2));
     return { error: "申請情報の更新に失敗しました" };
   }
 
@@ -267,7 +267,7 @@ export async function deleteSubsidyItem(id: string) {
     .eq("id", id);
 
   if (error) {
-    console.error("deleteSubsidyItem error:", error);
+    console.error("deleteSubsidyItem error:", JSON.stringify(error, null, 2));
     return { error: "申請の削除に失敗しました" };
   }
 
