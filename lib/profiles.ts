@@ -10,7 +10,7 @@ type ProfileQueryError = {
 export type MemberProfileRow = {
   id: string;
   name: string;
-  student_number: string;
+  student_number: string | null;
   grade: number | null;
 };
 
