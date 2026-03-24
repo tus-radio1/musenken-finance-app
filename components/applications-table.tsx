@@ -2,7 +2,13 @@
 
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { ArrowUpDown, Search, Filter } from "lucide-react";
+import {
+  ArrowUpDown,
+  Search,
+  Filter,
+  ExternalLink,
+  ChevronDown,
+} from "lucide-react";
 
 import {
   Table,
@@ -23,6 +29,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { TransactionRowActions } from "@/components/transaction-row-actions";
 
 type Transaction = {
   id: string;
@@ -32,6 +44,9 @@ type Transaction = {
   approval_status: string;
   accounting_group_id?: string;
   accounting_group_name: string;
+  receipt_url: string | null;
+  receipt_public_url: string | null;
+  remarks: string | null;
 };
 
 type SortKey = "date" | "amount";
@@ -40,9 +55,11 @@ type SortOrder = "asc" | "desc";
 export function ApplicationsTable({
   transactions,
   accountingGroups = [],
+  isGlobalAdmin = false,
 }: {
   transactions: Transaction[];
   accountingGroups?: { id: string; name: string }[];
+  isGlobalAdmin?: boolean;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -50,6 +67,7 @@ export function ApplicationsTable({
   const [accountingGroupFilter, setAccountingGroupFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [openCards, setOpenCards] = useState<Set<string>>(new Set());
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -58,6 +76,18 @@ export function ApplicationsTable({
       setSortKey(key);
       setSortOrder("desc");
     }
+  };
+
+  const toggleCard = (id: string) => {
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const filtered = useMemo(() => {
@@ -164,7 +194,7 @@ export function ApplicationsTable({
         </div>
       </div>
 
-      {/* テーブル */}
+      {/* テーブル / カード */}
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           {transactions.length === 0
@@ -172,85 +202,261 @@ export function ApplicationsTable({
             : "条件に一致する申請がありません。"}
         </p>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[120px]">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 -ml-3 font-medium"
-                    onClick={() => toggleSort("date")}
-                  >
-                    日付
-                    <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                  </Button>
-                </TableHead>
-                <TableHead>収支</TableHead>
-                <TableHead>概要</TableHead>
-                <TableHead>会計区分</TableHead>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 -ml-3 font-medium"
-                    onClick={() => toggleSort("amount")}
-                  >
-                    金額
-                    <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                  </Button>
-                </TableHead>
-                <TableHead className="w-[100px]">状態</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell className="font-medium">
-                    {tx.date ? format(new Date(tx.date), "yyyy/MM/dd") : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {tx.amount < 0 ? (
+        <>
+          {/* PC table (xl and above) */}
+          <div className="hidden xl:block">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[120px]">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 -ml-3 font-medium"
+                        onClick={() => toggleSort("date")}
+                      >
+                        日付
+                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </TableHead>
+                    <TableHead>収支</TableHead>
+                    <TableHead>概要</TableHead>
+                    <TableHead>会計区分</TableHead>
+                    <TableHead>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 -ml-3 font-medium"
+                        onClick={() => toggleSort("amount")}
+                      >
+                        金額
+                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[100px]">状態</TableHead>
+                    <TableHead>備考</TableHead>
+                    <TableHead className="w-[80px]">領収書</TableHead>
+                    <TableHead className="w-[60px]">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((tx) => {
+                    const canEditOrDelete =
+                      isGlobalAdmin || tx.approval_status === "pending";
+                    return (
+                      <TableRow key={tx.id}>
+                        <TableCell className="font-medium">
+                          {tx.date
+                            ? format(new Date(tx.date), "yyyy/MM/dd")
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {tx.amount < 0 ? (
+                            <Badge
+                              variant="outline"
+                              className="text-red-600 border-red-200"
+                            >
+                              支出
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="text-blue-600 border-blue-200"
+                            >
+                              収入
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className="max-w-[260px] truncate"
+                          title={tx.description}
+                        >
+                          {tx.description}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-normal">
+                            {tx.accounting_group_name || "-"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell
+                          className={`font-semibold ${
+                            tx.amount < 0 ? "text-red-600" : "text-blue-600"
+                          }`}
+                        >
+                          {formatCurrency(Math.abs(tx.amount))}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={tx.approval_status} />
+                        </TableCell>
+                        <TableCell className="max-w-[200px] whitespace-pre-wrap break-words">
+                          {tx.remarks || "\u2014"}
+                        </TableCell>
+                        <TableCell>
+                          {tx.receipt_public_url ? (
+                            <Button variant="outline" size="sm" asChild>
+                              <a
+                                href={tx.receipt_public_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                表示
+                              </a>
+                            </Button>
+                          ) : (
+                            "\u2014"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {canEditOrDelete && (
+                            <TransactionRowActions
+                              transaction={tx}
+                              categories={accountingGroups}
+                              canEdit={canEditOrDelete}
+                              canDelete={canEditOrDelete}
+                            />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          {/* Mobile / Tablet card layout (below xl) */}
+          <div className="xl:hidden space-y-3">
+            {filtered.map((tx) => {
+              const canEditOrDelete =
+                isGlobalAdmin || tx.approval_status === "pending";
+              return (
+                <Collapsible
+                  key={tx.id}
+                  open={openCards.has(tx.id)}
+                  onOpenChange={() => toggleCard(tx.id)}
+                >
+                  <div className="border rounded-lg p-4 bg-card space-y-3">
+                    {/* Header row: date + amount */}
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs text-muted-foreground">
+                          {tx.date
+                            ? format(new Date(tx.date), "yyyy/MM/dd")
+                            : "-"}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div
+                          className={`text-base font-semibold ${
+                            tx.amount < 0 ? "text-red-600" : "text-blue-600"
+                          }`}
+                        >
+                          {formatCurrency(Math.abs(tx.amount))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Second row: description + accounting_group */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm truncate flex-1">
+                        {tx.description}
+                      </span>
                       <Badge
                         variant="outline"
-                        className="text-red-600 border-red-200"
+                        className="font-normal shrink-0"
                       >
-                        支出
+                        {tx.accounting_group_name || "-"}
                       </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="text-blue-600 border-blue-200"
-                      >
-                        収入
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell
-                    className="max-w-[260px] truncate"
-                    title={tx.description}
-                  >
-                    {tx.description}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-normal">
-                      {tx.accounting_group_name || "-"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell
-                    className={`font-semibold ${
-                      tx.amount < 0 ? "text-red-600" : "text-blue-600"
-                    }`}
-                  >
-                    {formatCurrency(Math.abs(tx.amount))}
-                  </TableCell>
-                  <TableCell><StatusBadge status={tx.approval_status} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                    </div>
+
+                    {/* Third row: income/expense badge + status badge */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {tx.amount < 0 ? (
+                          <Badge
+                            variant="outline"
+                            className="text-red-600 border-red-200"
+                          >
+                            支出
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-blue-600 border-blue-200"
+                          >
+                            収入
+                          </Badge>
+                        )}
+                        <StatusBadge status={tx.approval_status} />
+                      </div>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 px-2">
+                          詳細
+                          <ChevronDown
+                            className={`ml-1 h-3.5 w-3.5 transition-transform ${
+                              openCards.has(tx.id) ? "rotate-180" : ""
+                            }`}
+                          />
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
+
+                    {/* Collapsible details */}
+                    <CollapsibleContent className="space-y-3 pt-1">
+                      {/* Remarks */}
+                      <div className="text-sm">
+                        <span className="text-muted-foreground font-medium">
+                          備考:{" "}
+                        </span>
+                        <span className="whitespace-pre-wrap break-words">{tx.remarks || "\u2014"}</span>
+                      </div>
+
+                      {/* Receipt link */}
+                      <div className="text-sm">
+                        <span className="text-muted-foreground font-medium">
+                          領収書:{" "}
+                        </span>
+                        {tx.receipt_public_url ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7"
+                            asChild
+                          >
+                            <a
+                              href={tx.receipt_public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                              表示
+                            </a>
+                          </Button>
+                        ) : (
+                          <span>{"\u2014"}</span>
+                        )}
+                      </div>
+
+                      {/* Action buttons (edit/delete) */}
+                      {canEditOrDelete && (
+                        <div className="flex items-center gap-1 pt-1">
+                          <TransactionRowActions
+                            transaction={tx}
+                            categories={accountingGroups}
+                            canEdit={canEditOrDelete}
+                            canDelete={canEditOrDelete}
+                          />
+                        </div>
+                      )}
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* 件数表示 */}
