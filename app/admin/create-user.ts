@@ -68,7 +68,7 @@ export async function adminCreateUser(raw: unknown) {
     return { error: "プロフィール作成に失敗しました" } as const;
   }
 
-  revalidatePath("/admin/users");
+  revalidatePath("/members/manage");
   return { success: true, userId, initialPassword: password } as const;
 }
 
