@@ -368,7 +368,7 @@ export function ManageMembersClient({
                       member={{
                         id: member.id,
                         name: member.name,
-                        student_number: member.student_number,
+                        student_number: member.student_number ?? "",
                         grade: member.grade,
                         role_ids: member.role_ids,
                       }}
