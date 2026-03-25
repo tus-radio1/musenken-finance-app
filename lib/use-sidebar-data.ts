@@ -101,6 +101,7 @@ export function useSidebarData() {
             .select("id, name, category, requested_amount, status")
             .eq("applicant_id", profileId)
             .eq("status", "pending")
+            .is("deleted_at", null)
             .order("created_at", { ascending: false })
             .limit(5);
           if (active) setPendingSubsidies(pendingSubs || []);

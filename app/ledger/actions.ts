@@ -80,7 +80,8 @@ export async function fetchLedgerTransactions(params: {
       "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status",
     )
     .eq("accounting_group_id", requestedGroupId)
-    .in("status", ["approved", "receipt_submitted", "paid"]);
+    .in("status", ["approved", "receipt_submitted", "paid"])
+    .is("deleted_at", null);
 
   if (typeof params.fyYear !== "undefined") {
     subsidyQuery = subsidyQuery.eq("fiscal_year_id", params.fyYear);

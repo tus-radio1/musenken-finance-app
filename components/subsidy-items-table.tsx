@@ -117,6 +117,11 @@ export function SubsidyItemsTable({
   accountingGroups?: { id: string; name: string }[];
 }) {
   const [items, setItems] = useState<SubsidyItem[]>(initialItems);
+
+  useEffect(() => {
+    setItems(initialItems);
+  }, [initialItems]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");

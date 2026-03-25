@@ -8,6 +8,7 @@ import {
   deleteSubsidyItemSchema,
   validateInput,
 } from "@/lib/validations";
+import { revalidatePath } from "next/cache";
 import { resolveAuthContext } from "@/lib/auth/context";
 import { getUserRoleAccess } from "@/lib/roles/access";
 
@@ -35,6 +36,7 @@ export async function fetchAllSubsidies() {
     .select(
       "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
     )
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -135,7 +137,8 @@ export async function updateSubsidyStatus(id: string, status: string) {
   const { error } = await auth.supabase
     .from("subsidy_items")
     .update({ status })
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
     console.error("updateSubsidyStatus error:", JSON.stringify(error, null, 2));
@@ -179,6 +182,9 @@ export async function updateSubsidyStatus(id: string, status: string) {
     }
   }
 
+  revalidatePath("/subsidies");
+  revalidatePath("/subsidies/manage");
+  revalidatePath("/");
   return { success: true };
 }
 
@@ -223,7 +229,8 @@ export async function updateSubsidyItem(
   const { error } = await auth.supabase
     .from("subsidy_items")
     .update(updates)
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
     console.error("updateSubsidyItem error:", JSON.stringify(error, null, 2));
@@ -238,6 +245,9 @@ export async function updateSubsidyItem(
     changedBy: auth.profileId,
   });
 
+  revalidatePath("/subsidies");
+  revalidatePath("/subsidies/manage");
+  revalidatePath("/");
   return { success: true };
 }
 
@@ -279,5 +289,8 @@ export async function deleteSubsidyItem(id: string) {
     changedBy: auth.profileId,
   });
 
+  revalidatePath("/subsidies");
+  revalidatePath("/subsidies/manage");
+  revalidatePath("/");
   return { success: true };
 }

@@ -63,6 +63,7 @@ export async function fetchMySubsidyItems() {
       "id, category, term, expense_type, name, requested_amount, approved_amount, status, justification, evidence_url, receipt_url, created_at, accounting_group_id, accounting_groups(name)",
     )
     .eq("applicant_id", auth.profileId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -85,6 +86,7 @@ export async function fetchPendingSubsidyItems() {
     )
     .eq("applicant_id", auth.profileId)
     .eq("status", "pending")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(10);
 
@@ -123,6 +125,7 @@ export async function updateMySubsidyItem(
     .from("subsidy_items")
     .select("status, applicant_id")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (fetchError || !item) {
