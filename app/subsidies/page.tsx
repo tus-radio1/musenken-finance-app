@@ -8,6 +8,7 @@ import {
   extractStudentNumberFromUser,
   findProfileIdByStudentNumber,
 } from "@/lib/account";
+import { getUserTeams } from "@/lib/teams";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
@@ -51,7 +52,10 @@ export default async function SubsidiesPage() {
     );
   }
 
-  // 会計グループ一覧を取得
+  // 会計グループ一覧を取得 & isGlobalAdmin判定
+  const teamData = await getUserTeams(supabase, supabase, user.id);
+  const isGlobalAdmin = teamData.isGlobalAdmin;
+
   const { data: accountingGroups } = await supabase
     .from("accounting_groups")
     .select("id, name")
@@ -62,11 +66,20 @@ export default async function SubsidiesPage() {
   const { data: subsidyItems } = await supabase
     .from("subsidy_items")
     .select(
-      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, created_at, accounting_group_id, accounting_groups(name)",
+      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, receipt_url, remarks, created_at, accounting_group_id, accounting_groups(name)",
     )
     .eq("applicant_id", profileId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
+
+  // Construct receipt public URL base from Supabase URL
+  const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
+    : null;
+
+  const publicEvidenceBase = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
+    : null;
 
   // テーブル用にデータを整形
   const tableData = (subsidyItems || []).map((item: any) => ({
@@ -82,6 +95,19 @@ export default async function SubsidiesPage() {
     accounting_group_id: item.accounting_group_id || undefined,
     accounting_group_name: item.accounting_groups?.name || "-",
     created_at: item.created_at,
+    remarks: item.remarks || null,
+    receipt_url: item.receipt_url || null,
+    receipt_public_url: item.receipt_url?.startsWith("http")
+      ? item.receipt_url
+      : publicReceiptBase && item.receipt_url
+        ? `${publicReceiptBase}${item.receipt_url}`
+        : null,
+    evidence_url: item.evidence_url || null,
+    evidence_public_url: item.evidence_url?.startsWith("http")
+      ? item.evidence_url
+      : publicEvidenceBase && item.evidence_url
+        ? `${publicEvidenceBase}${item.evidence_url}`
+        : null,
   }));
 
   // 集計: 種別ごとの件数
@@ -174,6 +200,7 @@ export default async function SubsidiesPage() {
                   <SubsidyItemsTable
                     items={tableData}
                     accountingGroups={accountingGroups || []}
+                    isGlobalAdmin={isGlobalAdmin}
                   />
                 </CardContent>
               </Card>

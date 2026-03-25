@@ -34,7 +34,7 @@ export async function fetchAllSubsidies() {
   const { data, error } = await auth.supabase
     .from("subsidy_items")
     .select(
-      "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
+      "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,evidence_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
@@ -60,6 +60,7 @@ export async function fetchAllSubsidies() {
     created_at: string;
     receipt_date: string | null;
     receipt_url: string | null;
+    evidence_url: string | null;
     remarks: string | null;
     profiles?: { name?: string | null } | null;
     accounting_groups?: { name?: string | null } | null;
@@ -84,6 +85,7 @@ export async function fetchAllSubsidies() {
       created_at: item.created_at,
       receipt_date: item.receipt_date,
       receipt_url: item.receipt_url,
+      evidence_url: item.evidence_url,
       applicant_name:
         item.applicant_id === accountingUserId
           ? "会計"

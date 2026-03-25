@@ -7,8 +7,10 @@ import { subsidyFormSchema } from "@/lib/schema";
 import { resolveAuthContext } from "@/lib/auth/context";
 import {
   updateMySubsidyItemSchema,
+  deleteSubsidyItemSchema,
   validateInput,
 } from "@/lib/validations";
+import { getUserRoleAccess } from "@/lib/roles/access";
 
 export async function createSubsidyItem(
   values: z.infer<typeof subsidyFormSchema>,
@@ -156,5 +158,57 @@ export async function updateMySubsidyItem(
   }
 
   revalidatePath("/subsidies");
+  return { success: true };
+}
+
+export async function deleteMySubsidyItem(id: string) {
+  const inputValidation = validateInput(deleteSubsidyItemSchema, { id });
+  if (!inputValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
+
+  // Check if user is global admin
+  const access = await getUserRoleAccess(auth);
+
+  // Fetch the item to verify ownership and status
+  const { data: item, error: fetchError } = await auth.supabase
+    .from("subsidy_items")
+    .select("status, applicant_id")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .single();
+
+  if (fetchError || !item) {
+    return { error: "支援金申請情報の取得に失敗しました" };
+  }
+
+  // Only the owner or a global admin can delete
+  if (item.applicant_id !== auth.profileId && !access.isAdmin) {
+    return { error: "他人の申請は削除できません" };
+  }
+
+  // Only pending items can be deleted (unless global admin)
+  if (item.status !== "pending" && !access.isAdmin) {
+    return { error: "受付中以外の申請は削除できません" };
+  }
+
+  // Soft delete: set deleted_at
+  const deletedAt = new Date().toISOString();
+  const { error } = await auth.supabase
+    .from("subsidy_items")
+    .update({ deleted_at: deletedAt })
+    .eq("id", id);
+
+  if (error) {
+    console.error("deleteMySubsidyItem error:", JSON.stringify(error, null, 2));
+    return { error: "申請の削除に失敗しました" };
+  }
+
+  revalidatePath("/subsidies");
+  revalidatePath("/");
   return { success: true };
 }
