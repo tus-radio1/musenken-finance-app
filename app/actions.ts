@@ -171,6 +171,22 @@ export async function updateTransaction(
     return { error: "入力データが不正です" };
   }
 
+  // Runtime validation of form values
+  const valuesValidation = formSchema.safeParse(values);
+  if (!valuesValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
+  // Validate receipt_url: must be a relative storage path (no external URLs, no path traversal)
+  if (values.receipt_url != null) {
+    const isValidPath =
+      /^[a-zA-Z0-9\-._/]+$/.test(values.receipt_url) &&
+      !values.receipt_url.includes("..");
+    if (!isValidPath) {
+      return { error: "領収書URLの形式が不正です" };
+    }
+  }
+
   const authResult = await resolveAuthContext();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
@@ -186,17 +202,9 @@ export async function updateTransaction(
     return { error: "対象のデータが見つかりません" };
   }
 
-  const { data: profile } = await auth.supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", auth.profileId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
   const access = await getUserRoleAccess(auth);
   const isGlobalAdmin = access.isAdmin;
-  const isAccountingUser =
-    profile?.role === "accounting" || access.hasAccountingRole;
+  const isAccountingUser = access.hasAccountingRole;
   const isGroupLeader = access.roles.some(
     (r) =>
       r.type === ROLE_TYPES.LEADER &&
@@ -289,6 +297,7 @@ export async function updateTransaction(
   });
 
   revalidatePath("/ledger");
+  revalidatePath("/applications");
   return { success: true };
 }
 
@@ -317,7 +326,10 @@ export async function deleteTransaction(id: string) {
   }
 
   const access = await getUserRoleAccess(auth);
-  if (!access.isAdmin) {
+  const isAdmin = access.isAdmin;
+  const isOwner = transaction.created_by === auth.profileId;
+
+  if (!isAdmin && !(isOwner && transaction.approval_status === "pending")) {
     return { error: "削除する権限がありません。" };
   }
 
@@ -346,5 +358,6 @@ export async function deleteTransaction(id: string) {
   });
 
   revalidatePath("/ledger");
+  revalidatePath("/applications");
   return { success: true };
 }

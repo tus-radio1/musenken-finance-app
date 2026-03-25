@@ -28,18 +28,9 @@ export async function fetchLedgerTransactions(params: {
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
 
-  // profile と roles を並列取得
-  const [{ data: profile }, access] = await Promise.all([
-    auth.supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", auth.profileId)
-      .maybeSingle(),
-    getUserRoleAccess(auth),
-  ]);
+  const access = await getUserRoleAccess(auth);
 
-  const isAccountingUser =
-    profile?.role === "accounting" || access.hasAccountingRole;
+  const isAccountingUser = access.hasAccountingRole;
   const isFullAccess =
     access.isAdmin ||
     isAccountingUser ||
@@ -89,7 +80,8 @@ export async function fetchLedgerTransactions(params: {
       "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status",
     )
     .eq("accounting_group_id", requestedGroupId)
-    .in("status", ["approved", "receipt_submitted", "paid"]);
+    .in("status", ["approved", "receipt_submitted", "paid"])
+    .is("deleted_at", null);
 
   if (typeof params.fyYear !== "undefined") {
     subsidyQuery = subsidyQuery.eq("fiscal_year_id", params.fyYear);

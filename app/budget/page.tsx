@@ -147,7 +147,8 @@ export default async function BudgetPage({
     .select(
       "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status, accounting_group_id",
     )
-    .in("status", ["approved", "receipt_submitted", "paid"]);
+    .in("status", ["approved", "receipt_submitted", "paid"])
+    .is("deleted_at", null);
 
   if (typeof fyYear !== "undefined") {
     subsidyQuery = subsidyQuery.eq("fiscal_year_id", fyYear);

@@ -105,6 +105,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
     defaultValues: {
       category: "activity",
       term: 1,
+      expense_type: "facility",
       name: "",
       requested_amount: 0,
       justification: "",
@@ -126,7 +127,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
     const validExpenseTypes = CATEGORY_EXPENSE_TYPES[selectedCategory] || [];
     const currentExpenseType = form.getValues("expense_type");
-    if (currentExpenseType && !validExpenseTypes.includes(currentExpenseType)) {
+    if (!currentExpenseType || !validExpenseTypes.includes(currentExpenseType)) {
       form.setValue("expense_type", validExpenseTypes[0] as any);
     }
   }, [selectedCategory, form]);
@@ -136,6 +137,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       form.reset({
         category: "activity",
         term: 1,
+        expense_type: "facility",
         name: "",
         requested_amount: 0,
         justification: "",

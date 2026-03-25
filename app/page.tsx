@@ -67,6 +67,7 @@ export default async function Home() {
   let mySubQuery = supabase
     .from("subsidy_items")
     .select("id, name, requested_amount, status, created_at")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (profileId) {

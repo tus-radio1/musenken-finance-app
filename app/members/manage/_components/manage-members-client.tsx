@@ -36,7 +36,7 @@ import { retireMember, deleteMember, resetPasswordMember } from "../actions";
 export type MemberManageRow = {
   id: string;
   name: string;
-  student_number: string;
+  student_number: string | null;
   grade: number;
   role_names: string[];
   role_ids: string[];
@@ -202,7 +202,7 @@ export function ManageMembersClient({
       if (filterName && !m.name.includes(filterName)) return false;
       if (
         filterStudentNumber &&
-        !m.student_number.includes(filterStudentNumber)
+        !(m.student_number ?? "").includes(filterStudentNumber)
       )
         return false;
       if (filterGrade !== "all" && m.grade !== Number(filterGrade))
@@ -368,7 +368,7 @@ export function ManageMembersClient({
                       member={{
                         id: member.id,
                         name: member.name,
-                        student_number: member.student_number,
+                        student_number: member.student_number ?? "",
                         grade: member.grade,
                         role_ids: member.role_ids,
                       }}

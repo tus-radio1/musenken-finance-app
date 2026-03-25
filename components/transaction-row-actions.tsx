@@ -9,6 +9,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { deleteTransaction } from "@/app/actions";
 import { toast } from "sonner";
 import { TransactionForm } from "@/components/transaction-form";
@@ -31,10 +41,9 @@ export function TransactionRowActions({
   users,
 }: Props) {
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const handleDelete = async () => {
-    if (!confirm("本当に削除しますか？\nこの操作は取り消せません。")) return;
-
     const res = await deleteTransaction(transaction.id);
     if ((res as any).error) {
       toast.error((res as any).error);
@@ -64,7 +73,10 @@ export function TransactionRowActions({
           )}
           {canDelete && (
             <DropdownMenuItem
-              onClick={handleDelete}
+              onSelect={(e) => {
+                e.preventDefault();
+                setShowDeleteDialog(true);
+              }}
               className="text-red-600 focus:text-red-600"
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -73,6 +85,23 @@ export function TransactionRowActions({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>レコードの削除</AlertDialogTitle>
+            <AlertDialogDescription>
+              このレコードを削除しますか？この操作は元に戻せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDelete}>
+              削除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {canEdit && (
         <TransactionForm

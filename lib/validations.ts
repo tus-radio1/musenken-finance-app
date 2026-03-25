@@ -91,6 +91,9 @@ export const updateSubsidyStatusSchema = z.object({
     "receipt_submitted",
     "paid",
     "unexecuted",
+    "application_rejected",
+    "accounting_received",
+    "application_in_progress",
   ]),
 });
 

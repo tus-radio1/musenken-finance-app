@@ -1,6 +1,5 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getAccountingUserIdSync } from "@/lib/system-config";
 import {
@@ -9,6 +8,7 @@ import {
   deleteSubsidyItemSchema,
   validateInput,
 } from "@/lib/validations";
+import { revalidatePath } from "next/cache";
 import { resolveAuthContext } from "@/lib/auth/context";
 import { getUserRoleAccess } from "@/lib/roles/access";
 
@@ -34,8 +34,9 @@ export async function fetchAllSubsidies() {
   const { data, error } = await auth.supabase
     .from("subsidy_items")
     .select(
-      "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
+      "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,evidence_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
     )
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -59,6 +60,7 @@ export async function fetchAllSubsidies() {
     created_at: string;
     receipt_date: string | null;
     receipt_url: string | null;
+    evidence_url: string | null;
     remarks: string | null;
     profiles?: { name?: string | null } | null;
     accounting_groups?: { name?: string | null } | null;
@@ -83,6 +85,7 @@ export async function fetchAllSubsidies() {
       created_at: item.created_at,
       receipt_date: item.receipt_date,
       receipt_url: item.receipt_url,
+      evidence_url: item.evidence_url,
       applicant_name:
         item.applicant_id === accountingUserId
           ? "会計"
@@ -94,17 +97,18 @@ export async function fetchAllSubsidies() {
 }
 
 export async function fetchProfilesList() {
-  // Uses createClient() with RLS - profile list access is controlled by RLS policies
-  const supabase = await createClient();
+  const authResult = await resolveAuthContext();
+  if (!authResult.ok) return { error: authResult.error, data: [] };
+  const auth = authResult.context;
 
-  const { data, error } = await supabase
+  const { data, error } = await auth.supabase
     .from("profiles")
     .select("id, name")
     .is("deleted_at", null)
     .order("name");
 
   if (error) {
-    console.error("fetchProfilesList error:", error);
+    console.error("fetchProfilesList error:", JSON.stringify(error, null, 2));
     return { error: "ユーザー一覧の取得に失敗しました", data: [] };
   }
 
@@ -135,10 +139,11 @@ export async function updateSubsidyStatus(id: string, status: string) {
   const { error } = await auth.supabase
     .from("subsidy_items")
     .update({ status })
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
-    console.error("updateSubsidyStatus error:", error);
+    console.error("updateSubsidyStatus error:", JSON.stringify(error, null, 2));
     return { error: "ステータスの更新に失敗しました" };
   }
 
@@ -179,6 +184,9 @@ export async function updateSubsidyStatus(id: string, status: string) {
     }
   }
 
+  revalidatePath("/subsidies");
+  revalidatePath("/subsidies/manage");
+  revalidatePath("/");
   return { success: true };
 }
 
@@ -223,10 +231,11 @@ export async function updateSubsidyItem(
   const { error } = await auth.supabase
     .from("subsidy_items")
     .update(updates)
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
-    console.error("updateSubsidyItem error:", error);
+    console.error("updateSubsidyItem error:", JSON.stringify(error, null, 2));
     return { error: "申請情報の更新に失敗しました" };
   }
 
@@ -238,6 +247,9 @@ export async function updateSubsidyItem(
     changedBy: auth.profileId,
   });
 
+  revalidatePath("/subsidies");
+  revalidatePath("/subsidies/manage");
+  revalidatePath("/");
   return { success: true };
 }
 
@@ -267,7 +279,7 @@ export async function deleteSubsidyItem(id: string) {
     .eq("id", id);
 
   if (error) {
-    console.error("deleteSubsidyItem error:", error);
+    console.error("deleteSubsidyItem error:", JSON.stringify(error, null, 2));
     return { error: "申請の削除に失敗しました" };
   }
 
@@ -279,5 +291,8 @@ export async function deleteSubsidyItem(id: string) {
     changedBy: auth.profileId,
   });
 
+  revalidatePath("/subsidies");
+  revalidatePath("/subsidies/manage");
+  revalidatePath("/");
   return { success: true };
 }

@@ -66,7 +66,7 @@ export async function setGlobalAdmin(userId: string, enable: boolean) {
     }
   }
 
-  revalidatePath("/admin/users");
+  revalidatePath("/members/manage");
   return { success: true };
 }
 
@@ -138,7 +138,7 @@ export async function assignGroupRole(
     return { error: "ロール割当に失敗しました" };
   }
 
-  revalidatePath("/admin/users");
+  revalidatePath("/members/manage");
   return { success: true };
 }
 
@@ -164,7 +164,7 @@ export async function removeGroupRole(userId: string, groupId: string) {
   type RoleIdRow = { id: string };
   const roleIds = (rolesOfGroup as RoleIdRow[] || []).map((r) => r.id);
   if (roleIds.length === 0) {
-    revalidatePath("/admin/users");
+    revalidatePath("/members/manage");
     return { success: true };
   }
 
@@ -178,6 +178,6 @@ export async function removeGroupRole(userId: string, groupId: string) {
     return { error: "ロール削除に失敗しました" };
   }
 
-  revalidatePath("/admin/users");
+  revalidatePath("/members/manage");
   return { success: true };
 }

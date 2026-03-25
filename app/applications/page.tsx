@@ -23,14 +23,21 @@ export default async function ApplicationsPage() {
   const teamData = await getUserTeams(supabase, supabase, user.id);
   const accountingGroups = teamData.teams;
 
+  const isGlobalAdmin = teamData.isGlobalAdmin;
+
   // 当該ユーザの過去の申請を取得（会計グループ名付き）
   const { data: transactions } = await supabase
     .from("transactions")
     .select(
-      "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name)",
+      "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name), receipt_url, remarks, created_by",
     )
     .eq("created_by", user.id)
     .order("date", { ascending: false });
+
+  // Construct receipt public URL base from Supabase URL
+  const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
+    : null;
 
   // テーブル用にデータを整形
   const tableData = (transactions || []).map((tx: any) => ({
@@ -41,6 +48,14 @@ export default async function ApplicationsPage() {
     approval_status: tx.approval_status,
     accounting_group_id: tx.accounting_group_id || undefined,
     accounting_group_name: tx.accounting_groups?.name || "-",
+    receipt_url: tx.receipt_url || null,
+    receipt_public_url: tx.receipt_url?.startsWith("http")
+      ? tx.receipt_url
+      : publicReceiptBase && tx.receipt_url
+        ? `${publicReceiptBase}${tx.receipt_url}`
+        : null,
+    remarks: tx.remarks || null,
+    created_by: tx.created_by,
   }));
 
   return (
@@ -69,7 +84,7 @@ export default async function ApplicationsPage() {
                   <CardTitle>あなたの申請一覧</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ApplicationsTable transactions={tableData} accountingGroups={accountingGroups || []} />
+                  <ApplicationsTable transactions={tableData} accountingGroups={accountingGroups || []} isGlobalAdmin={isGlobalAdmin} />
                 </CardContent>
               </Card>
 
