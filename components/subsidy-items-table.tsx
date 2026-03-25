@@ -7,9 +7,12 @@ import {
   Search,
   Filter,
   Loader2,
-  Edit,
-  Receipt,
   Upload,
+  ExternalLink,
+  ChevronDown,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -27,9 +30,30 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { updateMySubsidyItem } from "@/app/subsidies/actions";
+import { updateMySubsidyItem, deleteMySubsidyItem } from "@/app/subsidies/actions";
 import { uploadReceiptAction } from "@/app/actions";
 import { compressImageToWebp } from "@/lib/image";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +82,9 @@ type SubsidyItem = {
   accounting_group_name: string;
   created_at: string;
   receipt_url?: string | null;
+  receipt_public_url?: string | null;
+  evidence_public_url?: string | null;
+  remarks?: string | null;
 };
 
 type SortKey = "created_at" | "requested_amount";
@@ -112,9 +139,11 @@ const STATUS_LABELS: Record<string, string> = {
 export function SubsidyItemsTable({
   items: initialItems,
   accountingGroups = [],
+  isGlobalAdmin = false,
 }: {
   items: SubsidyItem[];
   accountingGroups?: { id: string; name: string }[];
+  isGlobalAdmin?: boolean;
 }) {
   const [items, setItems] = useState<SubsidyItem[]>(initialItems);
 
@@ -129,6 +158,7 @@ export function SubsidyItemsTable({
   const [accountingGroupFilter, setAccountingGroupFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [openCards, setOpenCards] = useState<Set<string>>(new Set());
 
   const [editingItem, setEditingItem] = useState<SubsidyItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -142,9 +172,8 @@ export function SubsidyItemsTable({
   });
   const [file, setFile] = useState<File | null>(null);
 
-  const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-    : null;
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<SubsidyItem | null>(null);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -153,6 +182,18 @@ export function SubsidyItemsTable({
       setSortKey(key);
       setSortOrder("desc");
     }
+  };
+
+  const toggleCard = (id: string) => {
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const filtered = useMemo(() => {
@@ -196,8 +237,6 @@ export function SubsidyItemsTable({
     return result;
   }, [items, searchQuery, statusFilter, categoryFilter, incomeTypeFilter, accountingGroupFilter, sortKey, sortOrder]);
 
-
-
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("ja-JP", {
       style: "currency",
@@ -215,6 +254,19 @@ export function SubsidyItemsTable({
     });
     setFile(null);
     setEditingItem(item);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingItem) return;
+    const res = await deleteMySubsidyItem(deletingItem.id);
+    if (res.error) {
+      toast.error(res.error);
+    } else {
+      toast.success("削除しました");
+      setItems((prev) => prev.filter((i) => i.id !== deletingItem.id));
+    }
+    setDeletingItem(null);
+    setShowDeleteDialog(false);
   };
 
   const handleEditSubmit = async () => {
@@ -300,7 +352,7 @@ export function SubsidyItemsTable({
     [editForm.category],
   );
 
-  // 支援金種別が変わったら経費種別と期をリセットするための効果
+  // Reset expense_type and term when category changes in edit form
   useEffect(() => {
     if (editingItem) {
       const validTerms = CATEGORY_TERMS[editForm.category] || [1];
@@ -323,7 +375,7 @@ export function SubsidyItemsTable({
 
   return (
     <div className="space-y-4">
-      {/* フィルタ・検索バー */}
+      {/* Filter / search bar */}
       <div className="flex flex-col gap-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -386,7 +438,7 @@ export function SubsidyItemsTable({
         </div>
       </div>
 
-      {/* テーブル */}
+      {/* Table / Cards */}
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           {items.length === 0
@@ -395,174 +447,318 @@ export function SubsidyItemsTable({
         </p>
       ) : (
         <>
-          {/* Mobile card view */}
-          <div className="md:hidden space-y-3">
-            {filtered.map((item) => (
-              <div
-                key={item.id}
-                className="border rounded-lg p-4 bg-card space-y-3"
-              >
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-muted-foreground">
-                      {format(new Date(item.created_at), "yyyy/MM/dd")}
-                    </div>
-                    <div className="font-medium truncate" title={item.name}>
-                      {item.name}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-semibold text-base">
-                      {formatCurrency(item.requested_amount)}
-                    </div>
-                    <StatusBadge status={item.status} />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge
-                      variant="outline"
-                      className={CATEGORY_BADGE_COLORS[item.category] || ""}
-                    >
-                      {CATEGORY_LABELS[item.category] || item.category}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {item.term}期
-                    </span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEditClick(item)}
-                  >
-                    詳細
-                  </Button>
-                </div>
-              </div>
-            ))}
+          {/* PC table (xl and above) */}
+          <div className="hidden xl:block">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 -ml-3 font-medium"
+                        onClick={() => toggleSort("created_at")}
+                      >
+                        申請日
+                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </TableHead>
+                    <TableHead>カテゴリ</TableHead>
+                    <TableHead>項目名</TableHead>
+                    <TableHead>会計区分</TableHead>
+                    <TableHead>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 -ml-3 font-medium"
+                        onClick={() => toggleSort("requested_amount")}
+                      >
+                        申請金額
+                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </TableHead>
+                    <TableHead>算定額</TableHead>
+                    <TableHead className="w-[100px]">状態</TableHead>
+                    <TableHead>備考</TableHead>
+                    <TableHead className="w-[120px]">添付書類</TableHead>
+                    <TableHead className="w-[60px]">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((item) => {
+                    const canEditOrDelete =
+                      isGlobalAdmin || item.status === "pending";
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">
+                          {format(new Date(item.created_at), "yyyy/MM/dd")}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+                              {CATEGORY_LABELS[item.category] || item.category}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
+                              第{item.term}期
+                            </Badge>
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
+                              {EXPENSE_TYPE_LABELS[item.expense_type] || item.expense_type}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className="max-w-[200px] truncate"
+                          title={item.name}
+                        >
+                          {item.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-normal">
+                            {item.accounting_group_name}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          {formatCurrency(item.requested_amount)}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {item.approved_amount != null
+                            ? formatCurrency(item.approved_amount)
+                            : "-"}
+                        </TableCell>
+                        <TableCell><StatusBadge status={item.status} /></TableCell>
+                        <TableCell className="max-w-[200px] whitespace-pre-wrap break-words">
+                          {item.remarks || "\u2014"}
+                        </TableCell>
+                        <TableCell className="w-[120px]">
+                          <div className="flex flex-col gap-1">
+                            {item.receipt_public_url ? (
+                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+                                <a href={item.receipt_public_url} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="h-3 w-3 mr-1" />
+                                  領収書
+                                </a>
+                              </Button>
+                            ) : null}
+                            {item.evidence_public_url ? (
+                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+                                <a href={item.evidence_public_url} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="h-3 w-3 mr-1" />
+                                  根拠書類
+                                </a>
+                              </Button>
+                            ) : null}
+                            {!item.receipt_public_url && !item.evidence_public_url && (
+                              <span className="text-muted-foreground">{"\u2014"}</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {canEditOrDelete && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <span className="sr-only">メニューを開く</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleEditClick(item)}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  編集
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onSelect={(e) => {
+                                    e.preventDefault();
+                                    setDeletingItem(item);
+                                    setShowDeleteDialog(true);
+                                  }}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  削除
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </div>
 
-          {/* Desktop table view */}
-          <div className="hidden md:block rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 -ml-3 font-medium"
-                      onClick={() => toggleSort("created_at")}
-                    >
-                      申請日
-                      <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>支援金種別</TableHead>
-                  <TableHead>期</TableHead>
-                  <TableHead>経費種別</TableHead>
-                  <TableHead>項目名</TableHead>
-                  <TableHead>会計区分</TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 -ml-3 font-medium"
-                      onClick={() => toggleSort("requested_amount")}
-                    >
-                      申請金額
-                      <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>算定額</TableHead>
-                  <TableHead>領収書</TableHead>
-                  <TableHead className="w-[100px]">状態</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">
-                      {format(new Date(item.created_at), "yyyy/MM/dd")}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={CATEGORY_BADGE_COLORS[item.category] || ""}
-                      >
-                        {CATEGORY_LABELS[item.category] || item.category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{item.term}期</TableCell>
-                    <TableCell className="text-sm">
-                      {EXPENSE_TYPE_LABELS[item.expense_type] ||
-                        item.expense_type}
-                    </TableCell>
-                    <TableCell
-                      className="max-w-[200px] truncate"
-                      title={item.name}
-                    >
-                      {item.name}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="font-normal">
-                        {item.accounting_group_name}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {formatCurrency(item.requested_amount)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {item.approved_amount != null
-                        ? formatCurrency(item.approved_amount)
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {item.receipt_url ? (
-                        <a
-                          href={
-                            item.receipt_url.startsWith("http")
-                              ? item.receipt_url
-                              : publicReceiptBase
-                                ? `${publicReceiptBase}${item.receipt_url}`
-                                : "#"
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center text-blue-600 hover:underline text-xs"
+          {/* Mobile / Tablet card layout (below xl) */}
+          <div className="xl:hidden space-y-3">
+            {filtered.map((item) => {
+              const canEditOrDelete =
+                isGlobalAdmin || item.status === "pending";
+              return (
+                <Collapsible
+                  key={item.id}
+                  open={openCards.has(item.id)}
+                  onOpenChange={() => toggleCard(item.id)}
+                >
+                  <div className="border rounded-lg p-4 bg-card space-y-3">
+                    {/* Header row: date + amount */}
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-muted-foreground">
+                          {format(new Date(item.created_at), "yyyy/MM/dd")}
+                        </div>
+                        <div className="font-medium truncate" title={item.name}>
+                          {item.name}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-semibold text-base">
+                          {formatCurrency(item.requested_amount)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Second row: category badge + term */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge
+                          variant="outline"
+                          className={CATEGORY_BADGE_COLORS[item.category] || ""}
                         >
-                          <Receipt className="h-4 w-4 mr-1" />
-                          確認
-                        </a>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell><StatusBadge status={item.status} /></TableCell>
-                    <TableCell className="text-right">
-                      {item.status === "pending" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditClick(item)}
-                        >
-                          <Edit className="h-4 w-4 text-muted-foreground" />
+                          {CATEGORY_LABELS[item.category] || item.category}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {item.term}期
+                        </span>
+                        <StatusBadge status={item.status} />
+                      </div>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 px-2">
+                          詳細
+                          <ChevronDown
+                            className={`ml-1 h-3.5 w-3.5 transition-transform ${
+                              openCards.has(item.id) ? "rotate-180" : ""
+                            }`}
+                          />
                         </Button>
+                      </CollapsibleTrigger>
+                    </div>
+
+                    {/* Collapsible details */}
+                    <CollapsibleContent className="space-y-3 pt-1">
+                      {/* Remarks */}
+                      <div className="text-sm">
+                        <span className="text-muted-foreground font-medium">
+                          備考:{" "}
+                        </span>
+                        <span className="whitespace-pre-wrap break-words">{item.remarks || "\u2014"}</span>
+                      </div>
+
+                      {/* Receipt link */}
+                      <div className="text-sm">
+                        <span className="text-muted-foreground font-medium">
+                          領収書:{" "}
+                        </span>
+                        {item.receipt_public_url ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7"
+                            asChild
+                          >
+                            <a
+                              href={item.receipt_public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                              領収書
+                            </a>
+                          </Button>
+                        ) : (
+                          <span>{"\u2014"}</span>
+                        )}
+                      </div>
+
+                      {/* Evidence link */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground font-medium min-w-[56px]">根拠書類:</span>
+                        {item.evidence_public_url ? (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={item.evidence_public_url} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                              確認する
+                            </a>
+                          </Button>
+                        ) : (
+                          <span className="text-sm">{"\u2014"}</span>
+                        )}
+                      </div>
+
+                      {/* Action buttons (edit/delete) */}
+                      {canEditOrDelete && (
+                        <div className="flex items-center gap-1 pt-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">メニューを開く</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditClick(item)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                編集
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setDeletingItem(item);
+                                  setShowDeleteDialog(true);
+                                }}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                削除
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              );
+            })}
           </div>
         </>
       )}
 
+      {/* Count display */}
       <p className="text-xs text-muted-foreground text-right">
         {filtered.length} / {items.length} 件表示
       </p>
 
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>申請の削除</AlertDialogTitle>
+            <AlertDialogDescription>
+              この申請を削除しますか？この操作は元に戻せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDelete}>
+              削除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit dialog */}
       <Dialog
         open={editingItem !== null}
         onOpenChange={(open) => !open && setEditingItem(null)}

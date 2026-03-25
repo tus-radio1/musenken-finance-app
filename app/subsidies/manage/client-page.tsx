@@ -8,7 +8,7 @@ import {
   deleteSubsidyItem,
 } from "./actions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Receipt, Upload, Loader2 } from "lucide-react";
+import { Receipt, FileText, Upload, Loader2 } from "lucide-react";
 import { uploadReceiptAction } from "@/app/actions";
 import { compressImageToWebp } from "@/lib/image";
 import {
@@ -47,6 +47,7 @@ type SubsidyItem = {
   accounting_group_name?: string;
   receipt_date?: string | null;
   receipt_url?: string | null;
+  evidence_url?: string | null;
   remarks?: string;
 };
 
@@ -337,7 +338,7 @@ export function SubsidiesManageClientPage({
               <th className="p-3 text-right">算定額</th>
               <th className="p-3 text-right">実経費額</th>
               <th className="p-3">受領日</th>
-              <th className="p-3">領収書</th>
+              <th className="p-3">添付書類</th>
               <th className="p-3">備考</th>
               <th className="p-3 w-[80px]"></th>
             </tr>
@@ -403,6 +404,25 @@ export function SubsidiesManageClientPage({
                           備考:
                         </span>
                         {item.remarks}
+                      </div>
+                    )}
+                    {item.evidence_url && (
+                      <div className="text-sm mt-1">
+                        <a
+                          href={
+                            item.evidence_url.startsWith("http")
+                              ? item.evidence_url
+                              : publicReceiptBase
+                                ? `${publicReceiptBase}${item.evidence_url}`
+                                : "#"
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center text-blue-600 hover:underline text-xs"
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          根拠書類を確認
+                        </a>
                       </div>
                     )}
                   </td>
@@ -506,25 +526,43 @@ export function SubsidiesManageClientPage({
                   </td>
 
                   <td className="p-3 hidden md:table-cell text-sm">
-                    {item.receipt_url ? (
-                      <a
-                        href={
-                          item.receipt_url.startsWith("http")
-                            ? item.receipt_url
-                            : publicReceiptBase
-                              ? `${publicReceiptBase}${item.receipt_url}`
-                              : "#"
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center text-blue-600 hover:underline text-xs"
-                      >
-                        <Receipt className="h-4 w-4 mr-1" />
-                        確認
-                      </a>
-                    ) : (
-                      "-"
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {item.receipt_url ? (
+                        <a
+                          href={
+                            item.receipt_url.startsWith("http")
+                              ? item.receipt_url
+                              : publicReceiptBase
+                                ? `${publicReceiptBase}${item.receipt_url}`
+                                : "#"
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center text-blue-600 hover:underline text-xs"
+                        >
+                          <Receipt className="h-4 w-4 mr-1" />
+                          領収書
+                        </a>
+                      ) : null}
+                      {item.evidence_url ? (
+                        <a
+                          href={
+                            item.evidence_url.startsWith("http")
+                              ? item.evidence_url
+                              : publicReceiptBase
+                                ? `${publicReceiptBase}${item.evidence_url}`
+                                : "#"
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center text-blue-600 hover:underline text-xs"
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          根拠書類
+                        </a>
+                      ) : null}
+                      {!item.receipt_url && !item.evidence_url && "-"}
+                    </div>
                   </td>
 
                   <td
