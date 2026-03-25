@@ -12,9 +12,23 @@ import {
 } from "@/lib/validations";
 import { getUserRoleAccess } from "@/lib/roles/access";
 
+const createSubsidyItemServerSchema = subsidyFormSchema.extend({
+  evidence_url: z
+    .string({ required_error: "根拠書類をアップロードしてください" })
+    .trim()
+    .min(1, "根拠書類をアップロードしてください"),
+});
+
 export async function createSubsidyItem(
   values: z.infer<typeof subsidyFormSchema>,
 ) {
+  const inputValidation = validateInput(createSubsidyItemServerSchema, values);
+  if (!inputValidation.success) {
+    return { error: inputValidation.error };
+  }
+
+  const validatedValues = inputValidation.data;
+
   const authResult = await resolveAuthContext();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
@@ -29,18 +43,18 @@ export async function createSubsidyItem(
   if (!fy) return { error: "現在の会計年度が設定されていません" };
 
   const { error } = await auth.supabase.from("subsidy_items").insert({
-    category: values.category,
-    term: values.term,
-    expense_type: values.expense_type,
-    income_type: values.income_type as string | undefined,
-    date: format(values.date, "yyyy-MM-dd"),
-    accounting_group_id: values.accounting_group_id,
+    category: validatedValues.category,
+    term: validatedValues.term,
+    expense_type: validatedValues.expense_type,
+    income_type: validatedValues.income_type as string | undefined,
+    date: format(validatedValues.date, "yyyy-MM-dd"),
+    accounting_group_id: validatedValues.accounting_group_id,
     applicant_id: auth.profileId,
     fiscal_year_id: fy.year,
-    name: values.name,
-    requested_amount: values.requested_amount,
-    justification: values.justification,
-    evidence_url: values.evidence_url,
+    name: validatedValues.name,
+    requested_amount: validatedValues.requested_amount,
+    justification: validatedValues.justification,
+    evidence_url: validatedValues.evidence_url,
     status: "pending",
   });
 
@@ -196,15 +210,30 @@ export async function deleteMySubsidyItem(id: string) {
     return { error: "受付中以外の申請は削除できません" };
   }
 
-  // Soft delete: set deleted_at
-  const deletedAt = new Date().toISOString();
-  const { error } = await auth.supabase
-    .from("subsidy_items")
-    .update({ deleted_at: deletedAt })
-    .eq("id", id);
+  // Delete behavior:
+  // - Admins perform a soft delete by setting deleted_at (not restricted by RLS).
+  // - Non-admin users perform a hard delete, avoiding the RLS check on deleted_at.
+  let dbError;
+  if (access.isAdmin) {
+    const deletedAt = new Date().toISOString();
+    const { error } = await auth.supabase
+      .from("subsidy_items")
+      .update({ deleted_at: deletedAt })
+      .eq("id", id);
+    dbError = error;
+  } else {
+    const { error } = await auth.supabase
+      .from("subsidy_items")
+      .delete()
+      .eq("id", id);
+    dbError = error;
+  }
 
-  if (error) {
-    console.error("deleteMySubsidyItem error:", JSON.stringify(error, null, 2));
+  if (dbError) {
+    console.error(
+      "deleteMySubsidyItem error:",
+      JSON.stringify(dbError, null, 2),
+    );
     return { error: "申請の削除に失敗しました" };
   }
 

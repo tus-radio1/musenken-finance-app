@@ -264,7 +264,10 @@ export async function deleteSubsidyItem(id: string) {
   const auth = authResult.context;
 
   const access = await getUserRoleAccess(auth);
-  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
+  // Only admins can soft-delete subsidy items due to RLS policy constraints
+  // The subsidy_items_update_admin_accounting policy has WITH CHECK (deleted_at IS NULL)
+  // which prevents setting deleted_at to non-null, so soft deletes must be restricted to admins
+  const hasAccessRole = access.isAdmin;
 
   if (!hasAccessRole) {
     return { error: "権限がありません" };

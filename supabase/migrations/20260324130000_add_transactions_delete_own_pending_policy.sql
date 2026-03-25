@@ -5,4 +5,5 @@ CREATE POLICY "transactions_delete_own_pending"
   USING (
     created_by = auth.uid()
     AND approval_status = 'pending'
+    AND deleted_at IS NULL
   );

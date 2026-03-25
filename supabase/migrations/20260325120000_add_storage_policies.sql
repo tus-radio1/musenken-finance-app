@@ -5,7 +5,11 @@ CREATE POLICY "Authenticated users can upload to receipts"
 ON storage.objects
 FOR INSERT
 TO authenticated
-WITH CHECK (bucket_id = 'receipts');
+WITH CHECK (
+	bucket_id = 'receipts'
+	AND owner = auth.uid()
+	AND name LIKE auth.uid()::text || '/%'
+);
 
 CREATE POLICY "Authenticated users can read receipts"
 ON storage.objects
