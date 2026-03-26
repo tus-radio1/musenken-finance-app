@@ -53,7 +53,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { updateMySubsidyItem, deleteMySubsidyItem } from "@/app/subsidies/actions";
+import { updateMySubsidyItem, deleteMySubsidyItem } from "@/app/(authenticated)/subsidies/actions";
 import { uploadReceiptAction } from "@/app/actions";
 import { compressImageToWebp } from "@/lib/image";
 import { Badge } from "@/components/ui/badge";

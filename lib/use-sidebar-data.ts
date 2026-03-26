@@ -12,10 +12,6 @@ import {
   UserCog,
   HandCoins,
 } from "lucide-react";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
 import { createClient } from "@/utils/supabase/client";
 import type { UserProfile } from "@/components/user-nav";
 import type { LucideIcon } from "lucide-react";
@@ -67,11 +63,7 @@ export function useSidebarData() {
           return;
         }
 
-        const studentNumber = extractStudentNumberFromUser(user);
-        const profileId = await findProfileIdByStudentNumber(
-          supabase,
-          studentNumber,
-        );
+        const profileId = user.id;
         if (!profileId) {
           if (active) setRoleNames([]);
           return;

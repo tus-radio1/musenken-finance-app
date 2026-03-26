@@ -6,10 +6,6 @@ import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getUserTeams } from "@/lib/teams";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -18,11 +14,7 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let profileId: string | null = null;
-  if (user) {
-    const studentNumber = extractStudentNumberFromUser(user);
-    profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
-  }
+  const profileId = user?.id ?? null;
 
   // 会計年度の決定（is_current が無ければ最新年度にフォールバック）
   const { data: fyCurrent } = await supabase

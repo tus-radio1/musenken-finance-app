@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
-import { fetchLedgerTransactions } from "@/app/ledger/actions";
+import { fetchLedgerTransactions } from "@/app/(authenticated)/ledger/actions";
 import {
   Receipt,
   ArrowUpDown,

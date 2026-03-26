@@ -4,10 +4,6 @@ import { SubsidyForm } from "@/components/subsidy-form";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SubsidyItemsTable } from "@/components/subsidy-items-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
 import { getUserTeams } from "@/lib/teams";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
@@ -23,8 +19,7 @@ export default async function SubsidiesPage() {
     redirect("/login");
   }
 
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
+  const profileId = user.id;
 
   if (!profileId) {
     return (

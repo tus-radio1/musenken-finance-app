@@ -9,10 +9,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
-import {
   ManageMembersClient,
   type MemberManageRow,
 } from "./_components/manage-members-client";
@@ -69,8 +65,7 @@ export default async function MembersManagePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
+  const profileId = user.id;
 
   let myRoleRows: RoleInfoRow[] | null | undefined;
   if (profileId) {
