@@ -26,11 +26,17 @@ import {
   ArrowUp,
   ArrowDown,
   ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { ApprovalActions } from "@/components/approval-actions";
 import { Badge } from "@/components/ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import Link from "next/link";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 
@@ -138,6 +144,20 @@ export default function LedgerView({
   // フィルタ state
   const [filterText, setFilterText] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  const [openCards, setOpenCards] = useState<Set<string>>(new Set());
+
+  const toggleCard = useCallback((id: string) => {
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const isAdminOrAccounting = isAccountingUser || isGlobalAdmin;
 
@@ -387,7 +407,7 @@ export default function LedgerView({
             </div>
           </div>
           {/* Mobile card view */}
-          <div className="md:hidden space-y-3">
+          <div className="xl:hidden space-y-3">
             {processedRows.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
                 取引データがありません
@@ -405,125 +425,156 @@ export default function LedgerView({
                 }
 
                 return (
-                  <div
+                  <Collapsible
                     key={r.id}
-                    className="border rounded-lg p-4 bg-card space-y-3"
+                    open={openCards.has(r.id)}
+                    onOpenChange={() => toggleCard(r.id)}
                   >
-                    {/* Row 1: Date + Applicant | Amount */}
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs text-muted-foreground">
-                          {r.date
-                            ? new Date(r.date).toLocaleDateString("ja-JP")
-                            : "-"}
+                    <div className="border rounded-lg p-4 bg-card space-y-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs text-muted-foreground">
+                            {r.date
+                              ? new Date(r.date).toLocaleDateString("ja-JP")
+                              : "-"}
+                          </div>
+                          <div className="text-sm font-medium truncate">
+                            {r.created_by_name || "未登録"}
+                          </div>
                         </div>
-                        <div className="text-sm font-medium truncate">
-                          {r.created_by_name || "未登録"}
+                        <div className="text-right shrink-0">
+                          <div
+                            className={`text-base font-semibold ${
+                              Number(r.amount) < 0
+                                ? "text-red-600"
+                                : "text-green-600"
+                            }`}
+                          >
+                            {formatCurrency(Number(r.amount))}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <div
-                          className={`text-base font-semibold ${
-                            Number(r.amount) < 0
-                              ? "text-red-600"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {formatCurrency(Number(r.amount))}
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Row 2: Description */}
-                    <div className="text-sm text-muted-foreground truncate">
-                      {r.is_subsidy && (
-                        <Badge
-                          variant="secondary"
-                          className="mr-1 bg-blue-100 text-blue-800 hover:bg-blue-100 border-none text-xs"
-                        >
-                          支援金
-                        </Badge>
-                      )}
-                      <span>{r.description || "-"}</span>
-                    </div>
-
-                    {/* Row 3: Status badge + Actions */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="shrink-0">
-                        {r.is_subsidy ? (
-                          <StatusBadge
-                            status={r.approval_status || "pending"}
-                          />
-                        ) : (
-                          <ApprovalActions
-                            transactionId={r.id}
-                            status={r.approval_status || "pending"}
-                            canApprove={isAdminOrAccounting}
-                            isMyTransaction={isOwner}
-                            amount={Number(r.amount)}
-                          />
+                      <div className="text-sm text-muted-foreground truncate">
+                        {r.is_subsidy && (
+                          <Badge
+                            variant="secondary"
+                            className="mr-1 bg-blue-100 text-blue-800 hover:bg-blue-100 border-none text-xs"
+                          >
+                            支援金
+                          </Badge>
                         )}
+                        <span>{r.description || "-"}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        {/* Receipt / subsidy link */}
-                        {(() => {
-                          if (r.is_subsidy) {
-                            if (isAdminOrAccounting) {
-                              return (
-                                <Button variant="outline" size="sm" asChild>
-                                  <Link href="/subsidies/manage">
-                                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                                    支援金
-                                  </Link>
-                                </Button>
-                              );
-                            } else if (isOwner) {
-                              return (
-                                <Button variant="outline" size="sm" asChild>
-                                  <Link href="/subsidies">
-                                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                                    支援金
-                                  </Link>
-                                </Button>
-                              );
+
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="shrink-0">
+                          {r.is_subsidy ? (
+                            <StatusBadge
+                              status={r.approval_status || "pending"}
+                            />
+                          ) : (
+                            <ApprovalActions
+                              transactionId={r.id}
+                              status={r.approval_status || "pending"}
+                              canApprove={isAdminOrAccounting}
+                              isMyTransaction={isOwner}
+                              amount={Number(r.amount)}
+                            />
+                          )}
+                        </div>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2">
+                            詳細
+                            <ChevronDown
+                              className={`ml-1 h-3.5 w-3.5 transition-transform ${
+                                openCards.has(r.id) ? "rotate-180" : ""
+                              }`}
+                            />
+                          </Button>
+                        </CollapsibleTrigger>
+                      </div>
+
+                      <CollapsibleContent className="space-y-3 pt-1">
+                        {r.remarks && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground font-medium">
+                              備考:{" "}
+                            </span>
+                            <span className="whitespace-pre-wrap break-words">
+                              {r.remarks}
+                            </span>
+                          </div>
+                        )}
+
+                        {!r.is_subsidy && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground font-medium">
+                              承認者:{" "}
+                            </span>
+                            <span>{r.approved_by_name || "\u2014"}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {(() => {
+                            if (r.is_subsidy) {
+                              if (isAdminOrAccounting) {
+                                return (
+                                  <Button variant="outline" size="sm" asChild>
+                                    <Link href="/subsidies/manage">
+                                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                      支援金
+                                    </Link>
+                                  </Button>
+                                );
+                              } else if (isOwner) {
+                                return (
+                                  <Button variant="outline" size="sm" asChild>
+                                    <Link href="/subsidies">
+                                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                      支援金
+                                    </Link>
+                                  </Button>
+                                );
+                              }
+                              return null;
                             }
                             return null;
-                          }
-                          return null;
-                        })()}
-                        {r.receipt_public_url && (
-                          <Button variant="outline" size="sm" asChild>
-                            <a
-                              href={r.receipt_public_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Receipt className="h-3.5 w-3.5 mr-1" />
-                              領収書
-                            </a>
-                          </Button>
-                        )}
-                        {/* Edit / Delete actions */}
-                        {!r.is_subsidy && (
-                          <TransactionRowActions
-                            transaction={r}
-                            categories={categoriesForSelected}
-                            canEdit={canEdit}
-                            canDelete={canDelete}
-                            userRole={userRoleStr}
-                            users={users}
-                          />
-                        )}
-                      </div>
+                          })()}
+                          {r.receipt_public_url && (
+                            <Button variant="outline" size="sm" asChild>
+                              <a
+                                href={r.receipt_public_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Receipt className="h-3.5 w-3.5 mr-1" />
+                                領収書
+                              </a>
+                            </Button>
+                          )}
+                          {!r.is_subsidy && (
+                            <TransactionRowActions
+                              transaction={r}
+                              categories={categoriesForSelected}
+                              canEdit={canEdit}
+                              canDelete={canDelete}
+                              userRole={userRoleStr}
+                              users={users}
+                            />
+                          )}
+                        </div>
+                      </CollapsibleContent>
                     </div>
-                  </div>
+                  </Collapsible>
                 );
               })
             )}
           </div>
 
           {/* Desktop table view */}
-          <div className="hidden md:block">
+          <div className="hidden xl:block">
             <Table>
               <TableHeader>
                 <TableRow>
