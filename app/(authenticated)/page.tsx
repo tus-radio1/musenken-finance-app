@@ -16,15 +16,21 @@ export default async function Home() {
 
   const profileId = user?.id ?? null;
 
-  // 会計年度の決定（is_current が無ければ最新年度にフォールバック）
-  const { data: fyCurrent } = await supabase
-    .from("fiscal_years")
-    .select("year")
-    .eq("is_current", true)
-    .single();
+  // 会計年度の決定 + チーム情報を並列取得
+  const [{ data: fyCurrent }, teamData] = await Promise.all([
+    supabase
+      .from("fiscal_years")
+      .select("year")
+      .eq("is_current", true)
+      .single(),
+    user
+      ? getUserTeams(supabase, supabase, user.id)
+      : Promise.resolve({ teams: [] as { id: string; name: string }[] }),
+  ]);
 
   let fyYear: number | undefined = fyCurrent?.year ?? undefined;
   if (!fyYear) {
+    // is_current が無ければ最新年度にフォールバック
     const { data: fyLatest } = await supabase
       .from("fiscal_years")
       .select("year")
@@ -33,43 +39,30 @@ export default async function Home() {
     fyYear = fyLatest?.[0]?.year ?? undefined;
   }
 
-  // 会計グループ一覧（FAB用）
-  let categories: { id: string; name: string }[] = [];
-  if (user) {
-    const teamData = await getUserTeams(supabase, supabase, user.id);
-    categories = teamData.teams;
-  }
+  const categories = teamData.teams;
 
-  // ログインユーザーの今年度の経費取引を取得
+  // 経費取引・支援金申請を並列取得
   let myTxQuery = supabase
     .from("transactions")
     .select("id, date, description, amount, approval_status, created_at")
     .order("created_at", { ascending: false });
 
-  if (profileId) {
-    myTxQuery = myTxQuery.eq("created_by", profileId);
-  }
-  if (typeof fyYear !== "undefined") {
-    myTxQuery = myTxQuery.eq("fiscal_year_id", fyYear);
-  }
+  if (profileId) myTxQuery = myTxQuery.eq("created_by", profileId);
+  if (typeof fyYear !== "undefined") myTxQuery = myTxQuery.eq("fiscal_year_id", fyYear);
 
-  const { data: myTransactions, error: txError } = await myTxQuery;
-
-  // ログインユーザーの今年度の支援金申請を取得
   let mySubQuery = supabase
     .from("subsidy_items")
     .select("id, name, requested_amount, status, created_at")
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
-  if (profileId) {
-    mySubQuery = mySubQuery.eq("applicant_id", profileId);
-  }
-  if (typeof fyYear !== "undefined") {
-    mySubQuery = mySubQuery.eq("fiscal_year_id", fyYear);
-  }
+  if (profileId) mySubQuery = mySubQuery.eq("applicant_id", profileId);
+  if (typeof fyYear !== "undefined") mySubQuery = mySubQuery.eq("fiscal_year_id", fyYear);
 
-  const { data: mySubsidies, error: subError } = await mySubQuery;
+  const [
+    { data: myTransactions, error: txError },
+    { data: mySubsidies, error: subError },
+  ] = await Promise.all([myTxQuery, mySubQuery]);
 
   const txList = myTransactions || [];
   const subList = mySubsidies || [];

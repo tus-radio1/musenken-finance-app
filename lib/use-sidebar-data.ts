@@ -76,7 +76,7 @@ export function useSidebarData() {
 
         const { data: profile } = await supabase
           .from("profiles")
-          .select("*")
+          .select("name")
           .eq("id", profileId)
           .maybeSingle();
 
