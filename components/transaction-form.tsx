@@ -33,7 +33,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import {
@@ -44,18 +43,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Upload } from "lucide-react";
+import {
+  createTransaction,
+  updateTransaction,
+  uploadReceiptAction,
+} from "@/app/actions";
 
 import { formSchema } from "@/lib/schema";
-import { cn } from "@/lib/utils";
-import { createClient } from "@/utils/supabase/client";
 import { ROLE_TYPES } from "@/lib/roles/constants";
+import { compressImageToWebp } from "@/lib/image";
 
 const ACCOUNTING_USER_ID =
   process.env.NEXT_PUBLIC_ACCOUNTING_SYSTEM_USER_ID ??
   "9701edd2-bd9d-4d57-9dd6-7235686103bf";
-import { Upload } from "lucide-react"; // アイコン用
-import { compressImageToWebp } from "@/lib/image";
-import { uploadReceiptAction } from "@/app/actions";
 
 // DBから取得したカテゴリーの型定義
 type Category = {
@@ -139,8 +140,6 @@ export function TransactionForm({
   async function onSubmit(values: z.input<typeof formSchema>) {
     try {
       let receiptPath: string | null | undefined = undefined;
-      const supabase = createClient();
-
       const transactionId = initialData?.id || crypto.randomUUID();
 
       // 1. ファイルがあればストレージにアップロード
@@ -183,50 +182,16 @@ export function TransactionForm({
 
       let result;
       if (initialData) {
-        const { updateTransaction } = await import("@/app/actions");
         result = await updateTransaction(initialData.id, {
           ...(values as any),
           receipt_url: receiptPath,
         });
       } else {
-        const finalAmount =
-          values.type === "expense"
-            ? -Number(values.amount)
-            : Number(values.amount);
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        // 現在の会計年度
-        const { data: fy } = await supabase
-          .from("fiscal_years")
-          .select("year")
-          .eq("is_current", true)
-          .single();
-
-        // toISOString() は UTC 変換するため日付がズレる。
-        // ローカルタイムゾーンで YYYY-MM-DD 文字列を生成する。
-        const d = new Date(values.date);
-        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-        const { error } = await supabase.from("transactions").insert({
-          id: transactionId,
-          date: dateStr,
-          amount: finalAmount,
-          accounting_group_id: values.accounting_group_id,
-          description: values.description,
-          created_by: user?.id ?? null,
-          fiscal_year_id: fy?.year ?? null,
-          receipt_url: receiptPath,
-          remarks: values.remarks,
-        });
-
-        if (error) {
-          console.error("Supabase insert error:", error);
-          toast.error("登録に失敗しました");
-          return;
-        }
-        result = { success: true };
+        result = await createTransaction(
+          values as z.infer<typeof formSchema>,
+          receiptPath,
+          transactionId,
+        );
       }
 
       if ((result as any).error) {

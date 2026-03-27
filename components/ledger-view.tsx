@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
-import { fetchLedgerTransactions } from "@/app/ledger/actions";
+import { fetchLedgerTransactions } from "@/app/(authenticated)/ledger/actions";
 import {
   Receipt,
   ArrowUpDown,
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/collapsible";
 import Link from "next/link";
 import { ROLE_TYPES } from "@/lib/roles/constants";
+import { createClient } from "@/utils/supabase/client";
 
 type Team = { id: string; name: string; type: "general" | "leader" };
 
@@ -187,6 +188,8 @@ export default function LedgerView({
 
   useEffect(() => {
     let active = true;
+    const supabase = createClient();
+
     const fetchData = async () => {
       if (!selectedGroup) return;
       setLoading(true);
@@ -227,12 +230,35 @@ export default function LedgerView({
     fetchData();
 
     // 取引変更後の自動再取得
-    const handleRefresh = () => fetchData();
+    const handleRefresh = () => {
+      void fetchData();
+    };
     window.addEventListener("ledger-refresh", handleRefresh);
+
+    const channel = selectedGroup
+      ? supabase
+          .channel(`ledger-transactions-${selectedGroup}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "transactions",
+              filter: `accounting_group_id=eq.${selectedGroup}`,
+            },
+            () => {
+              void fetchData();
+            },
+          )
+          .subscribe()
+      : null;
 
     return () => {
       active = false;
       window.removeEventListener("ledger-refresh", handleRefresh);
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
   }, [selectedGroup, fyYear, teams]);
 

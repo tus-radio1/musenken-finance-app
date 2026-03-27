@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { usePathname } from "next/navigation";
 import {
   Home,
@@ -12,14 +12,14 @@ import {
   UserCog,
   HandCoins,
 } from "lucide-react";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
 import { createClient } from "@/utils/supabase/client";
 import type { UserProfile } from "@/components/user-nav";
 import type { LucideIcon } from "lucide-react";
-import { ROLE_TYPES, ROLE_NAMES_JA, MANAGE_MEMBER_ROLE_NAMES } from "@/lib/roles/constants";
+import {
+  ROLE_TYPES,
+  ROLE_NAMES_JA,
+  MANAGE_MEMBER_ROLE_NAMES,
+} from "@/lib/roles/constants";
 
 export type NavItem = {
   href: string;
@@ -27,10 +27,47 @@ export type NavItem = {
   icon: LucideIcon;
 };
 
-function extractRoleInfo(rows: any[] | null | undefined) {
+type RoleInfoRow = {
+  roles:
+    | {
+        name?: string | null;
+        type?: string | null;
+      }
+    | Array<{
+        name?: string | null;
+        type?: string | null;
+      }>
+    | null;
+};
+
+type PendingSubsidy = {
+  id: string;
+  name: string | null;
+  category: string | null;
+  requested_amount: number | null;
+  status: string | null;
+};
+
+type SidebarData = {
+  roleNames: string[];
+  roleTypes: string[];
+  userProfile: UserProfile | null;
+  pendingSubsidies: PendingSubsidy[];
+};
+
+const EMPTY_SIDEBAR_DATA: SidebarData = {
+  roleNames: [],
+  roleTypes: [],
+  userProfile: null,
+  pendingSubsidies: [],
+};
+
+function extractRoleInfo(rows: RoleInfoRow[] | null | undefined) {
   const names: string[] = [];
   const types: string[] = [];
-  const pushRole = (role: any) => {
+  const pushRole = (
+    role: { name?: string | null; type?: string | null } | null,
+  ) => {
     const name = role?.name;
     const type = role?.type;
     if (name && !names.includes(name)) names.push(name);
@@ -44,98 +81,78 @@ function extractRoleInfo(rows: any[] | null | undefined) {
   return { names, types };
 }
 
+async function fetchSidebarData(): Promise<SidebarData> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return EMPTY_SIDEBAR_DATA;
+  }
+
+  const profileId = user.id;
+  const [rolesResult, profileResult, pendingResult] = await Promise.all([
+    supabase
+      .from("user_roles")
+      .select("roles(name, type)")
+      .eq("user_id", profileId),
+    supabase.from("profiles").select("name").eq("id", profileId).maybeSingle(),
+    supabase
+      .from("subsidy_items")
+      .select("id, name, category, requested_amount, status")
+      .eq("applicant_id", profileId)
+      .eq("status", "pending")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
+
+  if (rolesResult.error) {
+    throw rolesResult.error;
+  }
+
+  if (profileResult.error) {
+    throw profileResult.error;
+  }
+
+  if (pendingResult.error) {
+    throw pendingResult.error;
+  }
+
+  const info = extractRoleInfo(
+    rolesResult.data as RoleInfoRow[] | null | undefined,
+  );
+
+  return {
+    roleNames: info.names,
+    roleTypes: info.types,
+    pendingSubsidies: pendingResult.data ?? [],
+    userProfile: {
+      full_name: profileResult.data?.name || user.user_metadata?.name || "",
+      email: null,
+      role: null,
+    },
+  };
+}
+
 export function useSidebarData() {
   const pathname = usePathname();
-  const [roleNames, setRoleNames] = useState<string[]>([]);
-  const [roleTypes, setRoleTypes] = useState<string[]>([]);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingRoles, setIsLoadingRoles] = useState(true);
-  const [pendingSubsidies, setPendingSubsidies] = useState<any[]>([]);
+  const { data, isLoading } = useSWR("sidebar-data", fetchSidebarData, {
+    fallbackData: EMPTY_SIDEBAR_DATA,
+  });
 
-  useEffect(() => {
-    let active = true;
-    const supabase = createClient();
-
-    const loadRoles = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) {
-          if (active) setRoleNames([]);
-          return;
-        }
-
-        const studentNumber = extractStudentNumberFromUser(user);
-        const profileId = await findProfileIdByStudentNumber(
-          supabase,
-          studentNumber,
-        );
-        if (!profileId) {
-          if (active) setRoleNames([]);
-          return;
-        }
-
-        const { data: rows, error } = await supabase
-          .from("user_roles")
-          .select("roles(name, type)")
-          .eq("user_id", profileId);
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", profileId)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (active) {
-          const info = extractRoleInfo(rows);
-          setRoleNames(info.names);
-          setRoleTypes(info.types);
-
-          // 申請中の支援金を取得
-          const { data: pendingSubs } = await supabase
-            .from("subsidy_items")
-            .select("id, name, category, requested_amount, status")
-            .eq("applicant_id", profileId)
-            .eq("status", "pending")
-            .is("deleted_at", null)
-            .order("created_at", { ascending: false })
-            .limit(5);
-          if (active) setPendingSubsidies(pendingSubs || []);
-
-          if (profile) {
-            setUserProfile({
-              full_name: profile.name || user.user_metadata?.name || "",
-              email: null,
-              role: null,
-            });
-          }
-        }
-      } catch (error) {
-        if (active) {
-          setRoleNames([]);
-          setRoleTypes([]);
-        }
-      } finally {
-        if (active) setIsLoadingRoles(false);
-      }
-    };
-
-    loadRoles();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const roleNames = data?.roleNames ?? EMPTY_SIDEBAR_DATA.roleNames;
+  const roleTypes = data?.roleTypes ?? EMPTY_SIDEBAR_DATA.roleTypes;
+  const userProfile = data?.userProfile ?? EMPTY_SIDEBAR_DATA.userProfile;
+  const pendingSubsidies =
+    data?.pendingSubsidies ?? EMPTY_SIDEBAR_DATA.pendingSubsidies;
 
   // 会計ロールを持つユーザーのみが見られるナビゲーション項目
   const hasAccountingRole = roleNames.includes(ROLE_NAMES_JA.ACCOUNTING);
   // 部長・副部長・会計・Admin ロールを持つユーザーのみ部員管理を表示
   const hasManageRole =
-    roleNames.some((n) =>
+    roleNames.some((n: string) =>
       (MANAGE_MEMBER_ROLE_NAMES as readonly string[]).includes(n),
     ) || roleTypes.includes(ROLE_TYPES.ADMIN);
 
@@ -162,7 +179,7 @@ export function useSidebarData() {
     roleNames,
     roleTypes,
     userProfile,
-    isLoadingRoles,
+    isLoadingRoles: isLoading,
     pendingSubsidies,
     navItems,
   };

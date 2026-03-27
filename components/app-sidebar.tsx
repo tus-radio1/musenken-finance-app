@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { UserNav } from "@/components/user-nav";
-import { useSidebarData } from "@/lib/use-sidebar-data";
+import { useSidebarDataContext } from "@/components/sidebar-data-provider";
 
 export function AppSidebar() {
   const {
@@ -14,7 +14,7 @@ export function AppSidebar() {
     isLoadingRoles,
     pendingSubsidies,
     navItems,
-  } = useSidebarData();
+  } = useSidebarDataContext();
 
   return (
     <aside className="hidden md:flex md:flex-col md:w-56 border-r bg-background">

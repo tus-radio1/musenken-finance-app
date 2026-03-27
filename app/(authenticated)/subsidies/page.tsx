@@ -1,19 +1,24 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { SubsidyForm } from "@/components/subsidy-form";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SubsidyItemsTable } from "@/components/subsidy-items-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  extractStudentNumberFromUser,
-  findProfileIdByStudentNumber,
-} from "@/lib/account";
 import { getUserTeams } from "@/lib/teams";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { Button } from "@/components/ui/button";
 
-export default async function SubsidiesPage() {
+const PAGE_SIZE = 50;
+
+export default async function SubsidiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const supabase = await createClient();
+  const params = await searchParams;
 
   const {
     data: { user },
@@ -23,8 +28,7 @@ export default async function SubsidiesPage() {
     redirect("/login");
   }
 
-  const studentNumber = extractStudentNumberFromUser(user);
-  const profileId = await findProfileIdByStudentNumber(supabase, studentNumber);
+  const profileId = user.id;
 
   if (!profileId) {
     return (
@@ -52,6 +56,9 @@ export default async function SubsidiesPage() {
     );
   }
 
+  const page = Math.max(0, parseInt(params.page ?? "0", 10) || 0);
+  const offset = page * PAGE_SIZE;
+
   // 会計グループ一覧を取得 & isGlobalAdmin判定
   const teamData = await getUserTeams(supabase, supabase, user.id);
   const isGlobalAdmin = teamData.isGlobalAdmin;
@@ -63,14 +70,21 @@ export default async function SubsidiesPage() {
     .order("name");
 
   // 当該ユーザの支援金申請を取得 (soft-deleted records are excluded)
-  const { data: subsidyItems } = await supabase
+  const { data: subsidyItems, count } = await supabase
     .from("subsidy_items")
     .select(
       "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, receipt_url, remarks, created_at, accounting_group_id, accounting_groups(name)",
+      { count: "exact" },
     )
     .eq("applicant_id", profileId)
     .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1);
+
+  const totalCount = count ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const hasPrev = page > 0;
+  const hasNext = page < totalPages - 1;
 
   // Construct receipt public URL base from Supabase URL
   const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -204,6 +218,38 @@ export default async function SubsidiesPage() {
                   />
                 </CardContent>
               </Card>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {totalCount}件中 {offset + 1}〜{Math.min(offset + PAGE_SIZE, totalCount)}件
+                  </p>
+                  <div className="flex gap-2">
+                    {hasPrev ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/subsidies?page=${page - 1}`}>
+                          前へ
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled>
+                        前へ
+                      </Button>
+                    )}
+                    {hasNext ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/subsidies?page=${page + 1}`}>
+                          次へ
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled>
+                        次へ
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="md:hidden">
                 <SubsidyForm categories={accountingGroups || []} />

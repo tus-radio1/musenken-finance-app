@@ -12,7 +12,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useSidebarData } from "@/lib/use-sidebar-data";
+import { useSidebarDataContext } from "@/components/sidebar-data-provider";
 import { UserNav } from "@/components/user-nav";
 
 export function MobileSidebar() {
@@ -24,7 +24,7 @@ export function MobileSidebar() {
     isLoadingRoles,
     pendingSubsidies,
     navItems,
-  } = useSidebarData();
+  } = useSidebarDataContext();
 
   // --- スワイプ検出 ---
   const touchStartX = useRef<number | null>(null);
