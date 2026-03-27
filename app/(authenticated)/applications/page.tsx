@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { TransactionForm } from "@/components/transaction-form";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ApplicationsTable } from "@/components/applications-table";
@@ -7,9 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getUserTeams } from "@/lib/teams";
+import { Button } from "@/components/ui/button";
 
-export default async function ApplicationsPage() {
+const PAGE_SIZE = 50;
+
+export default async function ApplicationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const supabase = await createClient();
+  const params = await searchParams;
 
   const {
     data: { user },
@@ -19,6 +28,9 @@ export default async function ApplicationsPage() {
     redirect("/login");
   }
 
+  const page = Math.max(0, parseInt(params.page ?? "0", 10) || 0);
+  const offset = page * PAGE_SIZE;
+
   // 会計グループ一覧を取得
   const teamData = await getUserTeams(supabase, supabase, user.id);
   const accountingGroups = teamData.teams;
@@ -26,13 +38,20 @@ export default async function ApplicationsPage() {
   const isGlobalAdmin = teamData.isGlobalAdmin;
 
   // 当該ユーザの過去の申請を取得（会計グループ名付き）
-  const { data: transactions } = await supabase
+  const { data: transactions, count } = await supabase
     .from("transactions")
     .select(
       "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name), receipt_url, remarks, created_by",
+      { count: "exact" },
     )
     .eq("created_by", user.id)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1);
+
+  const totalCount = count ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const hasPrev = page > 0;
+  const hasNext = page < totalPages - 1;
 
   // Construct receipt public URL base from Supabase URL
   const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -87,6 +106,38 @@ export default async function ApplicationsPage() {
                   <ApplicationsTable transactions={tableData} accountingGroups={accountingGroups || []} isGlobalAdmin={isGlobalAdmin} />
                 </CardContent>
               </Card>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {totalCount}件中 {offset + 1}〜{Math.min(offset + PAGE_SIZE, totalCount)}件
+                  </p>
+                  <div className="flex gap-2">
+                    {hasPrev ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/applications?page=${page - 1}`}>
+                          前へ
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled>
+                        前へ
+                      </Button>
+                    )}
+                    {hasNext ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/applications?page=${page + 1}`}>
+                          次へ
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled>
+                        次へ
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="md:hidden">
                 <TransactionForm categories={accountingGroups || []} />

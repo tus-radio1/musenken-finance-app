@@ -11,9 +11,16 @@ import {
   updateTransactionStatusSchema,
   deleteTransactionSchema,
 } from "@/lib/validations";
-import { resolveAuthContext } from "@/lib/auth/context";
-import { getUserRoleAccess } from "@/lib/roles/access";
+import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import { ROLE_TYPES } from "@/lib/roles/constants";
+
+function isValidReceiptPath(path: string): boolean {
+  return /^[a-zA-Z0-9\-._/]+$/.test(path) && !path.includes("..");
+}
+
+function formatDateForDatabase(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 export async function signOut() {
   const authResult = await resolveAuthContext();
@@ -78,6 +85,88 @@ export async function uploadReceiptAction(formData: FormData) {
   return { success: true, filePath: sanitizedFileName };
 }
 
+export async function createTransaction(
+  values: z.infer<typeof formSchema>,
+  receiptPath?: string | null,
+  transactionId?: string,
+) {
+  const recordId = transactionId ?? crypto.randomUUID();
+
+  if (transactionId) {
+    const idValidation = z.string().uuid().safeParse(transactionId);
+    if (!idValidation.success) {
+      return { error: "入力データが不正です" };
+    }
+  }
+
+  if (receiptPath != null && !isValidReceiptPath(receiptPath)) {
+    return { error: "領収書URLの形式が不正です" };
+  }
+
+  const valuesValidation = formSchema.safeParse({
+    ...values,
+    receipt_url: receiptPath ?? null,
+  });
+  if (!valuesValidation.success) {
+    return { error: "入力データが不正です" };
+  }
+
+  const authResult = await resolveAuthWithRoles();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
+
+  const { data: fy, error: fyError } = await auth.supabase
+    .from("fiscal_years")
+    .select("year")
+    .eq("is_current", true)
+    .single();
+
+  if (fyError) {
+    console.error("[createTransaction] Fiscal year fetch error:", fyError);
+    return { error: "会計年度の取得に失敗しました" };
+  }
+
+  const parsedValues = valuesValidation.data;
+  const finalAmount =
+    parsedValues.type === "expense"
+      ? -Math.abs(parsedValues.amount)
+      : Math.abs(parsedValues.amount);
+
+  const insertData = {
+    id: recordId,
+    date: formatDateForDatabase(parsedValues.date),
+    amount: finalAmount,
+    accounting_group_id: parsedValues.accounting_group_id,
+    description: parsedValues.description,
+    created_by: auth.profileId,
+    fiscal_year_id: fy?.year ?? null,
+    receipt_url: parsedValues.receipt_url ?? null,
+    remarks: parsedValues.remarks ?? null,
+    approval_status: "pending",
+  };
+
+  const { error: insertError } = await auth.supabase
+    .from("transactions")
+    .insert(insertData);
+
+  if (insertError) {
+    console.error("[createTransaction] Insert error:", insertError);
+    return { error: "登録に失敗しました" };
+  }
+
+  await logAuditEvent({
+    tableName: "transactions",
+    recordId,
+    action: "INSERT",
+    newData: insertData,
+    changedBy: auth.profileId,
+  });
+
+  revalidatePath("/ledger");
+  revalidatePath("/applications");
+  return { success: true };
+}
+
 export async function updateTransactionStatus(
   transactionId: string,
   status: "approved" | "rejected",
@@ -93,9 +182,10 @@ export async function updateTransactionStatus(
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
@@ -110,7 +200,6 @@ export async function updateTransactionStatus(
     return { error: "対象のデータが見つかりません" };
   }
 
-  const access = await getUserRoleAccess(auth);
   const isGlobalAdmin = access.isAdmin;
   const isGroupLeader = access.roles.some(
     (r) =>
@@ -179,17 +268,15 @@ export async function updateTransaction(
 
   // Validate receipt_url: must be a relative storage path (no external URLs, no path traversal)
   if (values.receipt_url != null) {
-    const isValidPath =
-      /^[a-zA-Z0-9\-._/]+$/.test(values.receipt_url) &&
-      !values.receipt_url.includes("..");
-    if (!isValidPath) {
+    if (!isValidReceiptPath(values.receipt_url)) {
       return { error: "領収書URLの形式が不正です" };
     }
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
@@ -202,7 +289,6 @@ export async function updateTransaction(
     return { error: "対象のデータが見つかりません" };
   }
 
-  const access = await getUserRoleAccess(auth);
   const isGlobalAdmin = access.isAdmin;
   const isAccountingUser = access.hasAccountingRole;
   const isGroupLeader = access.roles.some(
@@ -239,14 +325,11 @@ export async function updateTransaction(
       ? -Math.abs(values.amount)
       : Math.abs(values.amount);
 
-  const dateObj = new Date(values.date);
-  const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
-
   const updates: Record<string, unknown> = {
     amount: finalAmount,
     description: values.description,
     fiscal_year_id: fy?.year ?? null,
-    date: dateStr,
+    date: formatDateForDatabase(new Date(values.date)),
     accounting_group_id: values.accounting_group_id,
   };
 
@@ -308,9 +391,10 @@ export async function deleteTransaction(id: string) {
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
@@ -325,7 +409,6 @@ export async function deleteTransaction(id: string) {
     return { error: "対象のデータが見つかりません" };
   }
 
-  const access = await getUserRoleAccess(auth);
   const isAdmin = access.isAdmin;
   const isOwner = transaction.created_by === auth.profileId;
 

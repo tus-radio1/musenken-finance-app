@@ -1,8 +1,8 @@
 import { createClient } from "@/utils/supabase/server";
+import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BudgetOverview } from "@/components/budget-overview";
 import {
   Table,
   TableBody,
@@ -14,14 +14,23 @@ import {
 import { YearSelector } from "./_components/year-selector";
 import { BudgetUpdateDialog } from "./_components/budget-update-dialog";
 import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
-import {
-  synthesizeLedgerRows,
-  TransactionRow,
-  SubsidyItemData,
-} from "@/lib/ledger";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
+
+const BudgetOverview = dynamic(
+  () =>
+    import("@/components/budget-overview").then((mod) => ({
+      default: mod.BudgetOverview,
+    })),
+  {
+    loading: () => (
+      <div className="h-48 flex items-center justify-center text-muted-foreground">
+        Loading chart...
+      </div>
+    ),
+  },
+);
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("ja-JP", {
@@ -135,62 +144,21 @@ export default async function BudgetPage({
   if (budgetsError) {
     console.error("budgets取得エラー:", budgetsError);
   }
-  // 取引集計（支出のみ）
-  let txQuery = supabase.from("transactions").select("*");
-  if (typeof fyYear !== "undefined") {
-    txQuery = txQuery.eq("fiscal_year_id", fyYear);
-  }
+  // Budget usage aggregation via server-side RPC
+  const { data: usageRows, error: usageError } = fyYear
+    ? await supabase.rpc("get_budget_usage", { p_fiscal_year_id: fyYear })
+    : { data: [], error: null };
 
-  // 支援金データの取得（統合用）
-  let subsidyQuery = supabase
-    .from("subsidy_items")
-    .select(
-      "id, name, requested_amount, approved_amount, actual_amount, created_at, applicant_id, receipt_date, status, accounting_group_id",
-    )
-    .in("status", ["approved", "receipt_submitted", "paid"])
-    .is("deleted_at", null);
-
-  if (typeof fyYear !== "undefined") {
-    subsidyQuery = subsidyQuery.eq("fiscal_year_id", fyYear);
-  }
-
-  const [txResult, subsidyResult] = await Promise.all([txQuery, subsidyQuery]);
-  const transactionsRaw = txResult.data || [];
-  const subsidyData = subsidyResult.data || [];
-
-  const transactions = synthesizeLedgerRows(
-    transactionsRaw as unknown as TransactionRow[],
-    subsidyData as SubsidyItemData[],
-  );
-
-  if (txResult.error) {
-    console.error("transactions取得エラー:", txResult.error);
+  if (usageError) {
+    console.error("get_budget_usage RPCエラー:", usageError);
   }
 
   const usageMap: Record<string, { expenses: number; pending: number }> = {};
-  (transactions || []).forEach((tx: any) => {
-    const gid = tx.accounting_group_id as string;
-    if (!gid) return;
-    const amt = Number(tx.amount);
-    if (!usageMap[gid]) usageMap[gid] = { expenses: 0, pending: 0 };
-
-    if (tx.approval_status === "refunded") {
-      if (amt < 0) {
-        usageMap[gid].expenses += Math.abs(amt);
-      } else {
-        // 収入（支援金受領等）は確定支出から差し引く
-        usageMap[gid].expenses -= amt;
-      }
-    } else if (
-      ["pending", "accepted", "approved"].includes(tx.approval_status)
-    ) {
-      if (amt < 0) {
-        usageMap[gid].pending += Math.abs(amt);
-      } else {
-        // 未受領の支援金収入は申請中から差し引く
-        usageMap[gid].pending -= amt;
-      }
-    }
+  (usageRows || []).forEach((row: any) => {
+    usageMap[row.accounting_group_id] = {
+      expenses: Number(row.expenses),
+      pending: Number(row.pending),
+    };
   });
 
   const budgetStatus = (budgets || []).map((b: any) => {

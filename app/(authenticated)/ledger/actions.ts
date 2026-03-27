@@ -5,8 +5,7 @@ import {
   fetchLedgerTransactionsSchema,
   validateInput,
 } from "@/lib/validations";
-import { resolveAuthContext } from "@/lib/auth/context";
-import { getUserRoleAccess } from "@/lib/roles/access";
+import { resolveAuthWithRoles } from "@/lib/auth/context";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 
 import {
@@ -24,11 +23,10 @@ export async function fetchLedgerTransactions(params: {
     return { error: "入力データが不正です" as const };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
-
-  const access = await getUserRoleAccess(auth);
+  const access = authResult.access;
 
   const isAccountingUser = access.hasAccountingRole;
   const isFullAccess =
