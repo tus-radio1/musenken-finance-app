@@ -4,13 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { format } from "date-fns";
 import { subsidyFormSchema } from "@/lib/schema";
-import { resolveAuthContext } from "@/lib/auth/context";
+import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import {
   updateMySubsidyItemSchema,
   deleteSubsidyItemSchema,
   validateInput,
 } from "@/lib/validations";
-import { getUserRoleAccess } from "@/lib/roles/access";
 
 const createSubsidyItemServerSchema = subsidyFormSchema.extend({
   evidence_url: z
@@ -181,12 +180,10 @@ export async function deleteMySubsidyItem(id: string) {
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
-
-  // Check if user is global admin
-  const access = await getUserRoleAccess(auth);
+  const access = authResult.access;
 
   // Fetch the item to verify ownership and status
   const { data: item, error: fetchError } = await auth.supabase

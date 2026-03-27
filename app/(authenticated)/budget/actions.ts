@@ -7,8 +7,8 @@ import {
   createFiscalYearBudgetsSchema,
   validateInput,
 } from "@/lib/validations";
-import { resolveAuthContext } from "@/lib/auth/context";
-import { getUserRoleAccess, canManageBudget } from "@/lib/roles/access";
+import { resolveAuthWithRoles } from "@/lib/auth/context";
+import { canManageBudget } from "@/lib/roles/access";
 
 export async function upsertBudget(
   accountingGroupId: string,
@@ -24,12 +24,12 @@ export async function upsertBudget(
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
   // 役割確認（グローバル管理者 or 当該グループのリーダーのみ編集可）
-  const access = await getUserRoleAccess(auth);
   if (!canManageBudget(access, accountingGroupId)) {
     return { error: "予算の編集権限がありません" };
   }
@@ -99,12 +99,12 @@ export async function createFiscalYearBudgets(
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
   // 役割確認（グローバル管理者 or 会計ロールのみ）
-  const access = await getUserRoleAccess(auth);
   if (!access.isAdmin && !access.hasAccountingRole) {
     return { error: "新規年度を作成する権限がありません" };
   }

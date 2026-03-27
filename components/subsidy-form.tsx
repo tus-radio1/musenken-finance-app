@@ -48,7 +48,7 @@ import {
 
 import { subsidyFormSchema } from "@/lib/schema";
 import { createClient } from "@/utils/supabase/client";
-import { createSubsidyItem } from "@/app/subsidies/actions";
+import { createSubsidyItem } from "@/app/(authenticated)/subsidies/actions";
 
 type Category = {
   id: string;

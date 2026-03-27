@@ -9,16 +9,15 @@ import {
   validateInput,
 } from "@/lib/validations";
 import { revalidatePath } from "next/cache";
-import { resolveAuthContext } from "@/lib/auth/context";
-import { getUserRoleAccess } from "@/lib/roles/access";
+import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 
 export async function fetchAllSubsidies() {
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error, data: [] };
   const auth = authResult.context;
+  const access = authResult.access;
 
   // Role validation: Accounting or Admin only
-  const access = await getUserRoleAccess(auth);
   const hasAccessRole = access.isAdmin || access.hasAccountingRole;
 
   if (!hasAccessRole) {
@@ -124,11 +123,11 @@ export async function updateSubsidyStatus(id: string, status: string) {
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
-  const access = await getUserRoleAccess(auth);
   const hasAccessRole = access.isAdmin || access.hasAccountingRole;
 
   if (!hasAccessRole) {
@@ -216,11 +215,11 @@ export async function updateSubsidyItem(
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
-  const access = await getUserRoleAccess(auth);
   const hasAccessRole = access.isAdmin || access.hasAccountingRole;
 
   if (!hasAccessRole) {
@@ -259,11 +258,11 @@ export async function deleteSubsidyItem(id: string) {
     return { error: "入力データが不正です" };
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+  const access = authResult.access;
 
-  const access = await getUserRoleAccess(auth);
   // Only admins can soft-delete subsidy items due to RLS policy constraints
   // The subsidy_items_update_admin_accounting policy has WITH CHECK (deleted_at IS NULL)
   // which prevents setting deleted_at to non-null, so soft deletes must be restricted to admins
