@@ -284,6 +284,11 @@ export function SubsidyItemsTable({
         const formData = new FormData();
         formData.append("file", compressedFile);
         formData.append("fileName", fileName);
+        // Pass existing receipt path so the server can delete the old file
+        // when the extension changes (e.g., .webp -> .pdf)
+        if (editingItem.receipt_url) {
+          formData.append("existingPath", editingItem.receipt_url);
+        }
 
         const result = await uploadReceiptAction(formData);
 
