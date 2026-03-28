@@ -327,6 +327,17 @@ export function SubsidyItemsTable({
         (g) => g.id === editForm.accounting_group_id,
       );
 
+      const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
+        ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
+        : null;
+      const newReceiptPublicUrl = uploadedReceiptUrl
+        ? uploadedReceiptUrl.startsWith("http")
+          ? uploadedReceiptUrl
+          : publicReceiptBase
+            ? `${publicReceiptBase}${uploadedReceiptUrl}`
+            : null
+        : null;
+
       setItems((prev) =>
         prev.map((i) =>
           i.id === editingItem.id
@@ -338,6 +349,7 @@ export function SubsidyItemsTable({
                   ? updatedGroup.name
                   : i.accounting_group_name,
                 receipt_url: uploadedReceiptUrl,
+                receipt_public_url: newReceiptPublicUrl,
               }
             : i,
         ),
