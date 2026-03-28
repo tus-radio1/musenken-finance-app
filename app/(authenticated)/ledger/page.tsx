@@ -59,12 +59,22 @@ export default async function LedgerPage({
   const selectedYearParam = params.year;
   let fyYear: number | undefined;
 
-  if (selectedYearParam) {
-    fyYear = parseInt(selectedYearParam, 10);
+  if (selectedYearParam !== undefined) {
+    const parsedYear = Number.parseInt(selectedYearParam, 10);
+    if (!Number.isNaN(parsedYear)) {
+      fyYear = parsedYear;
+    } else {
+      // Invalid year parameter; fall back to current or latest fiscal year
+      const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+      fyYear = currentFY?.year ?? undefined;
+      if (fyYear === undefined && fiscalYears && fiscalYears.length > 0) {
+        fyYear = fiscalYears[0]?.year ?? undefined;
+      }
+    }
   } else {
     const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
     fyYear = currentFY?.year ?? undefined;
-    if (!fyYear && fiscalYears && fiscalYears.length > 0) {
+    if (fyYear === undefined && fiscalYears && fiscalYears.length > 0) {
       fyYear = fiscalYears[0]?.year ?? undefined;
     }
   }

@@ -27,8 +27,14 @@ export default async function SubsidiesManagePage({
   let selectedYear: number | undefined;
 
   if (selectedYearParam) {
-    selectedYear = parseInt(selectedYearParam, 10);
-  } else {
+    const parsedYear = parseInt(selectedYearParam, 10);
+    if (Number.isFinite(parsedYear)) {
+      selectedYear = parsedYear;
+    }
+  }
+
+  // Fallback to current or latest fiscal year if no valid selected year from params
+  if (selectedYear === undefined) {
     const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
     selectedYear = currentFY?.year ?? undefined;
     if (!selectedYear && fiscalYears && fiscalYears.length > 0) {

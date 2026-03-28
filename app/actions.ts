@@ -69,7 +69,7 @@ export async function uploadReceiptAction(formData: FormData) {
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
     return {
       error:
-        "許可されていないファイル形式です（JPEG, PNG, WebP, GIF, HEIC, TIFF, BMP, PDFのみ）",
+        "許可されていないファイル形式です（JPEG, PNG, WebP, GIF, HEIC/HEIF, TIFF, BMP, PDFのみ）",
     };
   }
 

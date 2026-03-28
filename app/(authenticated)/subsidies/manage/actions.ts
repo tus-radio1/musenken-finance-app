@@ -37,8 +37,10 @@ export async function fetchAllSubsidies(year?: number) {
     )
     .is("deleted_at", null);
 
-  if (typeof year !== "undefined") {
+  if (typeof year === "number" && Number.isFinite(year)) {
     subsidyQuery = subsidyQuery.eq("fiscal_year_id", year);
+  } else if (typeof year !== "undefined") {
+    return { error: "無効な年度が指定されました", data: [] };
   }
 
   const { data, error } = await subsidyQuery.order("created_at", {
