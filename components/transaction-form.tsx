@@ -151,7 +151,7 @@ export function TransactionForm({
           const compressedFile = await compressImageToWebp(file);
 
           const fileExt = compressedFile.name.split(".").pop();
-          const fileName = `${transactionId}.${fileExt}`;
+          const fileName = `${transactionId}_${Date.now()}.${fileExt}`;
 
           const formData = new FormData();
           formData.append("file", compressedFile);

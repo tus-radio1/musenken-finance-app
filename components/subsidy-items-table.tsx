@@ -279,7 +279,7 @@ export function SubsidyItemsTable({
       try {
         const compressedFile = await compressImageToWebp(file);
         const fileExt = compressedFile.name.split(".").pop();
-        const fileName = `${editingItem.id}.${fileExt}`;
+        const fileName = `${editingItem.id}_${Date.now()}.${fileExt}`;
 
         const formData = new FormData();
         formData.append("file", compressedFile);
