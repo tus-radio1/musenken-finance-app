@@ -17,7 +17,11 @@ type AccountingGroup = {
   name: string;
 };
 
-export default async function LedgerPage() {
+export default async function LedgerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>;
+}) {
   const supabase = await createClient();
 
   const {
@@ -41,20 +45,59 @@ export default async function LedgerPage() {
     myTeams = teamData.teams;
   }
 
-  // 年度決定 と profiles を並列取得 (RLS handles authorization for SELECT)
-  const [{ data: fyCurrent }, { data: profiles }] = await Promise.all([
-    supabase.from("fiscal_years").select("year").eq("is_current", true).single(),
+  const params = await searchParams;
+
+  // 年度一覧 と profiles を並列取得 (RLS handles authorization for SELECT)
+  const [{ data: fiscalYears }, { data: profiles }] = await Promise.all([
+    supabase
+      .from("fiscal_years")
+      .select("year, is_current")
+      .order("year", { ascending: false }),
     supabase.from("profiles").select("id, name").is("deleted_at", null),
   ]);
 
-  let fyYear: number | undefined = fyCurrent?.year ?? undefined;
-  if (!fyYear) {
-    const { data: fyLatest } = await supabase
-      .from("fiscal_years")
-      .select("year")
-      .order("year", { ascending: false })
-      .limit(1);
-    fyYear = fyLatest?.[0]?.year ?? undefined;
+  const selectedYearParam = params.year;
+  let fyYear: number | undefined;
+
+  if (selectedYearParam !== undefined) {
+    const parsedYear = Number.parseInt(selectedYearParam, 10);
+    if (!Number.isNaN(parsedYear)) {
+      fyYear = parsedYear;
+    } else {
+      // Invalid year parameter; fall back to current or latest fiscal year
+      const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+      fyYear = currentFY?.year ?? undefined;
+      if (fyYear === undefined && fiscalYears && fiscalYears.length > 0) {
+        fyYear = fiscalYears[0]?.year ?? undefined;
+      }
+    }
+  } else {
+    const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+    fyYear = currentFY?.year ?? undefined;
+    if (fyYear === undefined && fiscalYears && fiscalYears.length > 0) {
+      fyYear = fiscalYears[0]?.year ?? undefined;
+    }
+  }
+
+  const isCurrentFY =
+    fiscalYears?.find((fy: any) => fy.year === fyYear)?.is_current ?? false;
+  const isReadOnly = !isCurrentFY && !isGlobalAdmin;
+
+  // 過年度の場合、予算が設定されているグループのみに絞り込む
+  let displayTeams = myTeams;
+  if (fyYear && !isCurrentFY) {
+    const { data: budgetsForYear } = await supabase
+      .from("budgets")
+      .select("accounting_group_id")
+      .eq("fiscal_year_id", fyYear);
+    const groupsWithBudget = new Set(
+      (budgetsForYear || []).map((b: any) => b.accounting_group_id),
+    );
+    const filtered = myTeams.filter((t) => groupsWithBudget.has(t.id));
+    // グループが1つも見つからない場合は全グループを表示（データ移行前など）
+    if (filtered.length > 0) {
+      displayTeams = filtered;
+    }
   }
 
   return (
@@ -65,12 +108,15 @@ export default async function LedgerPage() {
           <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
             <div className="max-w-7xl mx-auto w-full space-y-8">
               <LedgerView
-                teams={myTeams}
+                teams={displayTeams}
                 fyYear={fyYear}
                 isGlobalAdmin={isGlobalAdmin}
                 isAccountingUser={isAccountingUser}
                 currentProfileId={profileId || undefined}
                 users={profiles || []}
+                fiscalYears={fiscalYears || []}
+                selectedYear={fyYear}
+                isReadOnly={isReadOnly}
               />
             </div>
           </main>

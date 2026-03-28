@@ -55,9 +55,22 @@ export async function uploadReceiptAction(formData: FormData) {
   }
 
   // File type validation
-  const ALLOWED_FILE_TYPES = ["image/jpeg", "image/png", "application/pdf"];
+  const ALLOWED_FILE_TYPES = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/heic",
+    "image/heif",
+    "image/tiff",
+    "image/bmp",
+    "application/pdf",
+  ];
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-    return { error: "許可されていないファイル形式です（JPEG, PNG, PDFのみ）" };
+    return {
+      error:
+        "許可されていないファイル形式です（JPEG, PNG, WebP, GIF, HEIC/HEIF, TIFF, BMP, PDFのみ）",
+    };
   }
 
   // File size validation (max 10MB)

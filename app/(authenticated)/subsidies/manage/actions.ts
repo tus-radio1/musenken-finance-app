@@ -11,7 +11,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 
-export async function fetchAllSubsidies() {
+export async function fetchAllSubsidies(year?: number) {
   const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error, data: [] };
   const auth = authResult.context;
@@ -30,13 +30,22 @@ export async function fetchAllSubsidies() {
 
   // Fetch all subsidies including applicant name and transactions
   // Uses createClient() with RLS - role-based access is enforced by RLS policies
-  const { data, error } = await auth.supabase
+  let subsidyQuery = auth.supabase
     .from("subsidy_items")
     .select(
       "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,evidence_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
     )
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .is("deleted_at", null);
+
+  if (typeof year === "number" && Number.isFinite(year)) {
+    subsidyQuery = subsidyQuery.eq("fiscal_year_id", year);
+  } else if (typeof year !== "undefined") {
+    return { error: "無効な年度が指定されました", data: [] };
+  }
+
+  const { data, error } = await subsidyQuery.order("created_at", {
+    ascending: false,
+  });
 
   if (error) {
     console.error("Fetch all subsidies error:", JSON.stringify(error, null, 2));
