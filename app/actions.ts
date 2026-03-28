@@ -49,6 +49,7 @@ export async function uploadReceiptAction(formData: FormData) {
 
   const file = formData.get("file") as File;
   const fileName = formData.get("fileName") as string;
+  const existingPath = formData.get("existingPath") as string | null;
 
   if (!file || !fileName) {
     return { error: "ファイルとファイル名は必須です" };
@@ -84,6 +85,25 @@ export async function uploadReceiptAction(formData: FormData) {
 
   // createAdminClient is required here to bypass storage RLS for receipt uploads
   const supabaseAdmin = createAdminClient();
+
+  // Delete the existing file from storage if a different path is being uploaded.
+  // This prevents orphaned files when the file extension changes (e.g., .webp -> .pdf).
+  if (
+    existingPath &&
+    isValidReceiptPath(existingPath) &&
+    existingPath !== sanitizedFileName
+  ) {
+    const { error: removeError } = await supabaseAdmin.storage
+      .from("receipts")
+      .remove([existingPath]);
+    if (removeError) {
+      // Log but do not block the upload
+      console.error(
+        "[uploadReceiptAction] Failed to remove existing file:",
+        removeError,
+      );
+    }
+  }
 
   // upsert configuration is used in case a user updates the receipt for the same transaction
   const { error } = await supabaseAdmin.storage
