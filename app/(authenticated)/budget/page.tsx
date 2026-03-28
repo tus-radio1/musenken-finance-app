@@ -201,10 +201,13 @@ export default async function BudgetPage({
     };
   });
   const existingYears = (fiscalYears || []).map((fy: any) => fy.year as number);
+  const isCurrentFY =
+    fiscalYears?.find((fy: any) => fy.year === fyYear)?.is_current ?? false;
   const canEdit =
     isGlobalAdmin ||
-    hasAccountingRole ||
-    Object.values(myGroupRoles).includes(ROLE_TYPES.LEADER);
+    ((hasAccountingRole ||
+      Object.values(myGroupRoles).includes(ROLE_TYPES.LEADER)) &&
+      isCurrentFY);
 
   return (
     <div className="min-h-screen bg-background">
@@ -224,6 +227,12 @@ export default async function BudgetPage({
                   selectedYear={fyYear}
                 />
               </div>
+
+              {!isCurrentFY && !isGlobalAdmin && (
+                <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+                  過年度データのため閲覧専用です
+                </div>
+              )}
 
               <BudgetOverview data={budgetStatus as any} />
 

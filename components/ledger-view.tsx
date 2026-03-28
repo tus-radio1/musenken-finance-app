@@ -40,6 +40,7 @@ import {
 import Link from "next/link";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import { createClient } from "@/utils/supabase/client";
+import { FiscalYearSelector } from "@/components/fiscal-year-selector";
 
 type Team = { id: string; name: string; type: "general" | "leader" };
 
@@ -66,6 +67,9 @@ type Props = {
   isAccountingUser: boolean;
   currentProfileId?: string;
   users?: { id: string; name: string }[];
+  fiscalYears?: Array<{ year: number; is_current: boolean }>;
+  selectedYear?: number;
+  isReadOnly?: boolean;
 };
 
 type SortKey =
@@ -127,6 +131,9 @@ export default function LedgerView({
   isAccountingUser,
   currentProfileId,
   users,
+  fiscalYears,
+  selectedYear,
+  isReadOnly = false,
 }: Props) {
   const [selectedGroup, setSelectedGroup] = useState<string | undefined>(
     () => teams[0]?.id,
@@ -341,25 +348,34 @@ export default function LedgerView({
   return (
     <>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-baseline gap-0 flex-wrap">
-          <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-            <SelectTrigger className="inline-flex w-auto gap-1 border-none shadow-none px-0 text-2xl font-bold h-auto focus:ring-0 text-primary border-b-2 border-dotted border-primary/40 rounded-none hover:border-primary transition-colors cursor-pointer">
-              <SelectValue placeholder="選択してください" />
-            </SelectTrigger>
-            <SelectContent>
-              {teams.map((tm) => (
-                <SelectItem key={tm.id} value={tm.id}>
-                  {tm.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="ml-1">の出納帳</span>
-        </h1>
-        {typeof fyYear !== "undefined" && (
-          <p className="text-sm text-muted-foreground mt-1">
-            対象年度: {fyYear}
-          </p>
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold tracking-tight flex items-baseline gap-0 flex-wrap">
+            <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+              <SelectTrigger className="inline-flex w-auto gap-1 border-none shadow-none px-0 text-2xl font-bold h-auto focus:ring-0 text-primary border-b-2 border-dotted border-primary/40 rounded-none hover:border-primary transition-colors cursor-pointer">
+                <SelectValue placeholder="選択してください" />
+              </SelectTrigger>
+              <SelectContent>
+                {teams.map((tm) => (
+                  <SelectItem key={tm.id} value={tm.id}>
+                    {tm.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="ml-1">の出納帳</span>
+          </h1>
+          {fiscalYears && fiscalYears.length > 0 && (
+            <FiscalYearSelector
+              fiscalYears={fiscalYears}
+              selectedYear={selectedYear}
+              basePath="/ledger"
+            />
+          )}
+        </div>
+        {isReadOnly && (
+          <div className="mt-3 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+            過年度データのため閲覧専用です
+          </div>
         )}
       </div>
 
@@ -443,12 +459,10 @@ export default function LedgerView({
                 const isOwner =
                   !!currentProfileId && r.created_by === currentProfileId;
                 const canEdit =
-                  isAdminOrAccounting ||
-                  (isOwner && r.approval_status === "pending");
-                let canDelete = false;
-                if (isGlobalAdmin) {
-                  canDelete = true;
-                }
+                  !isReadOnly &&
+                  (isAdminOrAccounting ||
+                    (isOwner && r.approval_status === "pending"));
+                const canDelete = !isReadOnly && isGlobalAdmin;
 
                 return (
                   <Collapsible
@@ -657,19 +671,10 @@ export default function LedgerView({
                   const isOwner =
                     !!currentProfileId && r.created_by === currentProfileId;
                   const canEdit =
-                    isAdminOrAccounting ||
-                    (isOwner && r.approval_status === "pending");
-
-                  // 会計役職の削除権限は現状維持（自分が作成したデータのみ）
-                  // したがって、削除できるのは「Admin」か「自分が作ったデータかつ(Admin/会計以外なら)受付中」
-                  const isGeneralUserOnly =
-                    !isGlobalAdmin && !isAccountingUser && !r.is_subsidy; // is_subsidy は今回は考慮外だが念の為
-
-                  let canDelete = false;
-                  if (isGlobalAdmin) {
-                    // Adminのみ削除可能
-                    canDelete = true;
-                  }
+                    !isReadOnly &&
+                    (isAdminOrAccounting ||
+                      (isOwner && r.approval_status === "pending"));
+                  const canDelete = !isReadOnly && isGlobalAdmin;
 
                   return (
                     <TableRow key={r.id}>

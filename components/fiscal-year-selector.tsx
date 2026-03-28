@@ -2,12 +2,17 @@
 
 import { useRouter } from "next/navigation";
 
-interface YearSelectorProps {
+interface FiscalYearSelectorProps {
   fiscalYears: Array<{ year: number; is_current: boolean }>;
   selectedYear?: number;
+  basePath: string;
 }
 
-export function YearSelector({ fiscalYears, selectedYear }: YearSelectorProps) {
+export function FiscalYearSelector({
+  fiscalYears,
+  selectedYear,
+  basePath,
+}: FiscalYearSelectorProps) {
   const router = useRouter();
 
   if (!fiscalYears || fiscalYears.length === 0) {
@@ -22,7 +27,7 @@ export function YearSelector({ fiscalYears, selectedYear }: YearSelectorProps) {
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const year = e.target.value;
-    router.push(`/budget?year=${year}`);
+    router.push(`${basePath}?year=${year}`);
   };
 
   return (

@@ -89,11 +89,13 @@ export function SubsidiesManageClientPage({
   profiles,
   accountingGroups = [],
   isAdmin = false,
+  isReadOnly = false,
 }: {
   initialData: SubsidyItem[];
   profiles: { id: string; name: string }[];
   accountingGroups?: { id: string; name: string }[];
   isAdmin?: boolean;
+  isReadOnly?: boolean;
 }) {
   const ACCOUNTING_USER_ID =
     process.env.NEXT_PUBLIC_ACCOUNTING_SYSTEM_USER_ID ??
@@ -309,10 +311,6 @@ export function SubsidiesManageClientPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        <h2 className="text-2xl font-bold tracking-tight">支援金管理</h2>
-      </div>
-
       <div className="flex flex-col sm:flex-row gap-4 bg-muted/50 p-4 rounded-lg">
         <div className="w-full sm:w-64 space-y-2">
           <label className="text-sm font-medium">カテゴリ</label>
@@ -413,6 +411,7 @@ export function SubsidiesManageClientPage({
                       onValueChange={(val) =>
                         handleStatusChange(item.id, val)
                       }
+                      disabled={isReadOnly}
                     >
                       <SelectTrigger className="w-full h-8 bg-background">
                         <SelectValue />
@@ -506,15 +505,17 @@ export function SubsidiesManageClientPage({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditClick(item)}
-                    >
-                      編集
-                    </Button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditClick(item)}
+                      >
+                        編集
+                      </Button>
+                    </div>
+                  )}
                 </CollapsibleContent>
               </div>
             </Collapsible>
@@ -592,6 +593,7 @@ export function SubsidiesManageClientPage({
                     <Select
                       value={item.status}
                       onValueChange={(val) => handleStatusChange(item.id, val)}
+                      disabled={isReadOnly}
                     >
                       <SelectTrigger className="w-[120px] h-8 relative shrink-0">
                         <SelectValue />
@@ -690,13 +692,15 @@ export function SubsidiesManageClientPage({
                   </td>
 
                   <td className="p-3 align-middle text-right shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditClick(item)}
-                    >
-                      編集
-                    </Button>
+                    {!isReadOnly && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditClick(item)}
+                      >
+                        編集
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))
