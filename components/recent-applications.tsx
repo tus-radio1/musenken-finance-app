@@ -1,17 +1,13 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
+import { formatStoredDate } from "@/lib/date";
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(
     amount,
   );
-
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString("ja-JP");
-
-
 
 type Item = {
   id: string;
@@ -46,7 +42,7 @@ export function RecentApplications({ items }: { items: Item[] }) {
                   {item.description}
                 </div>
                 <div className="text-[11px] text-muted-foreground flex items-center gap-2">
-                  <span>{formatDate(item.date)}</span>
+                  <span>{formatStoredDate(item.date)}</span>
                   <span>・</span>
                   <StatusBadge status={item.approval_status} className="text-[10px] px-1.5 py-0" />
                 </div>

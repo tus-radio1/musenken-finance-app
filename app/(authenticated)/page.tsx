@@ -5,6 +5,7 @@ import { RecentApplications } from "@/components/recent-applications";
 import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { getSortableDateValue } from "@/lib/date";
 import { getUserTeams } from "@/lib/teams";
 
 export default async function Home() {
@@ -96,9 +97,7 @@ export default async function Home() {
   }));
 
   const allItems = [...txItems, ...subItems]
-    .sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    )
+    .sort((a, b) => getSortableDateValue(b.date) - getSortableDateValue(a.date))
     .slice(0, 5);
 
   // --- 今年度の集計（経費+支援金）---

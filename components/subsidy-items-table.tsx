@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { format } from "date-fns";
 import {
   ArrowUpDown,
   Search,
@@ -67,6 +66,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatStoredDate, getSortableDateValue } from "@/lib/date";
 
 type SubsidyItem = {
   id: string;
@@ -225,8 +225,8 @@ export function SubsidyItemsTable({
     result.sort((a, b) => {
       let cmp = 0;
       if (sortKey === "created_at") {
-        const da = new Date(a.created_at).getTime();
-        const db = new Date(b.created_at).getTime();
+        const da = getSortableDateValue(a.created_at);
+        const db = getSortableDateValue(b.created_at);
         cmp = da - db;
       } else if (sortKey === "requested_amount") {
         cmp = a.requested_amount - b.requested_amount;
@@ -509,7 +509,7 @@ export function SubsidyItemsTable({
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">
-                          {format(new Date(item.created_at), "yyyy/MM/dd")}
+                          {formatStoredDate(item.created_at)}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
@@ -623,7 +623,7 @@ export function SubsidyItemsTable({
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="text-xs text-muted-foreground">
-                          {format(new Date(item.created_at), "yyyy/MM/dd")}
+                          {formatStoredDate(item.created_at)}
                         </div>
                         <div className="font-medium truncate" title={item.name}>
                           {item.name}

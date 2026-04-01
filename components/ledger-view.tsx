@@ -41,6 +41,7 @@ import Link from "next/link";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import { createClient } from "@/utils/supabase/client";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
+import { formatStoredDate } from "@/lib/date";
 
 type Team = { id: string; name: string; type: "general" | "leader" };
 
@@ -476,9 +477,7 @@ export default function LedgerView({
                       <div className="flex justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-xs text-muted-foreground">
-                            {r.date
-                              ? new Date(r.date).toLocaleDateString("ja-JP")
-                              : "-"}
+                            {r.date ? formatStoredDate(r.date) : "-"}
                           </div>
                           <div className="text-sm font-medium truncate">
                             {r.created_by_name || "未登録"}
@@ -683,7 +682,7 @@ export default function LedgerView({
                     <TableRow key={r.id}>
                       <TableCell>
                         {r.date
-                          ? new Date(r.date).toLocaleDateString("ja-JP")
+                          ? formatStoredDate(r.date)
                           : "-"}
                       </TableCell>
                       <TableCell className="text-gray-500 text-sm">

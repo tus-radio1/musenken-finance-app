@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { format } from "date-fns";
 import { subsidyFormSchema } from "@/lib/schema";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
+import { formatDateForDatabase } from "@/lib/date";
 import {
   updateMySubsidyItemSchema,
   deleteSubsidyItemSchema,
@@ -46,7 +46,7 @@ export async function createSubsidyItem(
     term: validatedValues.term,
     expense_type: validatedValues.expense_type,
     income_type: validatedValues.income_type as string | undefined,
-    date: format(validatedValues.date, "yyyy-MM-dd"),
+    date: formatDateForDatabase(validatedValues.date),
     accounting_group_id: validatedValues.accounting_group_id,
     applicant_id: auth.profileId,
     fiscal_year_id: fy.year,
@@ -94,7 +94,7 @@ export async function fetchPendingSubsidyItems() {
   if (!authResult.ok) return { data: [] };
   const auth = authResult.context;
 
-  const { data, error } = await auth.supabase
+  const { data } = await auth.supabase
     .from("subsidy_items")
     .select(
       "id, category, term, expense_type, name, requested_amount, status, accounting_groups(name)",
@@ -157,7 +157,7 @@ export async function updateMySubsidyItem(
 
   const updateData: Record<string, unknown> = { ...values };
   if (values.date) {
-    updateData.date = format(values.date, "yyyy-MM-dd");
+    updateData.date = formatDateForDatabase(values.date);
   }
 
   const { error: updateError } = await auth.supabase

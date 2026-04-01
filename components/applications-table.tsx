@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
 import {
   ArrowUpDown,
   Search,
@@ -35,6 +34,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
+import { formatStoredDate, getSortableDateValue } from "@/lib/date";
 
 type Transaction = {
   id: string;
@@ -120,8 +120,8 @@ export function ApplicationsTable({
     result.sort((a, b) => {
       let cmp = 0;
       if (sortKey === "date") {
-        const da = a.date ? new Date(a.date).getTime() : 0;
-        const db = b.date ? new Date(b.date).getTime() : 0;
+        const da = getSortableDateValue(a.date);
+        const db = getSortableDateValue(b.date);
         cmp = da - db;
       } else if (sortKey === "amount") {
         cmp = Math.abs(a.amount) - Math.abs(b.amount);
@@ -248,7 +248,7 @@ export function ApplicationsTable({
                       <TableRow key={tx.id}>
                         <TableCell className="font-medium">
                           {tx.date
-                            ? format(new Date(tx.date), "yyyy/MM/dd")
+                            ? formatStoredDate(tx.date)
                             : "-"}
                         </TableCell>
                         <TableCell>
@@ -342,9 +342,7 @@ export function ApplicationsTable({
                     <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-xs text-muted-foreground">
-                          {tx.date
-                            ? format(new Date(tx.date), "yyyy/MM/dd")
-                            : "-"}
+                          {tx.date ? formatStoredDate(tx.date) : "-"}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
