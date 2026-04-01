@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { format } from "date-fns";
 import {
   updateSubsidyStatus,
   updateSubsidyItem,
   deleteSubsidyItem,
 } from "./actions";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Receipt, FileText, Upload, Loader2, ChevronDown } from "lucide-react";
 import { uploadReceiptAction } from "@/app/actions";
 import { compressImageToWebp } from "@/lib/image";
@@ -34,6 +33,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  dateInputValueToJstTimestamp,
+  formatStoredDate,
+  toDateInputValue,
+} from "@/lib/date";
 
 type SubsidyItem = {
   id: string;
@@ -187,10 +191,8 @@ export function SubsidiesManageClientPage({
       requested_amount: item.requested_amount,
       calculated_amount: item.calculated_amount,
       actual_amount: item.actual_expense || 0,
-      created_at: format(new Date(item.created_at), "yyyy-MM-dd"),
-      receipt_date: item.receipt_date
-        ? format(new Date(item.receipt_date), "yyyy-MM-dd")
-        : "",
+      created_at: toDateInputValue(item.created_at),
+      receipt_date: toDateInputValue(item.receipt_date),
       receipt_url: item.receipt_url || "",
       remarks: item.remarks || "",
     });
@@ -247,11 +249,9 @@ export function SubsidiesManageClientPage({
       approved_amount: editForm.calculated_amount,
       actual_amount: editForm.actual_amount,
       created_at: editForm.created_at
-        ? new Date(editForm.created_at).toISOString()
+        ? dateInputValueToJstTimestamp(editForm.created_at)
         : undefined,
-      receipt_date: editForm.receipt_date
-        ? new Date(editForm.receipt_date).toISOString()
-        : null,
+      receipt_date: editForm.receipt_date || null,
       receipt_url: uploadedReceiptUrl,
       remarks: editForm.remarks,
     });
@@ -284,11 +284,9 @@ export function SubsidiesManageClientPage({
                   ? updatedGroup.name
                   : i.accounting_group_name,
                 created_at: editForm.created_at
-                  ? new Date(editForm.created_at).toISOString()
+                  ? dateInputValueToJstTimestamp(editForm.created_at)
                   : i.created_at,
-                receipt_date: editForm.receipt_date
-                  ? new Date(editForm.receipt_date).toISOString()
-                  : i.receipt_date,
+                receipt_date: editForm.receipt_date || null,
                 receipt_url: uploadedReceiptUrl,
                 remarks: editForm.remarks,
               }
@@ -365,7 +363,7 @@ export function SubsidiesManageClientPage({
                 <div className="flex justify-between items-start gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="text-xs text-muted-foreground">
-                      {format(new Date(item.created_at), "yyyy/MM/dd")}
+                      {formatStoredDate(item.created_at)}
                     </div>
                     <div className="font-medium truncate">{item.name}</div>
                     <div className="text-xs text-muted-foreground">
@@ -452,7 +450,7 @@ export function SubsidiesManageClientPage({
                     <span className="text-muted-foreground font-medium">受領日: </span>
                     <span>
                       {item.receipt_date
-                        ? format(new Date(item.receipt_date), "yyyy/MM/dd")
+                        ? formatStoredDate(item.receipt_date)
                         : "\u2014"}
                     </span>
                   </div>
@@ -574,7 +572,7 @@ export function SubsidiesManageClientPage({
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground block">
-                      {format(new Date(item.created_at), "yyyy/MM/dd")}
+                      {formatStoredDate(item.created_at)}
                     </span>
                   </td>
 
@@ -644,9 +642,7 @@ export function SubsidiesManageClientPage({
                   </td>
 
                   <td className="p-3 text-sm">
-                    {item.receipt_date
-                      ? format(new Date(item.receipt_date), "yyyy/MM/dd")
-                      : "-"}
+                    {item.receipt_date ? formatStoredDate(item.receipt_date) : "-"}
                   </td>
 
                   <td className="p-3 text-sm">

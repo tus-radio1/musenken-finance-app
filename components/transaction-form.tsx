@@ -53,6 +53,7 @@ import {
 import { formSchema } from "@/lib/schema";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import { compressImageToWebp } from "@/lib/image";
+import { parseDateInputValue, parseDateOnly } from "@/lib/date";
 import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
 // DBから取得したカテゴリーの型定義
@@ -96,16 +97,9 @@ export function TransactionForm({
   // 編集権限(canEdit)の確認は呼び出し元やサーバー側で行われているため、フォームが開けたならコア編集可能
   const preventCoreEdits = false;
 
-  // DB の date 文字列 ("YYYY-MM-DD") を new Date() に渡すと UTC として解釈され、
-  // JST では1日前になるバグがある。年月日を分割してローカル日付として構築する。
-  const parseDateLocal = (dateStr: string) => {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    return new Date(y, m - 1, d);
-  };
-
   const defaultValues = initialData
     ? {
-        date: parseDateLocal(initialData.date),
+        date: parseDateOnly(initialData.date),
         amount: Math.abs(initialData.amount),
         type: initialData.amount < 0 ? "expense" : "income",
         accounting_group_id: initialData.accounting_group_id,
@@ -288,8 +282,8 @@ export function TransactionForm({
                             field.value ? format(field.value, "yyyy/MM/dd") : ""
                           }
                           onChange={(e) => {
-                            const parsed = new Date(e.target.value);
-                            if (!isNaN(parsed.getTime())) {
+                            const parsed = parseDateInputValue(e.target.value);
+                            if (parsed) {
                               field.onChange(parsed);
                             }
                           }}

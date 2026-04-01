@@ -7,6 +7,7 @@ import { z } from "zod";
 import { formSchema } from "@/lib/schema";
 import { logAuditEvent } from "@/lib/audit-log";
 import { uploadRateLimiter } from "@/lib/rate-limit";
+import { formatDateForDatabase } from "@/lib/date";
 import {
   ACCOUNTING_USER_ID_FALLBACK,
   getAccountingUserId,
@@ -20,10 +21,6 @@ import { ROLE_TYPES } from "@/lib/roles/constants";
 
 function isValidReceiptPath(path: string): boolean {
   return /^[a-zA-Z0-9\-._/]+$/.test(path) && !path.includes("..");
-}
-
-function formatDateForDatabase(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function normalizeAccountingUserId(
@@ -376,7 +373,7 @@ export async function updateTransaction(
     return { error: "受付中以外のデータは編集できません" };
   }
 
-  const updateDate = formatDateForDatabase(new Date(values.date));
+  const updateDate = formatDateForDatabase(values.date);
   const { data: fy } = await auth.supabase
     .from("fiscal_years")
     .select("year")
@@ -394,7 +391,7 @@ export async function updateTransaction(
     amount: finalAmount,
     description: values.description,
     fiscal_year_id: fy?.year ?? null,
-    date: formatDateForDatabase(new Date(values.date)),
+    date: formatDateForDatabase(values.date),
     accounting_group_id: values.accounting_group_id,
   };
 

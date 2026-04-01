@@ -1,3 +1,5 @@
+import { getSortableDateValue } from "@/lib/date";
+
 export type TransactionRow = {
   id: string;
   date: string | null;
@@ -109,8 +111,8 @@ export function synthesizeLedgerRows(
 
   // 日付で降順ソート
   combinedRows.sort((a, b) => {
-    const dateA = a.date ? new Date(a.date).getTime() : 0;
-    const dateB = b.date ? new Date(b.date).getTime() : 0;
+    const dateA = getSortableDateValue(a.date);
+    const dateB = getSortableDateValue(b.date);
     return dateB - dateA;
   });
 
