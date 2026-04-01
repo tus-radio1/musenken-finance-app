@@ -148,10 +148,14 @@ export async function createTransaction(
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
 
+  const parsedValues = valuesValidation.data;
+  const transactionDate = formatDateForDatabase(parsedValues.date);
+
   const { data: fy, error: fyError } = await auth.supabase
     .from("fiscal_years")
     .select("year")
-    .eq("is_current", true)
+    .lte("start_date", transactionDate)
+    .gte("end_date", transactionDate)
     .single();
 
   if (fyError) {
@@ -159,7 +163,6 @@ export async function createTransaction(
     return { error: "会計年度の取得に失敗しました" };
   }
 
-  const parsedValues = valuesValidation.data;
   const finalAmount =
     parsedValues.type === "expense"
       ? -Math.abs(parsedValues.amount)
@@ -346,10 +349,12 @@ export async function updateTransaction(
     return { error: "受付中以外のデータは編集できません" };
   }
 
+  const updateDate = formatDateForDatabase(new Date(values.date));
   const { data: fy } = await auth.supabase
     .from("fiscal_years")
     .select("year")
-    .eq("is_current", true)
+    .lte("start_date", updateDate)
+    .gte("end_date", updateDate)
     .single();
 
   const effectiveType = values.type;
