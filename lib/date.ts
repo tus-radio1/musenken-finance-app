@@ -29,7 +29,7 @@ export function isDateOnlyString(value: string): boolean {
 }
 
 export function formatDateForDatabase(date: Date): string {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  return formatDatePartsInTimeZone(date, JAPAN_TIME_ZONE);
 }
 
 export function parseDateOnly(value: string): Date {
