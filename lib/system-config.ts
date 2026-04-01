@@ -1,7 +1,9 @@
+import "server-only";
+
+import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 import { createClient } from "@/utils/supabase/server";
 
-const ACCOUNTING_USER_ID_FALLBACK =
-  "9701edd2-bd9d-4d57-9dd6-7235686103bf";
+export { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
 /**
  * Get accounting system user ID from environment variable.
@@ -9,9 +11,7 @@ const ACCOUNTING_USER_ID_FALLBACK =
  * Use in server components and server actions.
  */
 export function getAccountingUserIdSync(): string {
-  return (
-    process.env.ACCOUNTING_SYSTEM_USER_ID ?? ACCOUNTING_USER_ID_FALLBACK
-  );
+  return process.env.ACCOUNTING_SYSTEM_USER_ID ?? ACCOUNTING_USER_ID_FALLBACK;
 }
 
 /**

@@ -8,6 +8,10 @@ import { formSchema } from "@/lib/schema";
 import { logAuditEvent } from "@/lib/audit-log";
 import { uploadRateLimiter } from "@/lib/rate-limit";
 import {
+  ACCOUNTING_USER_ID_FALLBACK,
+  getAccountingUserId,
+} from "@/lib/system-config";
+import {
   updateTransactionStatusSchema,
   deleteTransactionSchema,
 } from "@/lib/validations";
@@ -20,6 +24,28 @@ function isValidReceiptPath(path: string): boolean {
 
 function formatDateForDatabase(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function normalizeAccountingUserId(
+  userId: string | null | undefined,
+  accountingUserId: string,
+): string | null | undefined {
+  if (typeof userId === "undefined") {
+    return undefined;
+  }
+
+  if (userId === null) {
+    return null;
+  }
+
+  if (
+    userId === accountingUserId ||
+    userId === ACCOUNTING_USER_ID_FALLBACK
+  ) {
+    return accountingUserId;
+  }
+
+  return userId;
 }
 
 export async function signOut() {
@@ -313,6 +339,7 @@ export async function updateTransaction(
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
   const access = authResult.access;
+  const accountingUserId = await getAccountingUserId();
 
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
@@ -380,12 +407,16 @@ export async function updateTransaction(
   }
 
   if (values.created_by !== undefined && isGlobalAdmin) {
-    updates.created_by = values.created_by;
+    updates.created_by =
+      normalizeAccountingUserId(values.created_by, accountingUserId) ??
+      values.created_by;
   }
 
   if (values.approved_by !== undefined && isGlobalAdmin) {
-    updates.approved_by =
-      values.approved_by === "clear" ? null : values.approved_by;
+    updates.approved_by = normalizeAccountingUserId(
+      values.approved_by === "clear" ? null : values.approved_by,
+      accountingUserId,
+    );
   }
 
   if (
