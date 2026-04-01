@@ -1,0 +1,2 @@
+export const ACCOUNTING_USER_ID_FALLBACK =
+  "9701edd2-bd9d-4d57-9dd6-7235686103bf";

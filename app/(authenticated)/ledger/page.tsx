@@ -5,6 +5,7 @@ import LedgerView from "@/components/ledger-view";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getUserTeams, TeamInfo } from "@/lib/teams";
+import { getAccountingUserId } from "@/lib/system-config";
 
 type Role = {
   name: string | null;
@@ -48,12 +49,14 @@ export default async function LedgerPage({
   const params = await searchParams;
 
   // 年度一覧 と profiles を並列取得 (RLS handles authorization for SELECT)
-  const [{ data: fiscalYears }, { data: profiles }] = await Promise.all([
+  const [{ data: fiscalYears }, { data: profiles }, accountingUserId] =
+    await Promise.all([
     supabase
       .from("fiscal_years")
       .select("year, is_current")
       .order("year", { ascending: false }),
     supabase.from("profiles").select("id, name").is("deleted_at", null),
+    getAccountingUserId(),
   ]);
 
   const selectedYearParam = params.year;
@@ -114,6 +117,7 @@ export default async function LedgerPage({
                 isAccountingUser={isAccountingUser}
                 currentProfileId={profileId || undefined}
                 users={profiles || []}
+                accountingUserId={accountingUserId}
                 fiscalYears={fiscalYears || []}
                 selectedYear={fyYear}
                 isReadOnly={isReadOnly}

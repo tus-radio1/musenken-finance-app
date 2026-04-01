@@ -53,10 +53,7 @@ import {
 import { formSchema } from "@/lib/schema";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import { compressImageToWebp } from "@/lib/image";
-
-const ACCOUNTING_USER_ID =
-  process.env.NEXT_PUBLIC_ACCOUNTING_SYSTEM_USER_ID ??
-  "9701edd2-bd9d-4d57-9dd6-7235686103bf";
+import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
 // DBから取得したカテゴリーの型定義
 type Category = {
@@ -71,6 +68,7 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
   userRole?: "admin" | "accounting" | "general" | null;
   users?: { id: string; name: string }[];
+  accountingUserId?: string;
 };
 
 export function TransactionForm({
@@ -81,6 +79,7 @@ export function TransactionForm({
   onOpenChange: setControlledOpen,
   userRole,
   users,
+  accountingUserId = ACCOUNTING_USER_ID_FALLBACK,
 }: Props) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -397,12 +396,12 @@ export function TransactionForm({
                 name="created_by"
                 render={({ field }) => {
                   const options = users.some(
-                    (u) => u.id === ACCOUNTING_USER_ID,
+                    (u) => u.id === accountingUserId,
                   )
                     ? users
                     : [
                         {
-                          id: ACCOUNTING_USER_ID,
+                          id: accountingUserId,
                           name: "会計",
                         },
                         ...users,
@@ -495,12 +494,12 @@ export function TransactionForm({
                 name="approved_by"
                 render={({ field }) => {
                   const options = users.some(
-                    (u) => u.id === ACCOUNTING_USER_ID,
+                    (u) => u.id === accountingUserId,
                   )
                     ? users
                     : [
                         {
-                          id: ACCOUNTING_USER_ID,
+                          id: accountingUserId,
                           name: "会計",
                         },
                         ...users,

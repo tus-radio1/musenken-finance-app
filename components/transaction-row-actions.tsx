@@ -30,6 +30,7 @@ type Props = {
   canDelete: boolean;
   userRole?: "admin" | "accounting" | "general" | null;
   users?: { id: string; name: string }[];
+  accountingUserId?: string;
 };
 
 export function TransactionRowActions({
@@ -39,6 +40,7 @@ export function TransactionRowActions({
   canDelete,
   userRole,
   users,
+  accountingUserId,
 }: Props) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -112,6 +114,7 @@ export function TransactionRowActions({
           triggerButton={<span className="hidden" />}
           userRole={userRole}
           users={users}
+          accountingUserId={accountingUserId}
         />
       )}
     </>

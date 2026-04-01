@@ -67,6 +67,7 @@ type Props = {
   isAccountingUser: boolean;
   currentProfileId?: string;
   users?: { id: string; name: string }[];
+  accountingUserId?: string;
   fiscalYears?: Array<{ year: number; is_current: boolean }>;
   selectedYear?: number;
   isReadOnly?: boolean;
@@ -131,6 +132,7 @@ export default function LedgerView({
   isAccountingUser,
   currentProfileId,
   users,
+  accountingUserId,
   fiscalYears,
   selectedYear,
   isReadOnly = false,
@@ -602,6 +604,7 @@ export default function LedgerView({
                               canDelete={canDelete}
                               userRole={userRoleStr}
                               users={users}
+                              accountingUserId={accountingUserId}
                             />
                           )}
                         </div>
@@ -799,6 +802,7 @@ export default function LedgerView({
                             canDelete={canDelete}
                             userRole={userRoleStr}
                             users={users}
+                            accountingUserId={accountingUserId}
                           />
                         )}
                       </TableCell>
