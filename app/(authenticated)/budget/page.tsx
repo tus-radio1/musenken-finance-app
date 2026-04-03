@@ -47,34 +47,77 @@ export default async function BudgetPage({
   const supabase = await createClient();
   const params = await searchParams;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Step 1: auth + fiscalYears are independent — run in parallel
+  const [{ data: { user } }, { data: fiscalYears, error: fiscalYearsError }] =
+    await Promise.all([
+      supabase.auth.getUser(),
+      supabase
+        .from("fiscal_years")
+        .select("year, is_current")
+        .order("year", { ascending: false }),
+    ]);
 
   if (!user) {
     redirect("/login");
   }
 
+  if (fiscalYearsError) {
+    console.error("fiscal_years取得エラー:", fiscalYearsError);
+  }
+
+  // 選択された年度、またはデフォルトで現在の年度
+  const selectedYearParam = params.year;
+  let fyYear: number | undefined;
+
+  if (selectedYearParam) {
+    fyYear = parseInt(selectedYearParam, 10);
+  } else {
+    const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+    fyYear = currentFY?.year ?? undefined;
+    if (!fyYear && fiscalYears && fiscalYears.length > 0) {
+      fyYear = fiscalYears[0]?.year ?? undefined;
+    }
+  }
+
+  // Step 2: userRoles + categories + budgets + RPC — all depend on user.id or fyYear, run in parallel
+  let budgetQuery = supabase
+    .from("budgets")
+    .select("id, accounting_group_id, amount, fiscal_year_id");
+  if (typeof fyYear !== "undefined") {
+    budgetQuery = budgetQuery.eq("fiscal_year_id", fyYear);
+  }
+
+  const [
+    { data: userRoles },
+    { data: categories },
+    { data: budgets, error: budgetsError },
+    { data: usageRows, error: usageError },
+  ] = await Promise.all([
+    supabase
+      .from("user_roles")
+      .select("roles(name, type, accounting_group_id)")
+      .eq("user_id", user.id),
+    supabase.from("accounting_groups").select("id, name").order("name"),
+    budgetQuery,
+    fyYear
+      ? supabase.rpc("get_budget_usage", { p_fiscal_year_id: fyYear })
+      : Promise.resolve({ data: [] as any[], error: null }),
+  ]);
+
   // ロール情報取得
   let isGlobalAdmin = false;
   let hasAccountingRole = false;
   const myGroupRoles: Record<string, string> = {};
-  if (user) {
-    const { data: userRoles } = await supabase
-      .from("user_roles")
-      .select("roles(name, type, accounting_group_id)")
-      .eq("user_id", user.id);
-    const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-    isGlobalAdmin = roles.some((r: any) => r.type === ROLE_TYPES.ADMIN);
-    hasAccountingRole = roles.some(
-      (r: any) => r.name === ROLE_NAMES_JA.ACCOUNTING,
-    );
-    roles.forEach((r: any) => {
-      if (r?.accounting_group_id && r?.type) {
-        myGroupRoles[r.accounting_group_id] = r.type;
-      }
-    });
-  }
+  const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
+  isGlobalAdmin = roles.some((r: any) => r.type === ROLE_TYPES.ADMIN);
+  hasAccountingRole = roles.some(
+    (r: any) => r.name === ROLE_NAMES_JA.ACCOUNTING,
+  );
+  roles.forEach((r: any) => {
+    if (r?.accounting_group_id && r?.type) {
+      myGroupRoles[r.accounting_group_id] = r.type;
+    }
+  });
 
   // 会計ロールを持たないユーザーはアクセス不可
   if (!hasAccountingRole && !isGlobalAdmin) {
@@ -103,51 +146,9 @@ export default async function BudgetPage({
     );
   }
 
-  // 年度一覧を取得 (RLS handles authorization for SELECT)
-  const { data: fiscalYears, error: fiscalYearsError } = await supabase
-    .from("fiscal_years")
-    .select("year, is_current")
-    .order("year", { ascending: false });
-
-  if (fiscalYearsError) {
-    console.error("fiscal_years取得エラー:", fiscalYearsError);
-  }
-  // 選択された年度、またはデフォルトで現在の年度
-  const selectedYearParam = params.year;
-  let fyYear: number | undefined;
-
-  if (selectedYearParam) {
-    fyYear = parseInt(selectedYearParam, 10);
-  } else {
-    const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
-    fyYear = currentFY?.year ?? undefined;
-    if (!fyYear && fiscalYears && fiscalYears.length > 0) {
-      fyYear = fiscalYears[0]?.year ?? undefined;
-    }
-  }
-
-  // 会計グループ一覧 (RLS handles authorization for SELECT)
-  const { data: categories } = await supabase
-    .from("accounting_groups")
-    .select("id, name")
-    .order("name");
-
-  // 予算一覧（当該年度）
-  let budgetQuery = supabase
-    .from("budgets")
-    .select("id, accounting_group_id, amount, fiscal_year_id");
-  if (typeof fyYear !== "undefined") {
-    budgetQuery = budgetQuery.eq("fiscal_year_id", fyYear);
-  }
-  const { data: budgets, error: budgetsError } = await budgetQuery;
-
   if (budgetsError) {
     console.error("budgets取得エラー:", budgetsError);
   }
-  // Budget usage aggregation via server-side RPC
-  const { data: usageRows, error: usageError } = fyYear
-    ? await supabase.rpc("get_budget_usage", { p_fiscal_year_id: fyYear })
-    : { data: [], error: null };
 
   if (usageError) {
     console.error("get_budget_usage RPCエラー:", usageError);
