@@ -1,7 +1,8 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
-import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/server";
 
 export { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
@@ -16,19 +17,23 @@ export function getAccountingUserIdSync(): string {
 
 /**
  * Get accounting system user ID from DB system_config table.
+ * Cached with unstable_cache (revalidate: 3600s).
  * Falls back to env var, then hardcoded value.
- * Use when you want the most up-to-date value from DB.
  */
-export async function getAccountingUserId(): Promise<string> {
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("system_config")
-      .select("value")
-      .eq("key", "accounting_user_id")
-      .single();
-    return data?.value ?? getAccountingUserIdSync();
-  } catch {
-    return getAccountingUserIdSync();
-  }
-}
+export const getAccountingUserId = unstable_cache(
+  async (): Promise<string> => {
+    try {
+      const supabase = createAdminClient();
+      const { data } = await supabase
+        .from("system_config")
+        .select("value")
+        .eq("key", "accounting_user_id")
+        .single();
+      return data?.value ?? getAccountingUserIdSync();
+    } catch {
+      return getAccountingUserIdSync();
+    }
+  },
+  ["system_config_accounting_user_id"],
+  { revalidate: 3600, tags: ["system_config"] },
+);

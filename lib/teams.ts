@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
+import { getAccountingGroups } from "@/lib/cache";
 
 export type TeamInfo = {
   id: string;
@@ -20,17 +21,14 @@ export async function getUserTeams(
   let isAccountingUser = false;
   const myTeams: TeamInfo[] = [];
 
-  const [{ data: profile }, { data: userRoles }, { data: categories }] =
+  const [{ data: profile }, { data: userRoles }, categories] =
     await Promise.all([
       supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
       supabase
         .from("user_roles")
         .select("roles(name, type, accounting_group_id)")
         .eq("user_id", userId),
-      admin
-        .from("accounting_groups")
-        .select("id, name, is_active")
-        .order("name"),
+      getAccountingGroups(),
     ]);
 
   isAccountingUser = profile?.role === ROLE_TYPES.ACCOUNTING;
@@ -67,14 +65,12 @@ export async function getUserTeams(
     });
   } else {
     // 全ユーザーに general タイプのグループを表示
-    const { data: generalGroups } = await admin
-      .from("accounting_groups")
-      .select("id, name, type")
-      .eq("type", ROLE_TYPES.GENERAL)
-      .eq("is_active", true)
-      .order("name");
+    // Use already-cached categories filtered by type and active status
+    const generalGroups = safeCategories.filter(
+      (c: any) => c.type === ROLE_TYPES.GENERAL || !c.type,
+    );
 
-    (generalGroups || []).forEach((g: any) => {
+    generalGroups.forEach((g: any) => {
       if (!myTeams.some((t) => t.id === g.id)) {
         myTeams.push({ id: g.id, name: g.name, type: ROLE_TYPES.GENERAL as "general" });
       }

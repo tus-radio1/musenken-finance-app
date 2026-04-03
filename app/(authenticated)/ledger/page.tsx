@@ -6,6 +6,7 @@ import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getUserTeams, TeamInfo } from "@/lib/teams";
 import { getAccountingUserId } from "@/lib/system-config";
+import { getFiscalYears } from "@/lib/cache";
 
 type Role = {
   name: string | null;
@@ -40,24 +41,24 @@ export default async function LedgerPage({
 
   if (user) {
     profileId = user.id;
-    const teamData = await getUserTeams(supabase, supabase, profileId);
-    isGlobalAdmin = teamData.isGlobalAdmin;
-    isAccountingUser = teamData.isAccountingUser;
-    myTeams = teamData.teams;
   }
 
   const params = await searchParams;
 
-  // 年度一覧 と profiles を並列取得 (RLS handles authorization for SELECT)
-  const [{ data: fiscalYears }, { data: profiles }, accountingUserId] =
+  // getUserTeams + getAccountingUserId + fiscalYears + profiles are independent — run in parallel
+  const [teamData, accountingUserId, fiscalYears, { data: profiles }] =
     await Promise.all([
-    supabase
-      .from("fiscal_years")
-      .select("year, is_current")
-      .order("year", { ascending: false }),
-    supabase.from("profiles").select("id, name").is("deleted_at", null),
-    getAccountingUserId(),
-  ]);
+      profileId
+        ? getUserTeams(supabase, supabase, profileId)
+        : Promise.resolve({ isGlobalAdmin: false, isAccountingUser: false, teams: [] as TeamInfo[] }),
+      getAccountingUserId(),
+      getFiscalYears(),
+      supabase.from("profiles").select("id, name").is("deleted_at", null),
+    ]);
+
+  isGlobalAdmin = teamData.isGlobalAdmin;
+  isAccountingUser = teamData.isAccountingUser;
+  myTeams = teamData.teams;
 
   const selectedYearParam = params.year;
   let fyYear: number | undefined;
