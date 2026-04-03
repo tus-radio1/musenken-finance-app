@@ -17,6 +17,7 @@ import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
+import { getAccountingGroups, getFiscalYears } from "@/lib/cache";
 
 const BudgetOverview = dynamic(
   () =>
@@ -48,21 +49,14 @@ export default async function BudgetPage({
   const params = await searchParams;
 
   // Step 1: auth + fiscalYears are independent — run in parallel
-  const [{ data: { user } }, { data: fiscalYears, error: fiscalYearsError }] =
+  const [{ data: { user } }, fiscalYears] =
     await Promise.all([
       supabase.auth.getUser(),
-      supabase
-        .from("fiscal_years")
-        .select("year, is_current")
-        .order("year", { ascending: false }),
+      getFiscalYears(),
     ]);
 
   if (!user) {
     redirect("/login");
-  }
-
-  if (fiscalYearsError) {
-    console.error("fiscal_years取得エラー:", fiscalYearsError);
   }
 
   // 選択された年度、またはデフォルトで現在の年度
@@ -89,7 +83,7 @@ export default async function BudgetPage({
 
   const [
     { data: userRoles },
-    { data: categories },
+    categories,
     { data: budgets, error: budgetsError },
     { data: usageRows, error: usageError },
   ] = await Promise.all([
@@ -97,7 +91,7 @@ export default async function BudgetPage({
       .from("user_roles")
       .select("roles(name, type, accounting_group_id)")
       .eq("user_id", user.id),
-    supabase.from("accounting_groups").select("id, name").order("name"),
+    getAccountingGroups(),
     budgetQuery,
     fyYear
       ? supabase.rpc("get_budget_usage", { p_fiscal_year_id: fyYear })

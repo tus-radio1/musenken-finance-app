@@ -6,6 +6,7 @@ import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getUserTeams, TeamInfo } from "@/lib/teams";
 import { getAccountingUserId } from "@/lib/system-config";
+import { getFiscalYears } from "@/lib/cache";
 
 type Role = {
   name: string | null;
@@ -45,16 +46,13 @@ export default async function LedgerPage({
   const params = await searchParams;
 
   // getUserTeams + getAccountingUserId + fiscalYears + profiles are independent — run in parallel
-  const [teamData, accountingUserId, { data: fiscalYears }, { data: profiles }] =
+  const [teamData, accountingUserId, fiscalYears, { data: profiles }] =
     await Promise.all([
       profileId
         ? getUserTeams(supabase, supabase, profileId)
         : Promise.resolve({ isGlobalAdmin: false, isAccountingUser: false, teams: [] as TeamInfo[] }),
       getAccountingUserId(),
-      supabase
-        .from("fiscal_years")
-        .select("year, is_current")
-        .order("year", { ascending: false }),
+      getFiscalYears(),
       supabase.from("profiles").select("id, name").is("deleted_at", null),
     ]);
 
