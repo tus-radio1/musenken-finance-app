@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isVercelDeployment = process.env.VERCEL === "1";
+
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
@@ -26,7 +28,8 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+            value:
+              "camera=(), microphone=(), geolocation=(), interest-cohort=()",
           },
           {
             key: "Strict-Transport-Security",
@@ -36,7 +39,15 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              [
+                "script-src",
+                "'self'",
+                "'unsafe-inline'",
+                "'unsafe-eval'",
+                isVercelDeployment ? "https://vercel.live" : "",
+              ]
+                .filter(Boolean)
+                .join(" "),
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co",
               "font-src 'self'",
