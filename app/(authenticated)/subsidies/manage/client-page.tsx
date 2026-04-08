@@ -905,6 +905,9 @@ export function SubsidiesManageClientPage({
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right text-sm">領収書画像</Label>
               <div className="col-span-3">
+                <p className="text-xs text-muted-foreground mb-2">
+                  対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF &nbsp;|&nbsp; 最大サイズ: 10MB
+                </p>
                 <div className="flex items-center gap-4">
                   <Button
                     type="button"

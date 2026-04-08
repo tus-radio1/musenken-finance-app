@@ -549,6 +549,9 @@ export function TransactionForm({
 
             <div className="space-y-2">
               <FormLabel>領収書データ (任意)</FormLabel>
+              <p className="text-xs text-muted-foreground">
+                対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF &nbsp;|&nbsp; 最大サイズ: 10MB
+              </p>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
                   <Button
