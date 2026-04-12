@@ -132,7 +132,7 @@ const STATUS_LABELS: Record<string, string> = {
   application_in_progress: "申請中",
   application_rejected: "申請拒否",
   receipt_submitted: "領収書提出済",
-  paid: "返金済",
+  paid: "受領済",
   unexecuted: "未執行",
 };
 

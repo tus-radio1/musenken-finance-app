@@ -84,7 +84,7 @@ const STATUS_MAP: Record<string, { label: string; variant: any }> = {
   approved: { label: "審査通過", variant: "default" },
   application_rejected: { label: "申請拒否", variant: "destructive" },
   receipt_submitted: { label: "領収書提出済", variant: "default" },
-  paid: { label: "返金済", variant: "default" },
+  paid: { label: "受領済", variant: "default" },
   unexecuted: { label: "未執行", variant: "outline" },
 };
 

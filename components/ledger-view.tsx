@@ -446,7 +446,7 @@ export default function LedgerView({
                   <SelectItem value="approved">承認済</SelectItem>
                   <SelectItem value="rejected">却下</SelectItem>
                   <SelectItem value="received">受領済</SelectItem>
-                  <SelectItem value="refunded">返金済</SelectItem>
+                  <SelectItem value="refunded">処理済(確定)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

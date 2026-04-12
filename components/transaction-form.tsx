@@ -444,7 +444,7 @@ export function TransactionForm({
                             { value: "accepted", label: "受付済" },
                             { value: "approved", label: "承認済" },
                             { value: "rejected", label: "却下" },
-                            { value: "refunded", label: "返金済" },
+                            { value: "refunded", label: "処理済(確定)" },
                           ]
                         : [
                             { value: "pending", label: "受付中" },

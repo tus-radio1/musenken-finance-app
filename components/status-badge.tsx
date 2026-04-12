@@ -40,11 +40,11 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
       tooltip = "領収書の提出が確認されました";
       break;
     case "refunded":
-    case "paid":
-      text = "返金済(支払済)";
+      text = "処理済(確定)";
       defaultClassName = "bg-slate-500 hover:bg-slate-600 text-white border-transparent";
-      tooltip = "金額の支払・返金が完了しました";
+      tooltip = "支払処理が確定しました";
       break;
+    case "paid":
     case "received":
       text = "受領済";
       defaultClassName = "bg-slate-500 hover:bg-slate-600 text-white border-transparent";
