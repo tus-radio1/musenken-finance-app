@@ -48,6 +48,15 @@ export function NewFiscalYearDialog({
       return init;
     },
   );
+  const [carryoverAmounts, setCarryoverAmounts] = useState<Record<string, string>>(
+    () => {
+      const init: Record<string, string> = {};
+      groups.forEach((g) => {
+        init[g.id] = "0";
+      });
+      return init;
+    },
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -57,16 +66,23 @@ export function NewFiscalYearDialog({
     if (!isOpen) {
       setYear(String(suggestedYear));
       const init: Record<string, string> = {};
+      const carryoverInit: Record<string, string> = {};
       groups.forEach((g) => {
         init[g.id] = "0";
+        carryoverInit[g.id] = "0";
       });
       setBudgetAmounts(init);
+      setCarryoverAmounts(carryoverInit);
       setError(null);
     }
   };
 
   const handleAmountChange = (groupId: string, value: string) => {
     setBudgetAmounts((prev) => ({ ...prev, [groupId]: value }));
+  };
+
+  const handleCarryoverChange = (groupId: string, value: string) => {
+    setCarryoverAmounts((prev) => ({ ...prev, [groupId]: value }));
   };
 
   const handleSubmit = () => {
@@ -80,14 +96,19 @@ export function NewFiscalYearDialog({
       return;
     }
 
-    const budgets: { groupId: string; amount: number }[] = [];
+    const budgets: { groupId: string; amount: number; carryoverAmount?: number }[] = [];
     for (const g of groups) {
       const amt = Number(budgetAmounts[g.id] || 0);
       if (Number.isNaN(amt) || amt < 0) {
-        setError(`「${g.name}」の金額が不正です`);
+        setError(`「${g.name}」の予算額が不正です`);
         return;
       }
-      budgets.push({ groupId: g.id, amount: amt });
+      const carryoverAmt = Number(carryoverAmounts[g.id] || 0);
+      if (Number.isNaN(carryoverAmt) || carryoverAmt < 0) {
+        setError(`「${g.name}」の繰入金が不正です`);
+        return;
+      }
+      budgets.push({ groupId: g.id, amount: amt, carryoverAmount: carryoverAmt });
     }
 
     setError(null);
@@ -133,25 +154,40 @@ export function NewFiscalYearDialog({
           </div>
 
           <div className="space-y-1">
-            <Label>各会計区分の予算額（円）</Label>
+            <Label>各会計区分の予算額・繰入金（円）</Label>
             <p className="text-xs text-muted-foreground mb-2">
               0 のまま残すことも可能です。あとから更新できます。
             </p>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {groups.map((g) => (
-                <div key={g.id} className="flex items-center gap-3">
-                  <span className="text-sm w-40 shrink-0 truncate">
+                <div key={g.id} className="space-y-1.5">
+                  <span className="text-sm font-medium truncate block">
                     {g.name}
                   </span>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={100}
-                    placeholder="0"
-                    value={budgetAmounts[g.id] || ""}
-                    onChange={(e) => handleAmountChange(g.id, e.target.value)}
-                    className="flex-1"
-                  />
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">予算額</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={100}
+                        placeholder="0"
+                        value={budgetAmounts[g.id] || ""}
+                        onChange={(e) => handleAmountChange(g.id, e.target.value)}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">繰入金</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={100}
+                        placeholder="0"
+                        value={carryoverAmounts[g.id] || ""}
+                        onChange={(e) => handleCarryoverChange(g.id, e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

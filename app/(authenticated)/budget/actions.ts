@@ -14,10 +14,12 @@ export async function upsertBudget(
   accountingGroupId: string,
   amount: number,
   fiscalYear?: number,
+  carryoverAmount?: number,
 ) {
   const validation = validateInput(upsertBudgetSchema, {
     accountingGroupId,
     amount,
+    carryoverAmount: carryoverAmount ?? 0,
     fiscalYear,
   });
   if (!validation.success) {
@@ -66,13 +68,14 @@ export async function upsertBudget(
   if (existing?.id) {
     const res = await adminDb
       .from("budgets")
-      .update({ amount })
+      .update({ amount, carryover_amount: carryoverAmount ?? 0 })
       .eq("id", existing.id);
     dbError = res.error;
   } else {
     const res = await adminDb.from("budgets").insert({
       accounting_group_id: accountingGroupId,
       amount,
+      carryover_amount: carryoverAmount ?? 0,
       fiscal_year_id: fiscalYearId,
     });
     dbError = res.error;
@@ -89,7 +92,7 @@ export async function upsertBudget(
 
 export async function createFiscalYearBudgets(
   year: number,
-  budgets: { groupId: string; amount: number }[],
+  budgets: { groupId: string; amount: number; carryoverAmount?: number }[],
 ) {
   const validation = validateInput(createFiscalYearBudgetsSchema, {
     year,
@@ -134,12 +137,13 @@ export async function createFiscalYearBudgets(
     return { error: "年度の作成に失敗しました" };
   }
 
-  // 予算一括挿入（金額が0より大きいもののみ）
+  // Bulk insert budgets (only those with amount > 0 or carryover > 0)
   const rows = budgets
-    .filter((b) => b.amount > 0)
+    .filter((b) => b.amount > 0 || (b.carryoverAmount ?? 0) > 0)
     .map((b) => ({
       accounting_group_id: b.groupId,
       amount: b.amount,
+      carryover_amount: b.carryoverAmount ?? 0,
       fiscal_year_id: year,
     }));
 
