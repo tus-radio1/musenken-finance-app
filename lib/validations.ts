@@ -50,6 +50,7 @@ export const adminResetPasswordSchema = z.object({
 export const upsertBudgetSchema = z.object({
   accountingGroupId: uuidSchema,
   amount: z.number().min(0, "Amount must be non-negative"),
+  carryoverAmount: z.number().min(0, "Carryover must be non-negative").optional(),
   fiscalYear: z.number().int().min(2000).max(2100).optional(),
 });
 
@@ -60,6 +61,7 @@ export const createFiscalYearBudgetsSchema = z.object({
     z.object({
       groupId: uuidSchema,
       amount: z.number().min(0),
+      carryoverAmount: z.number().min(0).optional(),
     }),
   ),
 });

@@ -28,6 +28,7 @@ type AccountingGroup = {
   id: string;
   name: string;
   currentBudget: number;
+  currentCarryover: number;
 };
 
 interface BudgetUpdateDialogProps {
@@ -42,6 +43,7 @@ export function BudgetUpdateDialog({
   const [open, setOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
+  const [carryover, setCarryover] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -53,6 +55,7 @@ export function BudgetUpdateDialog({
     if (!isOpen) {
       setSelectedGroupId("");
       setAmount("");
+      setCarryover("");
       setError(null);
     }
   };
@@ -62,6 +65,7 @@ export function BudgetUpdateDialog({
     const group = groups.find((g) => g.id === groupId);
     if (group) {
       setAmount(String(group.currentBudget));
+      setCarryover(String(group.currentCarryover));
     }
   };
 
@@ -75,16 +79,22 @@ export function BudgetUpdateDialog({
       setError("有効な金額を入力してください");
       return;
     }
+    const numCarryover = Number(carryover) || 0;
+    if (numCarryover < 0) {
+      setError("繰入金は0以上で入力してください");
+      return;
+    }
 
     setError(null);
     startTransition(async () => {
-      const result = await upsertBudget(selectedGroupId, numAmount, fiscalYear);
+      const result = await upsertBudget(selectedGroupId, numAmount, fiscalYear, numCarryover);
       if (result.error) {
         setError(result.error);
       } else {
         setOpen(false);
         setSelectedGroupId("");
         setAmount("");
+        setCarryover("");
         router.refresh();
       }
     });
@@ -143,6 +153,19 @@ export function BudgetUpdateDialog({
               placeholder="例: 100000"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="budget-carryover">前年度繰入金（円）</Label>
+            <Input
+              id="budget-carryover"
+              type="number"
+              min={0}
+              step={100}
+              placeholder="例: 50000"
+              value={carryover}
+              onChange={(e) => setCarryover(e.target.value)}
             />
           </div>
 

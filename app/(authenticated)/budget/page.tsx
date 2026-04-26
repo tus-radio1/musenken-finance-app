@@ -76,7 +76,7 @@ export default async function BudgetPage({
   // Step 2: userRoles + categories + budgets + RPC — all depend on user.id or fyYear, run in parallel
   let budgetQuery = supabase
     .from("budgets")
-    .select("id, accounting_group_id, amount, fiscal_year_id");
+    .select("id, accounting_group_id, amount, carryover_amount, fiscal_year_id");
   if (typeof fyYear !== "undefined") {
     budgetQuery = budgetQuery.eq("fiscal_year_id", fyYear);
   }
@@ -148,11 +148,12 @@ export default async function BudgetPage({
     console.error("get_budget_usage RPCエラー:", usageError);
   }
 
-  const usageMap: Record<string, { expenses: number; pending: number }> = {};
+  const usageMap: Record<string, { expenses: number; pending: number; income: number }> = {};
   (usageRows || []).forEach((row: any) => {
     usageMap[row.accounting_group_id] = {
       expenses: Number(row.expenses),
       pending: Number(row.pending),
+      income: Number(row.income),
     };
   });
 
@@ -165,12 +166,14 @@ export default async function BudgetPage({
       category_id: b.accounting_group_id,
       category_name: group?.name || "",
       budget_amount: Number(b.amount) || 0,
+      carryover_amount: Number(b.carryover_amount) || 0,
       expenses: usageMap[b.accounting_group_id]?.expenses || 0,
       pending: usageMap[b.accounting_group_id]?.pending || 0,
+      income: usageMap[b.accounting_group_id]?.income || 0,
     };
   });
 
-  // 予算が設定されていない会計グループも含めた一覧
+  // All accounting groups including those without budgets
   const allGroupsWithBudget = (categories || []).map((c: any) => {
     const budget = (budgets || []).find(
       (b: any) => b.accounting_group_id === c.id,
@@ -179,12 +182,14 @@ export default async function BudgetPage({
       group_id: c.id,
       group_name: c.name,
       budget_amount: budget ? Number(budget.amount) : 0,
+      carryover_amount: budget ? Number(budget.carryover_amount) : 0,
       expenses: usageMap[c.id]?.expenses || 0,
       pending: usageMap[c.id]?.pending || 0,
+      income: usageMap[c.id]?.income || 0,
     };
   });
 
-  // ダイアログ用データ
+  // Data for dialogs
   const groupsForDialog = (categories || []).map((c: any) => {
     const budget = (budgets || []).find(
       (b: any) => b.accounting_group_id === c.id,
@@ -193,6 +198,7 @@ export default async function BudgetPage({
       id: c.id as string,
       name: c.name as string,
       currentBudget: budget ? Number(budget.amount) : 0,
+      currentCarryover: budget ? Number(budget.carryover_amount) : 0,
     };
   });
   const existingYears = (fiscalYears || []).map((fy: any) => fy.year as number);
@@ -241,6 +247,8 @@ export default async function BudgetPage({
                       <TableRow>
                         <TableHead>会計グループ</TableHead>
                         <TableHead className="text-right">予算額</TableHead>
+                        <TableHead className="text-right">繰入金</TableHead>
+                        <TableHead className="text-right">収入合計</TableHead>
                         <TableHead className="text-right">支出額</TableHead>
                         <TableHead className="text-right">申請中</TableHead>
                         <TableHead className="text-right">残額</TableHead>
@@ -249,11 +257,12 @@ export default async function BudgetPage({
                     </TableHeader>
                     <TableBody>
                       {allGroupsWithBudget.map((item: any) => {
+                        const effectiveBudget = item.budget_amount + item.carryover_amount;
                         const totalUsed = item.expenses + item.pending;
-                        const remaining = item.budget_amount - totalUsed;
+                        const remaining = effectiveBudget + item.income - totalUsed;
                         const usageRate =
-                          item.budget_amount > 0
-                            ? (totalUsed / item.budget_amount) * 100
+                          effectiveBudget + item.income > 0
+                            ? (totalUsed / (effectiveBudget + item.income)) * 100
                             : 0;
                         return (
                           <TableRow key={item.group_id}>
@@ -262,6 +271,12 @@ export default async function BudgetPage({
                             </TableCell>
                             <TableCell className="text-right">
                               {formatCurrency(item.budget_amount)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(item.carryover_amount)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(item.income)}
                             </TableCell>
                             <TableCell className="text-right">
                               {formatCurrency(item.expenses)}
