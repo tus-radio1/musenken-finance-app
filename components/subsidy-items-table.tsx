@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  CalendarIcon,
 } from "lucide-react";
 
 import {
@@ -50,11 +51,22 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { updateMySubsidyItem, deleteMySubsidyItem } from "@/app/(authenticated)/subsidies/actions";
 import { uploadReceiptAction } from "@/app/actions";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
 import { compressImageToWebp } from "@/lib/image";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
@@ -81,6 +93,7 @@ type SubsidyItem = {
   accounting_group_id?: string;
   accounting_group_name: string;
   created_at: string;
+  date?: string | null;
   usage_period?: string | null;
   justification?: string | null;
   receipt_url?: string | null;
@@ -105,6 +118,8 @@ const EXPENSE_TYPE_LABELS: Record<string, string> = {
   registration: "連盟登録費",
   travel: "旅費",
   accommodation: "宿泊費",
+  tournament: "大会参加費等",
+  expensive_goods: "高額物品購入費等",
   other: "その他",
 };
 
@@ -123,7 +138,7 @@ const CATEGORY_TERMS: Record<string, number[]> = {
 const CATEGORY_EXPENSE_TYPES: Record<string, string[]> = {
   activity: ["facility", "participation", "equipment"],
   league: ["registration"],
-  special: ["facility", "participation", "travel", "accommodation", "other"],
+  special: ["tournament", "expensive_goods", "other"],
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -172,6 +187,9 @@ export function SubsidyItemsTable({
     name: "",
     requested_amount: 0,
     usage_period: "",
+    income_type: "expense",
+    date: new Date() as Date | undefined,
+    justification: "",
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -255,6 +273,9 @@ export function SubsidyItemsTable({
       name: item.name,
       requested_amount: item.requested_amount,
       usage_period: item.usage_period || "",
+      income_type: item.income_type || "expense",
+      date: item.date ? new Date(item.date) : new Date(),
+      justification: item.justification || "",
     });
     setFile(null);
     setEditingItem(item);
@@ -319,6 +340,9 @@ export function SubsidyItemsTable({
       name: editForm.name,
       requested_amount: editForm.requested_amount,
       usage_period: editForm.usage_period || undefined,
+      income_type: editForm.income_type || undefined,
+      date: editForm.date || undefined,
+      justification: editForm.justification || undefined,
       receipt_url: uploadedReceiptUrl,
     });
 
@@ -350,6 +374,9 @@ export function SubsidyItemsTable({
                 ...i,
                 ...editForm,
                 term: parseInt(editForm.term, 10),
+                date: editForm.date
+                  ? editForm.date.toISOString().split("T")[0]
+                  : i.date,
                 accounting_group_name: updatedGroup
                   ? updatedGroup.name
                   : i.accounting_group_name,
@@ -831,7 +858,7 @@ export function SubsidyItemsTable({
         open={editingItem !== null}
         onOpenChange={(open) => !open && setEditingItem(null)}
       >
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[540px]">
           <DialogHeader>
             <DialogTitle>申請内容の修正</DialogTitle>
           </DialogHeader>
@@ -856,6 +883,69 @@ export function SubsidyItemsTable({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* 収支区分 */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-sm">収支区分</Label>
+              <div className="col-span-3">
+                <RadioGroup
+                  value={editForm.income_type}
+                  onValueChange={(val) =>
+                    setEditForm({ ...editForm, income_type: val })
+                  }
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="expense" id="edit-income-type-expense" />
+                    <Label htmlFor="edit-income-type-expense" className="font-normal cursor-pointer">
+                      支出
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="income" id="edit-income-type-income" />
+                    <Label htmlFor="edit-income-type-income" className="font-normal cursor-pointer">
+                      収入
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+
+            {/* 日付 */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-sm">日付</Label>
+              <div className="col-span-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !editForm.date && "text-muted-foreground",
+                      )}
+                    >
+                      {editForm.date ? (
+                        format(editForm.date, "yyyy年MM月dd日")
+                      ) : (
+                        <span>日付を選択</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={editForm.date}
+                      onSelect={(date) =>
+                        setEditForm({ ...editForm, date: date ?? undefined })
+                      }
+                      locale={ja}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -965,6 +1055,22 @@ export function SubsidyItemsTable({
                     setEditForm({ ...editForm, usage_period: e.target.value })
                   }
                   placeholder="例：2026年4月〜6月"
+                />
+              </div>
+            </div>
+
+            {/* 申請理由 */}
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label className="text-right text-sm pt-2">申請理由</Label>
+              <div className="col-span-3">
+                <Textarea
+                  value={editForm.justification}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, justification: e.target.value })
+                  }
+                  placeholder="支援が必要な理由を記載してください..."
+                  className="resize-none"
+                  rows={3}
                 />
               </div>
             </div>
