@@ -8,8 +8,10 @@ type BudgetStatus = {
   category_id: string;
   category_name: string;
   budget_amount: number;
+  carryover_amount: number;
   expenses: number;
   pending: number;
+  income: number;
 };
 
 const COLORS = {
@@ -96,12 +98,13 @@ export function BudgetOverview({ data }: { data: BudgetStatus[] }) {
       {data.map((item) => {
         const expenses = item.expenses;
         const pending = item.pending;
+        const effectiveBudget = item.budget_amount + item.carryover_amount;
         const totalUsed = expenses + pending;
-        const remaining = item.budget_amount - totalUsed;
+        const remaining = effectiveBudget + item.income - totalUsed;
 
         const usagePercent =
-          item.budget_amount > 0
-            ? Math.min(100, Math.round((totalUsed / item.budget_amount) * 100))
+          effectiveBudget + item.income > 0
+            ? Math.min(100, Math.round((totalUsed / (effectiveBudget + item.income)) * 100))
             : totalUsed > 0
               ? 100
               : 0;

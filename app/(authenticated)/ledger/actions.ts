@@ -94,7 +94,7 @@ export async function fetchLedgerTransactions(params: {
     typeof params.fyYear !== "undefined"
       ? auth.supabase
           .from("budgets")
-          .select("amount")
+          .select("amount, carryover_amount")
           .eq("accounting_group_id", requestedGroupId)
           .eq("fiscal_year_id", params.fyYear)
           .maybeSingle()
@@ -128,10 +128,14 @@ export async function fetchLedgerTransactions(params: {
   );
   profileNameMap[getAccountingUserIdSync()] = "会計";
 
-  // 予算額
+  // Budget amount and carryover
   const budgetAmount =
     Number(
       (budgetResult.data as unknown as { amount?: unknown } | null)?.amount,
+    ) || 0;
+  const carryoverAmount =
+    Number(
+      (budgetResult.data as unknown as { carryover_amount?: unknown } | null)?.carryover_amount,
     ) || 0;
 
   const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -154,5 +158,5 @@ export async function fetchLedgerTransactions(params: {
     remarks: t.remarks || null,
   }));
 
-  return { data: enriched, budgetAmount };
+  return { data: enriched, budgetAmount, carryoverAmount };
 }

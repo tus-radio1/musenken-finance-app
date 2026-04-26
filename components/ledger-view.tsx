@@ -144,6 +144,7 @@ export default function LedgerView({
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<LedgerTransaction[]>([]);
   const [budgetAmount, setBudgetAmount] = useState<number>(0);
+  const [carryoverAmount, setCarryoverAmount] = useState<number>(0);
   const [categoriesForSelected, setCategoriesForSelected] = useState<
     Array<{ id: string; name: string }>
   >([]);
@@ -219,11 +220,16 @@ export default function LedgerView({
       if (isError(res)) {
         setRows([]);
         setBudgetAmount(0);
+        setCarryoverAmount(0);
       } else {
         const okRes = res as Extract<FetchResult, { data: unknown }>;
         setRows((okRes.data as LedgerTransaction[]) || []);
         setBudgetAmount(
           Number((res as unknown as { budgetAmount?: unknown }).budgetAmount) ||
+            0,
+        );
+        setCarryoverAmount(
+          Number((res as unknown as { carryoverAmount?: unknown }).carryoverAmount) ||
             0,
         );
       }
@@ -280,9 +286,9 @@ export default function LedgerView({
       if (amt >= 0) income += amt;
       else expense += Math.abs(amt);
     });
-    const budgetRemaining = (Number(budgetAmount) || 0) + income - expense;
+    const budgetRemaining = (Number(budgetAmount) || 0) + (Number(carryoverAmount) || 0) + income - expense;
     return { income, expense, budgetRemaining };
-  }, [rows, budgetAmount]);
+  }, [rows, budgetAmount, carryoverAmount]);
 
   // フィルタ + ソート済みの行
   const processedRows = useMemo(() => {
@@ -386,11 +392,17 @@ export default function LedgerView({
         <CardHeader>
           <CardTitle>集計</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-muted rounded p-4">
             <div className="text-sm text-muted-foreground">今年度予算額</div>
             <div className="text-xl font-semibold">
               {formatCurrency(Number(budgetAmount) || 0)}
+            </div>
+          </div>
+          <div className="bg-muted rounded p-4">
+            <div className="text-sm text-muted-foreground">繰入金</div>
+            <div className="text-xl font-semibold">
+              {formatCurrency(Number(carryoverAmount) || 0)}
             </div>
           </div>
           <div className="bg-muted rounded p-4">
