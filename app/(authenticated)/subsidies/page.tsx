@@ -73,7 +73,7 @@ export default async function SubsidiesPage({
   const { data: subsidyItems, count } = await supabase
     .from("subsidy_items")
     .select(
-      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, evidence_url, receipt_url, remarks, created_at, accounting_group_id, accounting_groups(name)",
+      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, usage_period, evidence_url, receipt_url, remarks, created_at, accounting_group_id, accounting_groups(name)",
       { count: "exact" },
     )
     .eq("applicant_id", profileId)
@@ -109,6 +109,7 @@ export default async function SubsidiesPage({
     accounting_group_id: item.accounting_group_id || undefined,
     accounting_group_name: item.accounting_groups?.name || "-",
     created_at: item.created_at,
+    usage_period: item.usage_period || null,
     remarks: item.remarks || null,
     receipt_url: item.receipt_url || null,
     receipt_public_url: item.receipt_url?.startsWith("http")

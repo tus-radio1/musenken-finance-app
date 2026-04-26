@@ -109,6 +109,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       name: "",
       requested_amount: 0,
       justification: "",
+      usage_period: "",
       income_type: "expense",
       date: new Date(),
       evidence_url: "",
@@ -141,6 +142,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
         name: "",
         requested_amount: 0,
         justification: "",
+        usage_period: "",
         income_type: "expense",
         date: new Date(),
         evidence_url: "",
@@ -471,6 +473,25 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                       placeholder="支援が必要な理由を記載してください..."
                       className="resize-none"
                       rows={3}
+                      {...field}
+                      value={field.value ?? ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* 使用時期 */}
+            <FormField
+              control={form.control}
+              name="usage_period"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>使用時期</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="例：2026年4月〜6月"
                       {...field}
                       value={field.value ?? ""}
                     />

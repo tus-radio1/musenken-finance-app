@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import {
   updateSubsidyStatus,
   updateSubsidyItem,
@@ -33,6 +33,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 import {
   dateInputValueToJstTimestamp,
   formatStoredDate,
@@ -58,6 +59,8 @@ type SubsidyItem = {
   receipt_url?: string | null;
   evidence_url?: string | null;
   remarks?: string;
+  justification?: string | null;
+  usage_period?: string | null;
 };
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -73,6 +76,8 @@ const EXPENSE_TYPE_MAP: Record<string, string> = {
   registration: "登録費",
   travel: "交通費",
   accommodation: "宿泊費",
+  tournament: "大会参加費等",
+  expensive_goods: "高額物品購入費等",
   other: "その他",
 };
 
@@ -132,6 +137,20 @@ export function SubsidiesManageClientPage({
     });
   };
 
+  const [openDetailRows, setOpenDetailRows] = useState<Set<string>>(new Set());
+
+  const toggleDetailRow = (id: string) => {
+    setOpenDetailRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   const [editingItem, setEditingItem] = useState<SubsidyItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -148,6 +167,7 @@ export function SubsidiesManageClientPage({
     receipt_date: "",
     receipt_url: "",
     remarks: "",
+    usage_period: "",
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -195,6 +215,7 @@ export function SubsidiesManageClientPage({
       receipt_date: toDateInputValue(item.receipt_date),
       receipt_url: item.receipt_url || "",
       remarks: item.remarks || "",
+      usage_period: item.usage_period || "",
     });
     setFile(null);
     setEditingItem(item);
@@ -254,6 +275,7 @@ export function SubsidiesManageClientPage({
       receipt_date: editForm.receipt_date || null,
       receipt_url: uploadedReceiptUrl,
       remarks: editForm.remarks,
+      usage_period: editForm.usage_period || null,
     });
 
     setIsSubmitting(false);
@@ -289,6 +311,7 @@ export function SubsidiesManageClientPage({
                 receipt_date: editForm.receipt_date || null,
                 receipt_url: uploadedReceiptUrl,
                 remarks: editForm.remarks,
+                usage_period: editForm.usage_period || null,
               }
             : i,
         ),
@@ -382,6 +405,9 @@ export function SubsidiesManageClientPage({
                     <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
                       {CATEGORY_MAP[item.category] || item.category}
                     </span>
+                    <Badge variant="outline" className="text-xs">
+                      {EXPENSE_TYPE_MAP[item.expense_type] || item.expense_type}
+                    </Badge>
                     <span className="text-xs text-muted-foreground">
                       第{item.term}期
                     </span>
@@ -407,7 +433,26 @@ export function SubsidiesManageClientPage({
                   </CollapsibleTrigger>
                 </div>
 
+                {/* Usage period (always visible) */}
+                {item.usage_period && (
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">使用時期: </span>
+                    <span>{item.usage_period}</span>
+                  </div>
+                )}
+
                 <CollapsibleContent className="space-y-3 pt-1">
+                  {item.justification && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground font-medium">
+                        申請理由:{" "}
+                      </span>
+                      <span className="whitespace-pre-wrap break-words">
+                        {item.justification}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="w-full">
                     <Select
                       value={item.status}
@@ -538,7 +583,8 @@ export function SubsidiesManageClientPage({
               <th className="p-3 text-right">実経費額</th>
               <th className="p-3">受領日</th>
               <th className="p-3">添付書類</th>
-              <th className="p-3">備考</th>
+              <th className="p-3">使用時期</th>
+              <th className="p-3 w-[60px]">詳細</th>
               <th className="p-3 w-[80px]"></th>
             </tr>
           </thead>
@@ -546,7 +592,7 @@ export function SubsidiesManageClientPage({
             {filteredItems.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="p-6 text-center text-muted-foreground"
                 >
                   該当する支援金申請はありません
@@ -554,8 +600,8 @@ export function SubsidiesManageClientPage({
               </tr>
             ) : (
               filteredItems.map((item) => (
+                <Fragment key={item.id}>
                 <tr
-                  key={item.id}
                   className="hover:bg-muted/50 transition-colors"
                 >
                   <td className="p-3">
@@ -685,11 +731,23 @@ export function SubsidiesManageClientPage({
                     </div>
                   </td>
 
-                  <td
-                    className="p-3 text-sm min-w-[150px] max-w-[300px] break-words whitespace-normal"
-                    title={item.remarks}
-                  >
-                    {item.remarks || "-"}
+                  <td className="p-3 text-sm">
+                    {item.usage_period || "-"}
+                  </td>
+
+                  <td className="p-3 align-middle">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => toggleDetailRow(item.id)}
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          openDetailRows.has(item.id) ? "rotate-180" : ""
+                        }`}
+                      />
+                    </Button>
                   </td>
 
                   <td className="p-3 align-middle text-right shrink-0">
@@ -704,6 +762,25 @@ export function SubsidiesManageClientPage({
                     )}
                   </td>
                 </tr>
+                {openDetailRows.has(item.id) && (
+                  <tr key={`${item.id}-detail`} className="bg-muted/30">
+                    <td colSpan={11} className="px-4 py-2">
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                        {item.justification && (
+                          <div className="col-span-2">
+                            <span className="font-medium text-muted-foreground">申請理由: </span>
+                            <span className="whitespace-pre-wrap break-words">{item.justification}</span>
+                          </div>
+                        )}
+                        <div className="col-span-2">
+                          <span className="font-medium text-muted-foreground">備考: </span>
+                          <span className="whitespace-pre-wrap break-words">{item.remarks || "-"}</span>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))
             )}
           </tbody>
@@ -714,11 +791,20 @@ export function SubsidiesManageClientPage({
         open={editingItem !== null}
         onOpenChange={(open) => !open && setEditingItem(null)}
       >
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>申請情報の編集</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
+            {editingItem?.justification && (
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label className="text-right text-sm pt-1">申請理由</Label>
+                <div className="col-span-3 text-sm whitespace-pre-wrap break-words bg-muted/50 rounded-md p-2">
+                  {editingItem.justification}
+                </div>
+              </div>
+            )}
+
             {isAdmin && (
               <>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -937,6 +1023,19 @@ export function SubsidiesManageClientPage({
                     }}
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-sm">使用時期</Label>
+              <div className="col-span-3">
+                <Input
+                  value={editForm.usage_period}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, usage_period: e.target.value })
+                  }
+                  placeholder="例：2026年4月〜6月"
+                />
               </div>
             </div>
 
