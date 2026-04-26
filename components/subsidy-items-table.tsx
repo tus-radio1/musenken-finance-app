@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import {
   ArrowUpDown,
   Search,
@@ -81,6 +81,8 @@ type SubsidyItem = {
   accounting_group_id?: string;
   accounting_group_name: string;
   created_at: string;
+  usage_period?: string | null;
+  justification?: string | null;
   receipt_url?: string | null;
   receipt_public_url?: string | null;
   evidence_public_url?: string | null;
@@ -169,6 +171,7 @@ export function SubsidyItemsTable({
     expense_type: "",
     name: "",
     requested_amount: 0,
+    usage_period: "",
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -251,6 +254,7 @@ export function SubsidyItemsTable({
       expense_type: item.expense_type,
       name: item.name,
       requested_amount: item.requested_amount,
+      usage_period: item.usage_period || "",
     });
     setFile(null);
     setEditingItem(item);
@@ -314,6 +318,7 @@ export function SubsidyItemsTable({
       expense_type: editForm.expense_type,
       name: editForm.name,
       requested_amount: editForm.requested_amount,
+      usage_period: editForm.usage_period || undefined,
       receipt_url: uploadedReceiptUrl,
     });
 
@@ -484,6 +489,7 @@ export function SubsidyItemsTable({
                     <TableHead>カテゴリ</TableHead>
                     <TableHead>項目名</TableHead>
                     <TableHead>会計区分</TableHead>
+                    <TableHead>使用時期</TableHead>
                     <TableHead>
                       <Button
                         variant="ghost"
@@ -497,8 +503,8 @@ export function SubsidyItemsTable({
                     </TableHead>
                     <TableHead>算定額</TableHead>
                     <TableHead className="w-[100px]">状態</TableHead>
-                    <TableHead>備考</TableHead>
                     <TableHead className="w-[120px]">添付書類</TableHead>
+                    <TableHead className="w-[60px]">詳細</TableHead>
                     <TableHead className="w-[60px]">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -507,7 +513,8 @@ export function SubsidyItemsTable({
                     const canEditOrDelete =
                       isGlobalAdmin || item.status === "pending";
                     return (
-                      <TableRow key={item.id}>
+                      <Fragment key={item.id}>
+                      <TableRow>
                         <TableCell className="font-medium">
                           {formatStoredDate(item.created_at)}
                         </TableCell>
@@ -535,6 +542,9 @@ export function SubsidyItemsTable({
                             {item.accounting_group_name}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-sm">
+                          {item.usage_period || "—"}
+                        </TableCell>
                         <TableCell className="font-semibold">
                           {formatCurrency(item.requested_amount)}
                         </TableCell>
@@ -544,9 +554,6 @@ export function SubsidyItemsTable({
                             : "-"}
                         </TableCell>
                         <TableCell><StatusBadge status={item.status} /></TableCell>
-                        <TableCell className="max-w-[200px] whitespace-pre-wrap break-words">
-                          {item.remarks || "\u2014"}
-                        </TableCell>
                         <TableCell className="w-[120px]">
                           <div className="flex flex-col gap-1">
                             {item.receipt_public_url ? (
@@ -569,6 +576,20 @@ export function SubsidyItemsTable({
                               <span className="text-muted-foreground">{"\u2014"}</span>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => toggleCard(item.id)}
+                          >
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${
+                                openCards.has(item.id) ? "rotate-180" : ""
+                              }`}
+                            />
+                          </Button>
                         </TableCell>
                         <TableCell>
                           {canEditOrDelete && (
@@ -600,6 +621,25 @@ export function SubsidyItemsTable({
                           )}
                         </TableCell>
                       </TableRow>
+                      {openCards.has(item.id) && (
+                        <TableRow key={`${item.id}-detail`} className="bg-muted/30">
+                          <TableCell colSpan={11} className="py-2 px-4">
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                              {item.justification && (
+                                <div className="col-span-2">
+                                  <span className="font-medium text-muted-foreground">申請理由: </span>
+                                  <span className="whitespace-pre-wrap break-words">{item.justification}</span>
+                                </div>
+                              )}
+                              <div className="col-span-2">
+                                <span className="font-medium text-muted-foreground">備考: </span>
+                                <span className="whitespace-pre-wrap break-words">{item.remarks || "—"}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      </Fragment>
                     );
                   })}
                 </TableBody>
@@ -645,6 +685,9 @@ export function SubsidyItemsTable({
                         >
                           {CATEGORY_LABELS[item.category] || item.category}
                         </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {EXPENSE_TYPE_LABELS[item.expense_type] || item.expense_type}
+                        </Badge>
                         <span className="text-xs text-muted-foreground">
                           {item.term}期
                         </span>
@@ -661,6 +704,14 @@ export function SubsidyItemsTable({
                         </Button>
                       </CollapsibleTrigger>
                     </div>
+
+                    {/* Usage period (always visible) */}
+                    {item.usage_period && (
+                      <div className="text-xs text-muted-foreground">
+                        <span className="font-medium">使用時期: </span>
+                        <span>{item.usage_period}</span>
+                      </div>
+                    )}
 
                     {/* Collapsible details */}
                     <CollapsibleContent className="space-y-3 pt-1">
@@ -901,6 +952,19 @@ export function SubsidyItemsTable({
                       requested_amount: parseInt(e.target.value) || 0,
                     })
                   }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-sm">使用時期</Label>
+              <div className="col-span-3">
+                <Input
+                  value={editForm.usage_period}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, usage_period: e.target.value })
+                  }
+                  placeholder="例：2026年4月〜6月"
                 />
               </div>
             </div>

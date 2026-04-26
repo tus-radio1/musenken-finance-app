@@ -33,7 +33,7 @@ export async function fetchAllSubsidies(year?: number) {
   let subsidyQuery = auth.supabase
     .from("subsidy_items")
     .select(
-      "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,evidence_url,remarks,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
+      "id,category,term,expense_type,name,applicant_id,accounting_group_id,requested_amount,approved_amount,actual_amount,status,created_at,receipt_date,receipt_url,evidence_url,remarks,justification,usage_period,profiles!subsidy_items_applicant_id_fkey(name),accounting_groups!subsidy_items_accounting_group_id_fkey(name)",
     )
     .is("deleted_at", null);
 
@@ -70,6 +70,8 @@ export async function fetchAllSubsidies(year?: number) {
     receipt_url: string | null;
     evidence_url: string | null;
     remarks: string | null;
+    justification: string | null;
+    usage_period: string | null;
     profiles?: { name?: string | null } | null;
     accounting_groups?: { name?: string | null } | null;
   };
@@ -90,6 +92,8 @@ export async function fetchAllSubsidies(year?: number) {
       actual_expense: item.actual_amount || 0,
       status: item.status,
       remarks: item.remarks || "",
+      justification: item.justification || null,
+      usage_period: item.usage_period || null,
       created_at: item.created_at,
       receipt_date: item.receipt_date,
       receipt_url: item.receipt_url,
@@ -214,6 +218,7 @@ export async function updateSubsidyItem(
     receipt_date?: string | null;
     receipt_url?: string | null;
     remarks?: string;
+    usage_period?: string | null;
   },
 ) {
   const inputValidation = validateInput(updateSubsidyItemSchema, {

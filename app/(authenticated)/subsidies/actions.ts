@@ -53,6 +53,7 @@ export async function createSubsidyItem(
     name: validatedValues.name,
     requested_amount: validatedValues.requested_amount,
     justification: validatedValues.justification,
+    usage_period: validatedValues.usage_period || null,
     evidence_url: validatedValues.evidence_url,
     status: "pending",
   });
@@ -75,7 +76,7 @@ export async function fetchMySubsidyItems() {
   const { data, error } = await auth.supabase
     .from("subsidy_items")
     .select(
-      "id, category, term, expense_type, name, requested_amount, approved_amount, status, justification, evidence_url, receipt_url, created_at, accounting_group_id, accounting_groups(name)",
+      "id, category, term, expense_type, name, requested_amount, approved_amount, status, justification, usage_period, evidence_url, receipt_url, created_at, accounting_group_id, accounting_groups(name)",
     )
     .eq("applicant_id", auth.profileId)
     .is("deleted_at", null)
@@ -120,6 +121,7 @@ export async function updateMySubsidyItem(
     name?: string;
     requested_amount?: number;
     justification?: string;
+    usage_period?: string;
     receipt_url?: string | null;
   },
 ) {
