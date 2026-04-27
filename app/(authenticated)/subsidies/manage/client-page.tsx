@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -184,8 +185,11 @@ export function SubsidiesManageClientPage({
     receipt_url: "",
     remarks: "",
     usage_period: "",
+    justification: "",
+    evidence_url: "",
   });
   const [file, setFile] = useState<File | null>(null);
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
   const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
     ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
@@ -272,8 +276,11 @@ export function SubsidiesManageClientPage({
       receipt_url: item.receipt_url || "",
       remarks: item.remarks || "",
       usage_period: item.usage_period || "",
+      justification: item.justification || "",
+      evidence_url: item.evidence_url || "",
     });
     setFile(null);
+    setEvidenceFile(null);
     setEditingItem(item);
   };
 
@@ -313,6 +320,34 @@ export function SubsidiesManageClientPage({
       }
     }
 
+    let uploadedEvidenceUrl = editingItem.evidence_url;
+
+    if (evidenceFile) {
+      try {
+        const compressedFile = await compressImageToWebp(evidenceFile);
+        const fileExt = compressedFile.name.split(".").pop();
+        const fileName = `evidence_${editingItem.id}_${Date.now()}.${fileExt}`;
+        const formData = new FormData();
+        formData.append("file", compressedFile);
+        formData.append("fileName", fileName);
+        if (editingItem.evidence_url) {
+          formData.append("existingPath", editingItem.evidence_url);
+        }
+        const evidenceResult = await uploadReceiptAction(formData);
+        if (evidenceResult.error) {
+          toast.error(evidenceResult.error);
+          setIsSubmitting(false);
+          return;
+        }
+        uploadedEvidenceUrl = evidenceResult.filePath;
+      } catch (error) {
+        console.error("Evidence file processing error:", error);
+        toast.error("根拠書類のアップロード中にエラーが発生しました");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     const result = await updateSubsidyItem(editingItem.id, {
       category: editForm.category,
       term: parseInt(editForm.term, 10),
@@ -330,6 +365,8 @@ export function SubsidiesManageClientPage({
       receipt_url: uploadedReceiptUrl,
       remarks: editForm.remarks,
       usage_period: editForm.usage_period || null,
+      justification: editForm.justification || null,
+      evidence_url: uploadedEvidenceUrl,
     });
 
     setIsSubmitting(false);
@@ -366,12 +403,15 @@ export function SubsidiesManageClientPage({
                 receipt_url: uploadedReceiptUrl,
                 remarks: editForm.remarks,
                 usage_period: editForm.usage_period || null,
+                justification: editForm.justification || null,
+                evidence_url: uploadedEvidenceUrl,
               }
             : i,
         ),
       );
       setEditingItem(null);
       setFile(null);
+      setEvidenceFile(null);
     }
   };
 
@@ -957,7 +997,7 @@ export function SubsidiesManageClientPage({
             <DialogTitle>申請情報の編集</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
-            {editingItem?.justification && (
+            {!isAdmin && editingItem?.justification && (
               <div className="grid grid-cols-4 items-start gap-4">
                 <Label className="text-right text-sm pt-1">申請理由</Label>
                 <div className="col-span-3 text-sm whitespace-pre-wrap break-words bg-muted/50 rounded-md p-2">
@@ -1017,6 +1057,82 @@ export function SubsidiesManageClientPage({
                         })
                       }
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">経費種別</Label>
+                  <div className="col-span-3">
+                    <Select
+                      value={editForm.expense_type}
+                      onValueChange={(val) =>
+                        setEditForm({ ...editForm, expense_type: val })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(EXPENSE_TYPE_MAP).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label className="text-right text-sm pt-1">申請理由</Label>
+                  <div className="col-span-3">
+                    <Textarea
+                      value={editForm.justification}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, justification: e.target.value })
+                      }
+                      placeholder="申請理由を入力"
+                      className="resize-none"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">根拠書類</Label>
+                  <div className="col-span-3">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF &nbsp;|&nbsp; 最大サイズ: 10MB
+                    </p>
+                    <div className="flex items-center gap-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          document.getElementById("admin-evidence-upload")?.click()
+                        }
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        {evidenceFile ? "ファイルを変更" : "ファイルを選択"}
+                      </Button>
+                      <span className="text-sm text-muted-foreground truncate max-w-[150px]">
+                        {evidenceFile
+                          ? evidenceFile.name
+                          : editingItem?.evidence_url
+                            ? "登録済み(変更可)"
+                            : "未登録"}
+                      </span>
+                      <Input
+                        id="admin-evidence-upload"
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const selectedFile = e.target.files?.[0];
+                          if (selectedFile) setEvidenceFile(selectedFile);
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               </>
@@ -1229,6 +1345,7 @@ export function SubsidiesManageClientPage({
                 onClick={() => {
                   setEditingItem(null);
                   setFile(null);
+                  setEvidenceFile(null);
                 }}
                 disabled={isSubmitting}
               >
