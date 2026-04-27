@@ -1,13 +1,21 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, useMemo, Fragment } from "react";
 import {
   updateSubsidyStatus,
   updateSubsidyItem,
   deleteSubsidyItem,
 } from "./actions";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Receipt, FileText, Upload, Loader2, ChevronDown } from "lucide-react";
+import {
+  Receipt,
+  FileText,
+  Upload,
+  Loader2,
+  ChevronDown,
+  ArrowUpDown,
+  Search,
+} from "lucide-react";
 import { uploadReceiptAction } from "@/app/actions";
 import { compressImageToWebp } from "@/lib/image";
 import {
@@ -81,7 +89,7 @@ const EXPENSE_TYPE_MAP: Record<string, string> = {
   other: "その他",
 };
 
-const STATUS_MAP: Record<string, { label: string; variant: any }> = {
+const STATUS_MAP: Record<string, { label: string; variant: string }> = {
   pending: { label: "受付中", variant: "secondary" },
   accounting_received: { label: "受付済", variant: "outline" },
   rejected: { label: "却下", variant: "destructive" },
@@ -92,6 +100,9 @@ const STATUS_MAP: Record<string, { label: string; variant: any }> = {
   paid: { label: "受領済", variant: "default" },
   unexecuted: { label: "未執行", variant: "outline" },
 };
+
+type SortKey = "created_at" | "requested_amount";
+type SortOrder = "asc" | "desc";
 
 export function SubsidiesManageClientPage({
   initialData,
@@ -122,6 +133,11 @@ export function SubsidiesManageClientPage({
   const [items, setItems] = useState<SubsidyItem[]>(initialData);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTerm, setSelectedTerm] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedApplicant, setSelectedApplicant] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
 
@@ -175,13 +191,53 @@ export function SubsidiesManageClientPage({
     ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
     : null;
 
-  const filteredItems = items.filter((item) => {
-    if (selectedCategory !== "all" && item.category !== selectedCategory)
-      return false;
-    if (selectedTerm !== "all" && item.term.toString() !== selectedTerm)
-      return false;
-    return true;
-  });
+  const handleSortToggle = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+    } else {
+      setSortKey(key);
+      setSortOrder("desc");
+    }
+  };
+
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = searchQuery.toLowerCase().trim();
+
+    const filtered = items.filter((item) => {
+      if (selectedCategory !== "all" && item.category !== selectedCategory)
+        return false;
+      if (selectedTerm !== "all" && item.term.toString() !== selectedTerm)
+        return false;
+      if (normalizedQuery && !item.name.toLowerCase().includes(normalizedQuery))
+        return false;
+      if (selectedApplicant !== "all" && item.applicant_id !== selectedApplicant)
+        return false;
+      if (selectedStatus !== "all" && item.status !== selectedStatus)
+        return false;
+      return true;
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "created_at") {
+        cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      } else {
+        cmp = a.requested_amount - b.requested_amount;
+      }
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+
+    return sorted;
+  }, [
+    items,
+    selectedCategory,
+    selectedTerm,
+    searchQuery,
+    selectedApplicant,
+    selectedStatus,
+    sortKey,
+    sortOrder,
+  ]);
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     const originalItems = [...items];
@@ -236,8 +292,6 @@ export function SubsidiesManageClientPage({
         const formData = new FormData();
         formData.append("file", compressedFile);
         formData.append("fileName", fileName);
-        // Pass existing receipt path so the server can delete the old file
-        // when the extension changes (e.g., .webp -> .pdf)
         if (editingItem.receipt_url) {
           formData.append("existingPath", editingItem.receipt_url);
         }
@@ -337,36 +391,113 @@ export function SubsidiesManageClientPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 bg-muted/50 p-4 rounded-lg">
-        <div className="w-full sm:w-64 space-y-2">
-          <label className="text-sm font-medium">カテゴリ</label>
-          <Tabs
-            value={selectedCategory}
-            onValueChange={setSelectedCategory}
-            className="w-full"
-          >
-            <TabsList className="w-full grid grid-cols-4">
-              <TabsTrigger value="all">すべて</TabsTrigger>
-              <TabsTrigger value="activity">活動</TabsTrigger>
-              <TabsTrigger value="league">連盟</TabsTrigger>
-              <TabsTrigger value="special">特別</TabsTrigger>
-            </TabsList>
-          </Tabs>
+      <div className="space-y-3 bg-muted/50 p-4 rounded-lg">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="項目名で検索..."
+            className="pl-9"
+          />
         </div>
 
-        <div className="w-full sm:w-48 space-y-2">
-          <label className="text-sm font-medium">期</label>
-          <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-            <SelectTrigger>
-              <SelectValue placeholder="すべての期" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">すべての期</SelectItem>
-              <SelectItem value="1">第1期</SelectItem>
-              <SelectItem value="2">第2期</SelectItem>
-              <SelectItem value="3">第3期</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-col sm:flex-row gap-3 items-end flex-wrap">
+          <div className="w-full sm:w-auto space-y-1">
+            <label className="text-sm font-medium">カテゴリ</label>
+            <Tabs
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
+              className="w-full sm:w-64"
+            >
+              <TabsList className="w-full grid grid-cols-4">
+                <TabsTrigger value="all">すべて</TabsTrigger>
+                <TabsTrigger value="activity">活動</TabsTrigger>
+                <TabsTrigger value="league">連盟</TabsTrigger>
+                <TabsTrigger value="special">特別</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          <div className="w-full sm:w-36 space-y-1">
+            <label className="text-sm font-medium">期</label>
+            <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+              <SelectTrigger>
+                <SelectValue placeholder="すべての期" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべての期</SelectItem>
+                <SelectItem value="1">第1期</SelectItem>
+                <SelectItem value="2">第2期</SelectItem>
+                <SelectItem value="3">第3期</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-full sm:w-40 space-y-1">
+            <label className="text-sm font-medium">申請者</label>
+            <Select value={selectedApplicant} onValueChange={setSelectedApplicant}>
+              <SelectTrigger>
+                <SelectValue placeholder="すべての申請者" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべての申請者</SelectItem>
+                {augmentedProfiles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-full sm:w-40 space-y-1">
+            <label className="text-sm font-medium">状況</label>
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="すべての状況" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべての状況</SelectItem>
+                {Object.entries(STATUS_MAP).map(([key, { label }]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex gap-1">
+            <Button
+              variant={sortKey === "created_at" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-9 px-2 text-xs"
+              onClick={() => handleSortToggle("created_at")}
+            >
+              申請日
+              <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+              {sortKey === "created_at" && (
+                <span className="ml-0.5 text-[10px]">
+                  {sortOrder === "asc" ? "↑" : "↓"}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant={sortKey === "requested_amount" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-9 px-2 text-xs"
+              onClick={() => handleSortToggle("requested_amount")}
+            >
+              申請額
+              <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+              {sortKey === "requested_amount" && (
+                <span className="ml-0.5 text-[10px]">
+                  {sortOrder === "asc" ? "↑" : "↓"}
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -433,7 +564,6 @@ export function SubsidiesManageClientPage({
                   </CollapsibleTrigger>
                 </div>
 
-                {/* Usage period (always visible) */}
                 {item.usage_period && (
                   <div className="text-xs text-muted-foreground">
                     <span className="font-medium">使用時期: </span>
@@ -496,7 +626,7 @@ export function SubsidiesManageClientPage({
                     <span>
                       {item.receipt_date
                         ? formatStoredDate(item.receipt_date)
-                        : "\u2014"}
+                        : "—"}
                     </span>
                   </div>
 
@@ -575,15 +705,43 @@ export function SubsidiesManageClientPage({
         <table className="w-full text-sm text-left">
           <thead className="bg-muted/50 text-muted-foreground font-medium border-b">
             <tr>
-              <th className="p-3 w-1/4">申請情報</th>
-              <th className="p-3">項目名 / 申請者</th>
+              <th className="p-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 font-medium text-muted-foreground hover:text-foreground"
+                  onClick={() => handleSortToggle("created_at")}
+                >
+                  申請日
+                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                  {sortKey === "created_at" && (
+                    <span className="ml-0.5 text-[10px]">
+                      {sortOrder === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </Button>
+              </th>
+              <th className="p-3">申請者</th>
+              <th className="p-3">項目名</th>
               <th className="p-3">状況</th>
-              <th className="p-3 text-right">申請額</th>
+              <th className="p-3 text-right">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 font-medium text-muted-foreground hover:text-foreground ml-auto"
+                  onClick={() => handleSortToggle("requested_amount")}
+                >
+                  申請額
+                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                  {sortKey === "requested_amount" && (
+                    <span className="ml-0.5 text-[10px]">
+                      {sortOrder === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </Button>
+              </th>
               <th className="p-3 text-right">算定額</th>
-              <th className="p-3 text-right">実経費額</th>
-              <th className="p-3">受領日</th>
               <th className="p-3">添付書類</th>
-              <th className="p-3">使用時期</th>
               <th className="p-3 w-[60px]">詳細</th>
               <th className="p-3 w-[80px]"></th>
             </tr>
@@ -592,7 +750,7 @@ export function SubsidiesManageClientPage({
             {filteredItems.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={9}
                   className="p-6 text-center text-muted-foreground"
                 >
                   該当する支援金申請はありません
@@ -605,27 +763,14 @@ export function SubsidiesManageClientPage({
                   className="hover:bg-muted/50 transition-colors"
                 >
                   <td className="p-3">
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
-                        {CATEGORY_MAP[item.category] || item.category}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground border">
-                        第{item.term}期
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground border">
-                        {EXPENSE_TYPE_MAP[item.expense_type] ||
-                          item.expense_type}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground block">
+                    <span className="text-sm">
                       {formatStoredDate(item.created_at)}
                     </span>
                   </td>
 
                   <td className="p-3">
-                    <div className="font-medium">{item.name}</div>
                     <div
-                      className="text-sm text-muted-foreground mt-0.5 max-w-[200px] truncate"
+                      className="text-sm max-w-[120px] truncate"
                       title={item.applicant_name}
                     >
                       {item.applicant_name}
@@ -636,6 +781,22 @@ export function SubsidiesManageClientPage({
                           {item.accounting_group_name}
                         </div>
                       )}
+                  </td>
+
+                  <td className="p-3">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      <span className="px-1.5 py-0 rounded text-[11px] bg-blue-100 text-blue-800 border border-blue-200">
+                        {CATEGORY_MAP[item.category] || item.category}
+                      </span>
+                      <span className="px-1.5 py-0 rounded text-[11px] bg-muted text-muted-foreground border">
+                        第{item.term}期
+                      </span>
+                      <span className="px-1.5 py-0 rounded text-[11px] bg-muted text-muted-foreground border">
+                        {EXPENSE_TYPE_MAP[item.expense_type] ||
+                          item.expense_type}
+                      </span>
+                    </div>
                   </td>
 
                   <td className="p-3">
@@ -673,22 +834,6 @@ export function SubsidiesManageClientPage({
                     >
                       ¥{item.calculated_amount.toLocaleString()}
                     </span>
-                  </td>
-
-                  <td className="p-3 text-right">
-                    <span
-                      className={
-                        item.actual_expense > 0
-                          ? "font-medium text-blue-600"
-                          : "text-muted-foreground"
-                      }
-                    >
-                      ¥{item.actual_expense.toLocaleString()}
-                    </span>
-                  </td>
-
-                  <td className="p-3 text-sm">
-                    {item.receipt_date ? formatStoredDate(item.receipt_date) : "-"}
                   </td>
 
                   <td className="p-3 text-sm">
@@ -731,10 +876,6 @@ export function SubsidiesManageClientPage({
                     </div>
                   </td>
 
-                  <td className="p-3 text-sm">
-                    {item.usage_period || "-"}
-                  </td>
-
                   <td className="p-3 align-middle">
                     <Button
                       variant="ghost"
@@ -764,15 +905,35 @@ export function SubsidiesManageClientPage({
                 </tr>
                 {openDetailRows.has(item.id) && (
                   <tr key={`${item.id}-detail`} className="bg-muted/30">
-                    <td colSpan={11} className="px-4 py-2">
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    <td colSpan={9} className="px-4 py-3">
+                      <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                        <div>
+                          <span className="font-medium text-muted-foreground">実経費額: </span>
+                          <span
+                            className={
+                              item.actual_expense > 0
+                                ? "font-medium text-blue-600"
+                                : "text-muted-foreground"
+                            }
+                          >
+                            ¥{item.actual_expense.toLocaleString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-muted-foreground">受領日: </span>
+                          <span>{item.receipt_date ? formatStoredDate(item.receipt_date) : "-"}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-muted-foreground">使用時期: </span>
+                          <span>{item.usage_period || "-"}</span>
+                        </div>
                         {item.justification && (
-                          <div className="col-span-2">
+                          <div className="col-span-3">
                             <span className="font-medium text-muted-foreground">申請理由: </span>
                             <span className="whitespace-pre-wrap break-words">{item.justification}</span>
                           </div>
                         )}
-                        <div className="col-span-2">
+                        <div className="col-span-3">
                           <span className="font-medium text-muted-foreground">備考: </span>
                           <span className="whitespace-pre-wrap break-words">{item.remarks || "-"}</span>
                         </div>
