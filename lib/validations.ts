@@ -142,6 +142,7 @@ export const updateMySubsidyItemSchema = z.object({
     justification: z.string().optional(),
     usage_period: z.string().optional(),
     receipt_url: z.string().nullable().optional(),
+    evidence_url: z.string().nullable().optional(),
   }),
 });
 

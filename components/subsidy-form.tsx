@@ -47,8 +47,9 @@ import {
 } from "@/components/ui/dialog";
 
 import { subsidyFormSchema } from "@/lib/schema";
-import { createClient } from "@/utils/supabase/client";
+import { uploadReceiptAction } from "@/app/actions";
 import { createSubsidyItem } from "@/app/(authenticated)/subsidies/actions";
+import { compressImageToWebp } from "@/lib/image";
 
 type Category = {
   id: string;
@@ -170,29 +171,32 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
       let evidenceUrl: string = "";
 
-      // ファイルアップロード
-      if (file) {
-        setIsUploading(true);
-        const supabase = createClient();
-        const fileExt = file.name.split(".").pop();
+      setIsUploading(true);
+      try {
+        const compressedFile = await compressImageToWebp(file);
+        const fileExt = compressedFile.name.split(".").pop();
         const fileName = `subsidy-${Date.now()}-${Math.random()
           .toString(36)
           .substring(2)}.${fileExt}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from("receipts")
-          .upload(fileName, file);
+        const formData = new FormData();
+        formData.append("file", compressedFile);
+        formData.append("fileName", fileName);
 
-        if (uploadError) {
+        const uploadResult = await uploadReceiptAction(formData);
+        if (uploadResult.error) {
           toast.error("書類のアップロードに失敗しました");
-          console.error(uploadError);
           setIsUploading(false);
           return;
         }
 
-        evidenceUrl = fileName;
+        evidenceUrl = uploadResult.filePath ?? "";
+      } catch {
+        toast.error("書類のアップロード中にエラーが発生しました");
         setIsUploading(false);
+        return;
       }
+      setIsUploading(false);
 
       const result = await createSubsidyItem({
         ...values,

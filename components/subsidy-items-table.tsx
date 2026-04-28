@@ -98,6 +98,7 @@ type SubsidyItem = {
   justification?: string | null;
   receipt_url?: string | null;
   receipt_public_url?: string | null;
+  evidence_url?: string | null;
   evidence_public_url?: string | null;
   remarks?: string | null;
 };
@@ -298,7 +299,10 @@ export function SubsidyItemsTable({
     if (!editingItem) return;
     setIsSubmitting(true);
 
-    let uploadedReceiptUrl = editingItem.receipt_url;
+    const isApproved = editingItem.status === "approved";
+    let uploadedFileUrl = isApproved
+      ? editingItem.receipt_url
+      : editingItem.evidence_url ?? null;
 
     if (file) {
       try {
@@ -309,21 +313,20 @@ export function SubsidyItemsTable({
         const formData = new FormData();
         formData.append("file", compressedFile);
         formData.append("fileName", fileName);
-        // Pass existing receipt path so the server can delete the old file
-        // when the extension changes (e.g., .webp -> .pdf)
-        if (editingItem.receipt_url) {
-          formData.append("existingPath", editingItem.receipt_url);
+        const existingPath = isApproved
+          ? editingItem.receipt_url
+          : editingItem.evidence_url;
+        if (existingPath) {
+          formData.append("existingPath", existingPath);
         }
 
         const result = await uploadReceiptAction(formData);
-
         if (result.error) {
           toast.error(result.error);
           setIsSubmitting(false);
           return;
         }
-
-        uploadedReceiptUrl = result.filePath;
+        uploadedFileUrl = result.filePath;
       } catch (error) {
         console.error("Image processing error:", error);
         toast.error("画像の再処理またはアップロード中にエラーが発生しました");
@@ -332,59 +335,73 @@ export function SubsidyItemsTable({
       }
     }
 
-    const result = await updateMySubsidyItem(editingItem.id, {
-      category: editForm.category,
-      term: parseInt(editForm.term, 10),
-      accounting_group_id: editForm.accounting_group_id || undefined,
-      expense_type: editForm.expense_type,
-      name: editForm.name,
-      requested_amount: editForm.requested_amount,
-      usage_period: editForm.usage_period || undefined,
-      income_type: editForm.income_type || undefined,
-      date: editForm.date || undefined,
-      justification: editForm.justification || undefined,
-      receipt_url: uploadedReceiptUrl,
-    });
+    let updateValues: Parameters<typeof updateMySubsidyItem>[1];
+    if (isApproved) {
+      updateValues = { receipt_url: uploadedFileUrl };
+    } else {
+      updateValues = {
+        category: editForm.category,
+        term: parseInt(editForm.term, 10),
+        accounting_group_id: editForm.accounting_group_id || undefined,
+        expense_type: editForm.expense_type,
+        name: editForm.name,
+        requested_amount: editForm.requested_amount,
+        usage_period: editForm.usage_period || undefined,
+        income_type: editForm.income_type || undefined,
+        date: editForm.date || undefined,
+        justification: editForm.justification || undefined,
+        evidence_url: uploadedFileUrl,
+      };
+    }
 
+    const result = await updateMySubsidyItem(editingItem.id, updateValues);
     setIsSubmitting(false);
 
     if (result.error) {
       toast.error(result.error);
     } else {
       toast.success("申請情報を更新しました");
+
+      const publicBase = process.env.NEXT_PUBLIC_SUPABASE_URL
+        ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
+        : null;
+      const buildPublicUrl = (path: string | null | undefined) =>
+        path
+          ? path.startsWith("http")
+            ? path
+            : publicBase
+              ? `${publicBase}${path}`
+              : null
+          : null;
+
       const updatedGroup = accountingGroups.find(
         (g) => g.id === editForm.accounting_group_id,
       );
 
-      const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-        ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-        : null;
-      const newReceiptPublicUrl = uploadedReceiptUrl
-        ? uploadedReceiptUrl.startsWith("http")
-          ? uploadedReceiptUrl
-          : publicReceiptBase
-            ? `${publicReceiptBase}${uploadedReceiptUrl}`
-            : null
-        : null;
-
       setItems((prev) =>
-        prev.map((i) =>
-          i.id === editingItem.id
-            ? {
-                ...i,
-                ...editForm,
-                term: parseInt(editForm.term, 10),
-                date: editForm.date
-                  ? editForm.date.toISOString().split("T")[0]
-                  : i.date,
-                accounting_group_name: updatedGroup
-                  ? updatedGroup.name
-                  : i.accounting_group_name,
-                receipt_url: uploadedReceiptUrl,
-                receipt_public_url: newReceiptPublicUrl,
-              }
-            : i,
-        ),
+        prev.map((i) => {
+          if (i.id !== editingItem.id) return i;
+          if (isApproved) {
+            return {
+              ...i,
+              receipt_url: uploadedFileUrl,
+              receipt_public_url: buildPublicUrl(uploadedFileUrl),
+            };
+          }
+          return {
+            ...i,
+            ...editForm,
+            term: parseInt(editForm.term, 10),
+            date: editForm.date
+              ? editForm.date.toISOString().split("T")[0]
+              : i.date,
+            accounting_group_name: updatedGroup
+              ? updatedGroup.name
+              : i.accounting_group_name,
+            evidence_url: uploadedFileUrl,
+            evidence_public_url: buildPublicUrl(uploadedFileUrl),
+          };
+        }),
       );
       setEditingItem(null);
       setFile(null);
@@ -537,7 +554,9 @@ export function SubsidyItemsTable({
                 </TableHeader>
                 <TableBody>
                   {filtered.map((item) => {
-                    const canEditOrDelete =
+                    const canEdit =
+                      isGlobalAdmin || item.status === "pending" || item.status === "approved";
+                    const canDelete =
                       isGlobalAdmin || item.status === "pending";
                     return (
                       <Fragment key={item.id}>
@@ -619,7 +638,7 @@ export function SubsidyItemsTable({
                           </Button>
                         </TableCell>
                         <TableCell>
-                          {canEditOrDelete && (
+                          {(canEdit || canDelete) && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" className="h-8 w-8 p-0">
@@ -628,21 +647,25 @@ export function SubsidyItemsTable({
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleEditClick(item)}>
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  編集
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={(e) => {
-                                    e.preventDefault();
-                                    setDeletingItem(item);
-                                    setShowDeleteDialog(true);
-                                  }}
-                                  className="text-red-600 focus:text-red-600"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  削除
-                                </DropdownMenuItem>
+                                {canEdit && (
+                                  <DropdownMenuItem onClick={() => handleEditClick(item)}>
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    編集
+                                  </DropdownMenuItem>
+                                )}
+                                {canDelete && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      setDeletingItem(item);
+                                      setShowDeleteDialog(true);
+                                    }}
+                                    className="text-red-600 focus:text-red-600"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    削除
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
@@ -677,7 +700,9 @@ export function SubsidyItemsTable({
           {/* Mobile / Tablet card layout (below xl) */}
           <div className="xl:hidden space-y-3">
             {filtered.map((item) => {
-              const canEditOrDelete =
+              const canEdit =
+                isGlobalAdmin || item.status === "pending" || item.status === "approved";
+              const canDelete =
                 isGlobalAdmin || item.status === "pending";
               return (
                 <Collapsible
@@ -792,7 +817,7 @@ export function SubsidyItemsTable({
                       </div>
 
                       {/* Action buttons (edit/delete) */}
-                      {canEditOrDelete && (
+                      {(canEdit || canDelete) && (
                         <div className="flex items-center gap-1 pt-1">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -802,21 +827,25 @@ export function SubsidyItemsTable({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEditClick(item)}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                編集
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onSelect={(e) => {
-                                  e.preventDefault();
-                                  setDeletingItem(item);
-                                  setShowDeleteDialog(true);
-                                }}
-                                className="text-red-600 focus:text-red-600"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                削除
-                              </DropdownMenuItem>
+                              {canEdit && (
+                                <DropdownMenuItem onClick={() => handleEditClick(item)}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  編集
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && (
+                                <DropdownMenuItem
+                                  onSelect={(e) => {
+                                    e.preventDefault();
+                                    setDeletingItem(item);
+                                    setShowDeleteDialog(true);
+                                  }}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  削除
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -860,253 +889,296 @@ export function SubsidyItemsTable({
       >
         <DialogContent className="sm:max-w-[540px]">
           <DialogHeader>
-            <DialogTitle>申請内容の修正</DialogTitle>
+            <DialogTitle>
+              {editingItem?.status === "approved" ? "領収書のアップロード" : "申請内容の修正"}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">カテゴリ</Label>
-              <div className="col-span-3">
-                <Select
-                  value={editForm.category}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, category: val })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {editingItem?.status === "approved" ? (
+              <div className="space-y-2 px-1">
+                <Label>領収書画像</Label>
+                <p className="text-xs text-muted-foreground">
+                  対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF | 最大サイズ: 10MB
+                </p>
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      document.getElementById("receipt-upload")?.click()
+                    }
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {file ? "画像を変更" : "画像を選択"}
+                  </Button>
+                  <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+                    {file
+                      ? file.name
+                      : editingItem?.receipt_url
+                        ? "登録済み(変更可)"
+                        : "選択されていません"}
+                  </span>
+                  <Input
+                    id="receipt-upload"
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const selectedFile = e.target.files?.[0];
+                      if (selectedFile) setFile(selectedFile);
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-
-            {/* 収支区分 */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">収支区分</Label>
-              <div className="col-span-3">
-                <RadioGroup
-                  value={editForm.income_type}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, income_type: val })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="expense" id="edit-income-type-expense" />
-                    <Label htmlFor="edit-income-type-expense" className="font-normal cursor-pointer">
-                      支出
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="income" id="edit-income-type-income" />
-                    <Label htmlFor="edit-income-type-income" className="font-normal cursor-pointer">
-                      収入
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            </div>
-
-            {/* 日付 */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">日付</Label>
-              <div className="col-span-3">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full pl-3 text-left font-normal",
-                        !editForm.date && "text-muted-foreground",
-                      )}
-                    >
-                      {editForm.date ? (
-                        format(editForm.date, "yyyy年MM月dd日")
-                      ) : (
-                        <span>日付を選択</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={editForm.date}
-                      onSelect={(date) =>
-                        setEditForm({ ...editForm, date: date ?? undefined })
+            ) : (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">カテゴリ</Label>
+                  <div className="col-span-3">
+                    <Select
+                      value={editForm.category}
+                      onValueChange={(val) =>
+                        setEditForm({ ...editForm, category: val })
                       }
-                      locale={ja}
-                      initialFocus
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* 収支区分 */}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">収支区分</Label>
+                  <div className="col-span-3">
+                    <RadioGroup
+                      value={editForm.income_type}
+                      onValueChange={(val) =>
+                        setEditForm({ ...editForm, income_type: val })
+                      }
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="expense" id="edit-income-type-expense" />
+                        <Label htmlFor="edit-income-type-expense" className="font-normal cursor-pointer">
+                          支出
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="income" id="edit-income-type-income" />
+                        <Label htmlFor="edit-income-type-income" className="font-normal cursor-pointer">
+                          収入
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </div>
+
+                {/* 日付 */}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">日付</Label>
+                  <div className="col-span-3">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full pl-3 text-left font-normal",
+                            !editForm.date && "text-muted-foreground",
+                          )}
+                        >
+                          {editForm.date ? (
+                            format(editForm.date, "yyyy年MM月dd日")
+                          ) : (
+                            <span>日付を選択</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={editForm.date}
+                          onSelect={(date) =>
+                            setEditForm({ ...editForm, date: date ?? undefined })
+                          }
+                          locale={ja}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">期</Label>
+                  <div className="col-span-3">
+                    <Select
+                      value={editForm.term}
+                      onValueChange={(val) =>
+                        setEditForm({ ...editForm, term: val })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableTerms.map((t) => (
+                          <SelectItem key={String(t)} value={String(t)}>
+                            第{t}期
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">経費種別</Label>
+                  <div className="col-span-3">
+                    <Select
+                      value={editForm.expense_type}
+                      onValueChange={(val) =>
+                        setEditForm({ ...editForm, expense_type: val })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableExpenseTypes.map((et) => (
+                          <SelectItem key={et} value={et}>
+                            {EXPENSE_TYPE_LABELS[et] || et}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">会計区分</Label>
+                  <div className="col-span-3">
+                    <Select
+                      value={editForm.accounting_group_id}
+                      onValueChange={(val) =>
+                        setEditForm({ ...editForm, accounting_group_id: val })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="会計区分を選択" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accountingGroups.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">項目名</Label>
+                  <div className="col-span-3">
+                    <Input
+                      value={editForm.name}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, name: e.target.value })
+                      }
                     />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">期</Label>
-              <div className="col-span-3">
-                <Select
-                  value={editForm.term}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, term: val })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableTerms.map((t) => (
-                      <SelectItem key={String(t)} value={String(t)}>
-                        第{t}期
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">申請額</Label>
+                  <div className="col-span-3">
+                    <Input
+                      type="number"
+                      value={editForm.requested_amount}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          requested_amount: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">経費種別</Label>
-              <div className="col-span-3">
-                <Select
-                  value={editForm.expense_type}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, expense_type: val })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableExpenseTypes.map((et) => (
-                      <SelectItem key={et} value={et}>
-                        {EXPENSE_TYPE_LABELS[et] || et}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-sm">使用時期</Label>
+                  <div className="col-span-3">
+                    <Input
+                      value={editForm.usage_period}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, usage_period: e.target.value })
+                      }
+                      placeholder="例：2026年4月〜6月"
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">会計区分</Label>
-              <div className="col-span-3">
-                <Select
-                  value={editForm.accounting_group_id}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, accounting_group_id: val })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="会計区分を選択" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accountingGroups.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                {/* 申請理由 */}
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label className="text-right text-sm pt-2">申請理由</Label>
+                  <div className="col-span-3">
+                    <Textarea
+                      value={editForm.justification}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, justification: e.target.value })
+                      }
+                      placeholder="支援が必要な理由を記載してください..."
+                      className="resize-none"
+                      rows={3}
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">項目名</Label>
-              <div className="col-span-3">
-                <Input
-                  value={editForm.name}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, name: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">申請額</Label>
-              <div className="col-span-3">
-                <Input
-                  type="number"
-                  value={editForm.requested_amount}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      requested_amount: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">使用時期</Label>
-              <div className="col-span-3">
-                <Input
-                  value={editForm.usage_period}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, usage_period: e.target.value })
-                  }
-                  placeholder="例：2026年4月〜6月"
-                />
-              </div>
-            </div>
-
-            {/* 申請理由 */}
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right text-sm pt-2">申請理由</Label>
-              <div className="col-span-3">
-                <Textarea
-                  value={editForm.justification}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, justification: e.target.value })
-                  }
-                  placeholder="支援が必要な理由を記載してください..."
-                  className="resize-none"
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2 px-1">
-              <Label>領収書画像 (任意)</Label>
-              <div className="flex items-center gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("receipt-upload")?.click()
-                  }
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {file ? "画像を変更" : "画像を選択"}
-                </Button>
-                <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-                  {file
-                    ? file.name
-                    : editingItem?.receipt_url
-                      ? "登録済み(変更可)"
-                      : "選択されていません"}
-                </span>
-                <Input
-                  id="receipt-upload"
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const selectedFile = e.target.files?.[0];
-                    if (selectedFile) setFile(selectedFile);
-                  }}
-                />
-              </div>
-            </div>
+                {/* 根拠書類アップロード */}
+                <div className="space-y-2 px-1">
+                  <Label>根拠書類 (任意)</Label>
+                  <div className="flex items-center gap-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        document.getElementById("evidence-upload")?.click()
+                      }
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {file ? "ファイルを変更" : "ファイルを選択"}
+                    </Button>
+                    <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+                      {file
+                        ? file.name
+                        : editingItem?.evidence_url
+                          ? "登録済み(変更可)"
+                          : "選択されていません"}
+                    </span>
+                    <Input
+                      id="evidence-upload"
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const selectedFile = e.target.files?.[0];
+                        if (selectedFile) setFile(selectedFile);
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button
