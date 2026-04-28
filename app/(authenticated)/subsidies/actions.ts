@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { subsidyFormSchema } from "@/lib/schema";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
+import { createAdminClient } from "@/utils/supabase/server";
 import { formatDateForDatabase } from "@/lib/date";
 import {
   updateMySubsidyItemSchema,
@@ -54,6 +55,7 @@ export async function createSubsidyItem(
     requested_amount: validatedValues.requested_amount,
     justification: validatedValues.justification,
     usage_period: validatedValues.usage_period || null,
+    remarks: validatedValues.remarks || null,
     evidence_url: validatedValues.evidence_url,
     status: "pending",
   });
@@ -122,7 +124,9 @@ export async function updateMySubsidyItem(
     requested_amount?: number;
     justification?: string;
     usage_period?: string;
+    remarks?: string | null;
     receipt_url?: string | null;
+    evidence_url?: string | null;
   },
 ) {
   const inputValidation = validateInput(updateMySubsidyItemSchema, {
@@ -153,19 +157,34 @@ export async function updateMySubsidyItem(
     return { error: "他人の申請は編集できません" };
   }
 
-  if (item.status !== "pending") {
-    return { error: "受付中以外の申請は編集できません" };
+  if (item.status !== "pending" && item.status !== "approved") {
+    return { error: "受付中または審査通過の申請のみ編集できます" };
   }
 
-  const updateData: Record<string, unknown> = { ...values };
-  if (values.date) {
-    updateData.date = formatDateForDatabase(values.date);
+  let updateData: Record<string, unknown>;
+  if (item.status === "approved") {
+    // approved: receipt_url only
+    updateData = {};
+    if (values.receipt_url !== undefined) {
+      updateData.receipt_url = values.receipt_url;
+    }
+  } else {
+    // pending: general fields + evidence_url (receipt_url is not allowed)
+    const { receipt_url, ...rest } = values;
+    updateData = { ...rest };
+    if (values.date) {
+      updateData.date = formatDateForDatabase(values.date);
+    }
   }
 
-  const { error: updateError } = await auth.supabase
+  // Use admin client to bypass RLS for the update.
+  // Ownership and status are already validated above with the user's client.
+  const supabaseAdmin = createAdminClient();
+  const { error: updateError } = await supabaseAdmin
     .from("subsidy_items")
     .update(updateData)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("applicant_id", auth.profileId);
 
   if (updateError) {
     console.error("updateMySubsidyItem error:", updateError);

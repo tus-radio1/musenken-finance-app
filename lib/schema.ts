@@ -68,5 +68,6 @@ export const subsidyFormSchema = z.object({
     required_error: "申請理由を入力してください",
   }).min(1, "申請理由を入力してください"),
   usage_period: z.string().optional(),
+  remarks: z.string().nullable().optional(),
   evidence_url: z.string(),
 });

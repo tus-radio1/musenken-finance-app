@@ -219,6 +219,8 @@ export async function updateSubsidyItem(
     receipt_url?: string | null;
     remarks?: string;
     usage_period?: string | null;
+    justification?: string | null;
+    evidence_url?: string | null;
   },
 ) {
   const inputValidation = validateInput(updateSubsidyItemSchema, {
