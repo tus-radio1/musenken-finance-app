@@ -141,6 +141,7 @@ export const updateMySubsidyItemSchema = z.object({
     requested_amount: z.number().min(1).optional(),
     justification: z.string().optional(),
     usage_period: z.string().optional(),
+    remarks: z.string().nullable().optional(),
     receipt_url: z.string().nullable().optional(),
     evidence_url: z.string().nullable().optional(),
   }),

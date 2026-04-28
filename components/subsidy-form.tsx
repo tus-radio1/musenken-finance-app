@@ -111,6 +111,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       requested_amount: 0,
       justification: "",
       usage_period: "",
+      remarks: "",
       income_type: "expense",
       date: new Date(),
       evidence_url: "",
@@ -144,6 +145,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
         requested_amount: 0,
         justification: "",
         usage_period: "",
+        remarks: "",
         income_type: "expense",
         date: new Date(),
         evidence_url: "",
@@ -224,7 +226,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       <DialogTrigger asChild>
         {triggerButton ? triggerButton : <Button>＋ 支援金申請</Button>}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>支援金の新規申請</DialogTitle>
           <DialogDescription>
@@ -496,6 +498,27 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                   <FormControl>
                     <Input
                       placeholder="例：2026年4月〜6月"
+                      {...field}
+                      value={field.value ?? ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* 備考 */}
+            <FormField
+              control={form.control}
+              name="remarks"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>備考（任意）</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="補足事項があれば記載してください..."
+                      className="resize-none"
+                      rows={3}
                       {...field}
                       value={field.value ?? ""}
                     />

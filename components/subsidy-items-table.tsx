@@ -191,6 +191,7 @@ export function SubsidyItemsTable({
     income_type: "expense",
     date: new Date() as Date | undefined,
     justification: "",
+    remarks: "",
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -277,6 +278,7 @@ export function SubsidyItemsTable({
       income_type: item.income_type || "expense",
       date: item.date ? new Date(item.date) : new Date(),
       justification: item.justification || "",
+      remarks: item.remarks || "",
     });
     setFile(null);
     setEditingItem(item);
@@ -350,6 +352,7 @@ export function SubsidyItemsTable({
         income_type: editForm.income_type || undefined,
         date: editForm.date || undefined,
         justification: editForm.justification || undefined,
+        remarks: editForm.remarks || null,
         evidence_url: uploadedFileUrl,
       };
     }
@@ -887,7 +890,7 @@ export function SubsidyItemsTable({
         open={editingItem !== null}
         onOpenChange={(open) => !open && setEditingItem(null)}
       >
-        <DialogContent className="sm:max-w-[540px]">
+        <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>
               {editingItem?.status === "approved" ? "領収書のアップロード" : "申請内容の修正"}
@@ -1138,6 +1141,22 @@ export function SubsidyItemsTable({
                         setEditForm({ ...editForm, justification: e.target.value })
                       }
                       placeholder="支援が必要な理由を記載してください..."
+                      className="resize-none"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                {/* 備考 */}
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label className="text-right text-sm pt-2">備考</Label>
+                  <div className="col-span-3">
+                    <Textarea
+                      value={editForm.remarks}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, remarks: e.target.value })
+                      }
+                      placeholder="補足事項があれば記載してください..."
                       className="resize-none"
                       rows={3}
                     />

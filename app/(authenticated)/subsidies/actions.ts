@@ -55,6 +55,7 @@ export async function createSubsidyItem(
     requested_amount: validatedValues.requested_amount,
     justification: validatedValues.justification,
     usage_period: validatedValues.usage_period || null,
+    remarks: validatedValues.remarks || null,
     evidence_url: validatedValues.evidence_url,
     status: "pending",
   });
@@ -123,6 +124,7 @@ export async function updateMySubsidyItem(
     requested_amount?: number;
     justification?: string;
     usage_period?: string;
+    remarks?: string | null;
     receipt_url?: string | null;
     evidence_url?: string | null;
   },
