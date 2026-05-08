@@ -176,8 +176,8 @@ export default async function BudgetPage({
     };
   });
 
-  // All accounting groups including those without budgets
-  const allGroupsWithBudget = (categories || []).map((c: any) => {
+  // Active accounting groups only (inactive groups are excluded from the table)
+  const allGroupsWithBudget = (categories || []).filter((c: any) => c.is_active !== false).map((c: any) => {
     const budget = (budgets || []).find(
       (b: any) => b.accounting_group_id === c.id,
     );
