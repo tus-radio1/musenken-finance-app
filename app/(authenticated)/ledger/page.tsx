@@ -6,7 +6,7 @@ import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getUserTeams, TeamInfo } from "@/lib/teams";
 import { getAccountingUserId } from "@/lib/system-config";
-import { getFiscalYears } from "@/lib/cache";
+import { getFiscalYears, getAccountingGroups } from "@/lib/cache";
 
 type Role = {
   name: string | null;
@@ -50,7 +50,7 @@ export default async function LedgerPage({
     await Promise.all([
       profileId
         ? getUserTeams(supabase, supabase, profileId)
-        : Promise.resolve({ isGlobalAdmin: false, isAccountingUser: false, teams: [] as TeamInfo[] }),
+        : Promise.resolve({ isGlobalAdmin: false, isAccountingUser: false, isFullAccess: false, roleGroupIds: [] as string[], teams: [] as TeamInfo[] }),
       getAccountingUserId(),
       getFiscalYears(),
       supabase.from("profiles").select("id, name").is("deleted_at", null),
@@ -59,6 +59,7 @@ export default async function LedgerPage({
   isGlobalAdmin = teamData.isGlobalAdmin;
   isAccountingUser = teamData.isAccountingUser;
   myTeams = teamData.teams;
+  const { isFullAccess: teamFullAccess, roleGroupIds } = teamData;
 
   const selectedYearParam = params.year;
   let fyYear: number | undefined;
@@ -87,20 +88,54 @@ export default async function LedgerPage({
     fiscalYears?.find((fy: any) => fy.year === fyYear)?.is_current ?? false;
   const isReadOnly = !isCurrentFY && !isGlobalAdmin;
 
-  // 過年度の場合、予算が設定されているグループのみに絞り込む
+  // 過年度の場合、その年度に予算が設定されていたグループのみに絞り込む
+  // （現在Inactiveでも、その年度時点でActiveだったグループ＝予算が存在するグループも含む）
   let displayTeams = myTeams;
   if (fyYear && !isCurrentFY) {
-    const { data: budgetsForYear } = await supabase
-      .from("budgets")
-      .select("accounting_group_id")
-      .eq("fiscal_year_id", fyYear);
+    const [{ data: budgetsForYear }, allGroups] = await Promise.all([
+      supabase
+        .from("budgets")
+        .select("accounting_group_id")
+        .eq("fiscal_year_id", fyYear),
+      getAccountingGroups(),
+    ]);
+
     const groupsWithBudget = new Set(
       (budgetsForYear || []).map((b: any) => b.accounting_group_id),
     );
-    const filtered = myTeams.filter((t) => groupsWithBudget.has(t.id));
-    // グループが1つも見つからない場合は全グループを表示（データ移行前など）
-    if (filtered.length > 0) {
-      displayTeams = filtered;
+
+    if (teamFullAccess) {
+      // 全アクセス権ユーザー（管理者・会計・議長・副議長）:
+      // その年度に予算があった全グループを表示（inactive含む）
+      const historicalTeams: TeamInfo[] = ((allGroups || []) as any[])
+        .filter((g: any) => groupsWithBudget.has(g.id))
+        .map((g: any) => ({
+          id: g.id,
+          name: g.name,
+          type: (g.type === "leader" ? "leader" : "general") as "general" | "leader",
+        }));
+      if (historicalTeams.length > 0) {
+        displayTeams = historicalTeams;
+      }
+    } else {
+      // 一般ユーザー: generalグループ＋ユーザーが所属するグループのうち、
+      // その年度に予算があったもの（inactive含む）
+      const eligibleGroupIds = new Set([
+        ...((allGroups || []) as any[])
+          .filter((g: any) => g.type === "general" || !g.type)
+          .map((g: any) => g.id),
+        ...(roleGroupIds ?? []),
+      ]);
+      const historicalTeams: TeamInfo[] = ((allGroups || []) as any[])
+        .filter((g: any) => groupsWithBudget.has(g.id) && eligibleGroupIds.has(g.id))
+        .map((g: any) => ({
+          id: g.id,
+          name: g.name,
+          type: (g.type === "leader" ? "leader" : "general") as "general" | "leader",
+        }));
+      if (historicalTeams.length > 0) {
+        displayTeams = historicalTeams;
+      }
     }
   }
 

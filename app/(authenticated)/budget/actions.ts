@@ -1,10 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createAdminClient } from "@/utils/supabase/server";
 import {
   upsertBudgetSchema,
   createFiscalYearBudgetsSchema,
+  toggleAccountingGroupActiveSchema,
+  deleteGroupYearDataSchema,
   validateInput,
 } from "@/lib/validations";
 import { resolveAuthWithRoles } from "@/lib/auth/context";
@@ -154,6 +156,94 @@ export async function createFiscalYearBudgets(
       console.error(budgetError);
       return { error: "予算の保存に失敗しました" };
     }
+  }
+
+  revalidatePath("/budget");
+  return { success: true };
+}
+
+export async function toggleAccountingGroupActive(
+  groupId: string,
+  isActive: boolean,
+) {
+  const validation = validateInput(toggleAccountingGroupActiveSchema, {
+    groupId,
+    isActive,
+  });
+  if (!validation.success) {
+    return { error: "入力データが不正です" };
+  }
+
+  const authResult = await resolveAuthWithRoles();
+  if (!authResult.ok) return { error: authResult.error };
+  const access = authResult.access;
+
+  // Only global admins can toggle group active status
+  if (!access.isAdmin) {
+    return { error: "グループの有効/無効を切り替える権限がありません" };
+  }
+
+  const adminDb = createAdminClient();
+  const { error: dbError } = await adminDb
+    .from("accounting_groups")
+    .update({ is_active: isActive })
+    .eq("id", groupId);
+
+  if (dbError) {
+    console.error("[toggleAccountingGroupActive] DB error:", dbError);
+    return { error: "グループの状態更新に失敗しました" };
+  }
+
+  updateTag("accounting_groups");
+  revalidatePath("/budget");
+  return { success: true };
+}
+
+export async function deleteGroupYearData(
+  groupId: string,
+  fiscalYear: number,
+) {
+  const validation = validateInput(deleteGroupYearDataSchema, {
+    groupId,
+    fiscalYear,
+  });
+  if (!validation.success) {
+    return { error: "入力データが不正です" };
+  }
+
+  const authResult = await resolveAuthWithRoles();
+  if (!authResult.ok) return { error: authResult.error };
+  const access = authResult.access;
+
+  // Only global admins can delete group year data
+  if (!access.isAdmin) {
+    return { error: "データを削除する権限がありません" };
+  }
+
+  const adminDb = createAdminClient();
+
+  // Delete transactions first (referential integrity)
+  const { error: txError } = await adminDb
+    .from("transactions")
+    .delete()
+    .eq("accounting_group_id", groupId)
+    .eq("fiscal_year_id", fiscalYear);
+
+  if (txError) {
+    console.error("[deleteGroupYearData] transactions delete error:", txError);
+    return { error: "出納帳データの削除に失敗しました" };
+  }
+
+  // Delete budget record
+  const { error: budgetError } = await adminDb
+    .from("budgets")
+    .delete()
+    .eq("accounting_group_id", groupId)
+    .eq("fiscal_year_id", fiscalYear);
+
+  if (budgetError) {
+    console.error("[deleteGroupYearData] budgets delete error:", budgetError);
+    return { error: "予算データの削除に失敗しました" };
   }
 
   revalidatePath("/budget");

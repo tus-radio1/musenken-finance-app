@@ -46,6 +46,12 @@ export const adminResetPasswordSchema = z.object({
   userId: uuidSchema,
 });
 
+/** toggleAccountingGroupActive */
+export const toggleAccountingGroupActiveSchema = z.object({
+  groupId: uuidSchema,
+  isActive: z.boolean(),
+});
+
 /** upsertBudget */
 export const upsertBudgetSchema = z.object({
   accountingGroupId: uuidSchema,
@@ -163,6 +169,12 @@ export const updateMemberSchema = z.object({
     grade: z.number().int().min(0).max(4),
     role_ids: z.array(uuidSchema),
   }),
+});
+
+/** deleteGroupYearData */
+export const deleteGroupYearDataSchema = z.object({
+  groupId: uuidSchema,
+  fiscalYear: z.number().int().min(2000).max(2100),
 });
 
 /** retireMember / deleteMember / resetPasswordMember */
