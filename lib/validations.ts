@@ -182,6 +182,12 @@ export const memberIdSchema = z.object({
   userId: uuidSchema,
 });
 
+/** createAccountingGroup */
+export const createAccountingGroupSchema = z.object({
+  name: z.string().min(1, "Group name is required").max(100),
+  type: z.string().min(1, "Group type is required").max(100),
+});
+
 // --- Utility: Safe validation wrapper ---
 
 export type ValidationResult<T> =

@@ -16,6 +16,7 @@ import { YearSelector } from "./_components/year-selector";
 import { BudgetUpdateDialog } from "./_components/budget-update-dialog";
 import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
 import { ToggleGroupActiveDialog } from "./_components/toggle-group-active-dialog";
+import { AddGroupDialog } from "./_components/add-group-dialog";
 import { DeleteGroupYearButton } from "./_components/delete-group-year-button";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
@@ -342,13 +343,16 @@ export default async function BudgetPage({
                     existingYears={existingYears}
                   />
                   {isGlobalAdmin && (
-                    <ToggleGroupActiveDialog
-                      groups={groupsForDialog.map((g) => ({
-                        id: g.id,
-                        name: g.name,
-                        isActive: g.isActive,
-                      }))}
-                    />
+                    <>
+                      <AddGroupDialog fiscalYear={fyYear} />
+                      <ToggleGroupActiveDialog
+                        groups={groupsForDialog.map((g) => ({
+                          id: g.id,
+                          name: g.name,
+                          isActive: g.isActive,
+                        }))}
+                      />
+                    </>
                   )}
                 </div>
               )}

@@ -7,6 +7,7 @@ import {
   createFiscalYearBudgetsSchema,
   toggleAccountingGroupActiveSchema,
   deleteGroupYearDataSchema,
+  createAccountingGroupSchema,
   validateInput,
 } from "@/lib/validations";
 import { resolveAuthWithRoles } from "@/lib/auth/context";
@@ -248,4 +249,60 @@ export async function deleteGroupYearData(
 
   revalidatePath("/budget");
   return { success: true };
+}
+
+export async function createAccountingGroup(
+  name: string,
+  type: string,
+  fiscalYear?: number,
+  amount?: number,
+  carryoverAmount?: number,
+): Promise<{ success?: boolean; groupId?: string; error?: string }> {
+  const validation = validateInput(createAccountingGroupSchema, { name, type });
+  if (!validation.success) {
+    return { error: "入力データが不正です" };
+  }
+
+  const authResult = await resolveAuthWithRoles();
+  if (!authResult.ok) return { error: authResult.error };
+  const access = authResult.access;
+
+  if (!access.isAdmin) {
+    return { error: "会計グループを作成する権限がありません" };
+  }
+
+  const adminDb = createAdminClient();
+
+  const { data: newGroup, error: groupError } = await adminDb
+    .from("accounting_groups")
+    .insert({ name, type, is_active: true })
+    .select("id")
+    .single();
+
+  if (groupError) {
+    console.error("[createAccountingGroup] DB error:", groupError);
+    if (groupError.code === "23505") {
+      return { error: `「${name}」は既に存在します` };
+    }
+    return { error: "会計グループの作成に失敗しました" };
+  }
+
+  if (fiscalYear !== undefined && newGroup?.id) {
+    const { error: budgetError } = await adminDb.from("budgets").insert({
+      accounting_group_id: newGroup.id,
+      amount: amount ?? 0,
+      carryover_amount: carryoverAmount ?? 0,
+      fiscal_year_id: fiscalYear,
+    });
+    if (budgetError) {
+      console.error("[createAccountingGroup] budget insert error:", budgetError);
+      updateTag("accounting_groups");
+      revalidatePath("/budget");
+      return { success: true, groupId: newGroup.id, error: "グループは作成されましたが、予算の設定に失敗しました" };
+    }
+  }
+
+  updateTag("accounting_groups");
+  revalidatePath("/budget");
+  return { success: true, groupId: newGroup?.id };
 }
