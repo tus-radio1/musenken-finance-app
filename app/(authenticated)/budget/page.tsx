@@ -11,9 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { YearSelector } from "./_components/year-selector";
 import { BudgetUpdateDialog } from "./_components/budget-update-dialog";
 import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
+import { ToggleGroupActiveDialog } from "./_components/toggle-group-active-dialog";
+import { AddGroupDialog } from "./_components/add-group-dialog";
+import { DeleteGroupYearButton } from "./_components/delete-group-year-button";
 import { MobileSidebar } from "@/components/mobile-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
@@ -173,14 +177,15 @@ export default async function BudgetPage({
     };
   });
 
-  // All accounting groups including those without budgets
-  const allGroupsWithBudget = (categories || []).map((c: any) => {
+  // Active accounting groups only (inactive groups are excluded from the table)
+  const allGroupsWithBudget = (categories || []).filter((c: any) => c.is_active !== false).map((c: any) => {
     const budget = (budgets || []).find(
       (b: any) => b.accounting_group_id === c.id,
     );
     return {
       group_id: c.id,
       group_name: c.name,
+      is_active: c.is_active ?? true,
       budget_amount: budget ? Number(budget.amount) : 0,
       carryover_amount: budget ? Number(budget.carryover_amount) : 0,
       expenses: usageMap[c.id]?.expenses || 0,
@@ -197,6 +202,7 @@ export default async function BudgetPage({
     return {
       id: c.id as string,
       name: c.name as string,
+      isActive: (c.is_active ?? true) as boolean,
       currentBudget: budget ? Number(budget.amount) : 0,
       currentCarryover: budget ? Number(budget.carryover_amount) : 0,
     };
@@ -253,6 +259,7 @@ export default async function BudgetPage({
                         <TableHead className="text-right">申請中</TableHead>
                         <TableHead className="text-right">残額</TableHead>
                         <TableHead className="text-right">使用率</TableHead>
+                        <TableHead className="w-10" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -267,7 +274,12 @@ export default async function BudgetPage({
                         return (
                           <TableRow key={item.group_id}>
                             <TableCell className="font-medium">
-                              {item.group_name}
+                              <span className="flex items-center gap-2">
+                                {item.group_name}
+                                {!item.is_active && (
+                                  <Badge variant="outline">無効</Badge>
+                                )}
+                              </span>
                             </TableCell>
                             <TableCell className="text-right">
                               {formatCurrency(item.budget_amount)}
@@ -300,6 +312,15 @@ export default async function BudgetPage({
                                 {usageRate.toFixed(1)}%
                               </span>
                             </TableCell>
+                            <TableCell>
+                              {isGlobalAdmin && !item.is_active && fyYear && (
+                                <DeleteGroupYearButton
+                                  groupId={item.group_id}
+                                  groupName={item.group_name}
+                                  fiscalYear={fyYear}
+                                />
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })}
@@ -321,6 +342,18 @@ export default async function BudgetPage({
                     }))}
                     existingYears={existingYears}
                   />
+                  {isGlobalAdmin && (
+                    <>
+                      <AddGroupDialog fiscalYear={fyYear} />
+                      <ToggleGroupActiveDialog
+                        groups={groupsForDialog.map((g) => ({
+                          id: g.id,
+                          name: g.name,
+                          isActive: g.isActive,
+                        }))}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>

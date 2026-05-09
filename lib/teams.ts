@@ -16,6 +16,8 @@ export async function getUserTeams(
   teams: TeamInfo[];
   isGlobalAdmin: boolean;
   isAccountingUser: boolean;
+  isFullAccess: boolean;
+  roleGroupIds: string[];
 }> {
   let isGlobalAdmin = false;
   let isAccountingUser = false;
@@ -89,5 +91,9 @@ export async function getUserTeams(
     });
   }
 
-  return { teams: myTeams, isGlobalAdmin, isAccountingUser };
+  const roleGroupIds = roles
+    .filter((r) => r.accounting_group_id)
+    .map((r) => r.accounting_group_id as string);
+
+  return { teams: myTeams, isGlobalAdmin, isAccountingUser, isFullAccess, roleGroupIds };
 }

@@ -13,13 +13,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { createFiscalYearBudgets } from "../actions";
+import { createFiscalYearBudgets, createAccountingGroup } from "../actions";
 import { useRouter } from "next/navigation";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, Plus, Trash2 } from "lucide-react";
 
 type AccountingGroup = {
   id: string;
   name: string;
+};
+
+type NewGroup = {
+  tempId: string;
+  name: string;
+  type: string;
 };
 
 interface NewFiscalYearDialogProps {
@@ -57,6 +63,9 @@ export function NewFiscalYearDialog({
       return init;
     },
   );
+  const [newGroups, setNewGroups] = useState<NewGroup[]>([]);
+  const [newGroupAmounts, setNewGroupAmounts] = useState<Record<string, string>>({});
+  const [newGroupCarryovers, setNewGroupCarryovers] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -73,6 +82,9 @@ export function NewFiscalYearDialog({
       });
       setBudgetAmounts(init);
       setCarryoverAmounts(carryoverInit);
+      setNewGroups([]);
+      setNewGroupAmounts({});
+      setNewGroupCarryovers({});
       setError(null);
     }
   };
@@ -83,6 +95,33 @@ export function NewFiscalYearDialog({
 
   const handleCarryoverChange = (groupId: string, value: string) => {
     setCarryoverAmounts((prev) => ({ ...prev, [groupId]: value }));
+  };
+
+  const handleAddNewGroup = () => {
+    const tempId = `new-${Date.now()}`;
+    setNewGroups((prev) => [...prev, { tempId, name: "", type: "" }]);
+    setNewGroupAmounts((prev) => ({ ...prev, [tempId]: "0" }));
+    setNewGroupCarryovers((prev) => ({ ...prev, [tempId]: "0" }));
+  };
+
+  const handleNewGroupChange = (tempId: string, field: "name" | "type", value: string) => {
+    setNewGroups((prev) =>
+      prev.map((g) => (g.tempId === tempId ? { ...g, [field]: value } : g)),
+    );
+  };
+
+  const handleRemoveNewGroup = (tempId: string) => {
+    setNewGroups((prev) => prev.filter((g) => g.tempId !== tempId));
+    setNewGroupAmounts((prev) => {
+      const next = { ...prev };
+      delete next[tempId];
+      return next;
+    });
+    setNewGroupCarryovers((prev) => {
+      const next = { ...prev };
+      delete next[tempId];
+      return next;
+    });
   };
 
   const handleSubmit = () => {
@@ -96,6 +135,7 @@ export function NewFiscalYearDialog({
       return;
     }
 
+    // Validate existing groups
     const budgets: { groupId: string; amount: number; carryoverAmount?: number }[] = [];
     for (const g of groups) {
       const amt = Number(budgetAmounts[g.id] || 0);
@@ -111,8 +151,44 @@ export function NewFiscalYearDialog({
       budgets.push({ groupId: g.id, amount: amt, carryoverAmount: carryoverAmt });
     }
 
+    // Validate new groups
+    for (const ng of newGroups) {
+      if (!ng.name.trim()) {
+        setError("追加するグループのグループ名を入力してください");
+        return;
+      }
+      if (!ng.type.trim()) {
+        setError(`「${ng.name}」の種別を入力してください`);
+        return;
+      }
+      const amt = Number(newGroupAmounts[ng.tempId] || 0);
+      if (Number.isNaN(amt) || amt < 0) {
+        setError(`「${ng.name}」の予算額が不正です`);
+        return;
+      }
+      const carryoverAmt = Number(newGroupCarryovers[ng.tempId] || 0);
+      if (Number.isNaN(carryoverAmt) || carryoverAmt < 0) {
+        setError(`「${ng.name}」の繰入金が不正です`);
+        return;
+      }
+    }
+
     setError(null);
     startTransition(async () => {
+      // Create new groups first (without fiscal year, budgets added via createFiscalYearBudgets)
+      for (const ng of newGroups) {
+        const result = await createAccountingGroup(ng.name.trim(), ng.type.trim());
+        if (result.error && !result.success) {
+          setError(result.error);
+          return;
+        }
+        if (result.groupId) {
+          const amt = Number(newGroupAmounts[ng.tempId] || 0);
+          const carryoverAmt = Number(newGroupCarryovers[ng.tempId] || 0);
+          budgets.push({ groupId: result.groupId, amount: amt, carryoverAmount: carryoverAmt });
+        }
+      }
+
       const result = await createFiscalYearBudgets(numYear, budgets);
       if (result.error) {
         setError(result.error);
@@ -190,7 +266,81 @@ export function NewFiscalYearDialog({
                   </div>
                 </div>
               ))}
+
+              {newGroups.map((ng) => (
+                <div key={ng.tempId} className="space-y-1.5 border rounded-md p-3 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">新規グループ</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => handleRemoveNewGroup(ng.tempId)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">グループ名 *</Label>
+                      <Input
+                        placeholder="例: 広報グループ"
+                        value={ng.name}
+                        onChange={(e) => handleNewGroupChange(ng.tempId, "name", e.target.value)}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">種別 *</Label>
+                      <Input
+                        placeholder="例: 部門"
+                        value={ng.type}
+                        onChange={(e) => handleNewGroupChange(ng.tempId, "type", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">予算額</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={100}
+                        placeholder="0"
+                        value={newGroupAmounts[ng.tempId] || ""}
+                        onChange={(e) =>
+                          setNewGroupAmounts((prev) => ({ ...prev, [ng.tempId]: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">繰入金</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={100}
+                        placeholder="0"
+                        value={newGroupCarryovers[ng.tempId] || ""}
+                        onChange={(e) =>
+                          setNewGroupCarryovers((prev) => ({ ...prev, [ng.tempId]: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2 w-full border border-dashed"
+              onClick={handleAddNewGroup}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              会計グループを追加
+            </Button>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

@@ -46,6 +46,12 @@ export const adminResetPasswordSchema = z.object({
   userId: uuidSchema,
 });
 
+/** toggleAccountingGroupActive */
+export const toggleAccountingGroupActiveSchema = z.object({
+  groupId: uuidSchema,
+  isActive: z.boolean(),
+});
+
 /** upsertBudget */
 export const upsertBudgetSchema = z.object({
   accountingGroupId: uuidSchema,
@@ -165,9 +171,21 @@ export const updateMemberSchema = z.object({
   }),
 });
 
+/** deleteGroupYearData */
+export const deleteGroupYearDataSchema = z.object({
+  groupId: uuidSchema,
+  fiscalYear: z.number().int().min(2000).max(2100),
+});
+
 /** retireMember / deleteMember / resetPasswordMember */
 export const memberIdSchema = z.object({
   userId: uuidSchema,
+});
+
+/** createAccountingGroup */
+export const createAccountingGroupSchema = z.object({
+  name: z.string().min(1, "Group name is required").max(100),
+  type: z.string().min(1, "Group type is required").max(100),
 });
 
 // --- Utility: Safe validation wrapper ---
