@@ -82,7 +82,7 @@ export default async function MembersManagementPage() {
             <div className="max-w-6xl mx-auto w-full">
               <Card>
                 <CardHeader>
-                  <CardTitle>部員情報管理</CardTitle>
+                  <CardTitle>部員情報一覧</CardTitle>
                   <CardDescription>
                     登録されているメンバーの基本情報を一覧表示します。
                   </CardDescription>

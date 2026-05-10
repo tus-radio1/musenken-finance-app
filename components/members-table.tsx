@@ -75,12 +75,21 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
   const [filterName, setFilterName] = useState("");
   const [filterStudentNumber, setFilterStudentNumber] = useState("");
   const [filterGrade, setFilterGrade] = useState<string>("all");
+  const [filterRole, setFilterRole] = useState<string>("all");
 
   const grades = useMemo(() => {
     const set = new Set(
       members.map((m) => m.grade).filter((g): g is number => g !== null),
     );
     return Array.from(set).sort((a, b) => a - b);
+  }, [members]);
+
+  const roleOptions = useMemo(() => {
+    const set = new Set<string>();
+    members.forEach((m) => {
+      m.roles.split("、").forEach((r) => set.add(r.trim()));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "ja"));
   }, [members]);
 
   const toggleSort = (key: SortKey) => {
@@ -94,12 +103,13 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
   };
 
   const hasActiveFilter =
-    filterName || filterStudentNumber || filterGrade !== "all";
+    filterName || filterStudentNumber || filterGrade !== "all" || filterRole !== "all";
 
   const clearFilters = () => {
     setFilterName("");
     setFilterStudentNumber("");
     setFilterGrade("all");
+    setFilterRole("all");
   };
 
   const filtered = useMemo(() => {
@@ -112,9 +122,11 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
         return false;
       if (filterGrade !== "all" && m.grade !== Number(filterGrade))
         return false;
+      if (filterRole !== "all" && !m.roles.split("、").includes(filterRole))
+        return false;
       return true;
     });
-  }, [members, filterName, filterStudentNumber, filterGrade]);
+  }, [members, filterName, filterStudentNumber, filterGrade, filterRole]);
 
   const sorted = useMemo(() => {
     if (!sort) return filtered;
@@ -176,7 +188,25 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
               <SelectItem value="all">全学年</SelectItem>
               {grades.map((g) => (
                 <SelectItem key={g} value={String(g)}>
-                  {g}年
+                  {g === 0 ? "OB・OG" : `${g}年`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">
+            役職
+          </label>
+          <Select value={filterRole} onValueChange={setFilterRole}>
+            <SelectTrigger className="h-9 w-32 text-sm">
+              <SelectValue placeholder="全役職" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全役職</SelectItem>
+              {roleOptions.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
                 </SelectItem>
               ))}
             </SelectContent>
