@@ -6,6 +6,7 @@ import {
   createUserSchema,
   deriveEmail,
   deriveInitialPassword,
+  generateSecurePassword,
 } from "@/lib/account";
 import { resolveAuthContext } from "@/lib/auth/context";
 import { verifyAdmin, verifyManageMembersPermission } from "@/lib/auth/permissions";

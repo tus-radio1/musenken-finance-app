@@ -6,6 +6,7 @@ import {
   createUserSchema,
   deriveEmail,
   deriveInitialPassword,
+  generateSecurePassword,
 } from "@/lib/account";
 import { adminResetPasswordSchema, validateInput } from "@/lib/validations";
 import { passwordResetRateLimiter } from "@/lib/rate-limit";
