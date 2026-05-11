@@ -1,9 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { AppSidebar } from "@/components/app-sidebar";
 import LedgerView from "@/components/ledger-view";
-import { MobileSidebar } from "@/components/mobile-sidebar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getUserTeams, TeamInfo } from "@/lib/teams";
 import { getAccountingUserId } from "@/lib/system-config";
 import { getFiscalYears, getAccountingGroups } from "@/lib/cache";
@@ -140,30 +137,21 @@ export default async function LedgerPage({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-7xl mx-auto w-full space-y-8">
-              <LedgerView
-                teams={displayTeams}
-                fyYear={fyYear}
-                isGlobalAdmin={isGlobalAdmin}
-                isAccountingUser={isAccountingUser}
-                currentProfileId={profileId || undefined}
-                users={profiles || []}
-                accountingUserId={accountingUserId}
-                fiscalYears={fiscalYears || []}
-                selectedYear={fyYear}
-                isReadOnly={isReadOnly}
-              />
-            </div>
-          </main>
-        </div>
+    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
+      <div className="max-w-7xl mx-auto w-full space-y-8">
+        <LedgerView
+          teams={displayTeams}
+          fyYear={fyYear}
+          isGlobalAdmin={isGlobalAdmin}
+          isAccountingUser={isAccountingUser}
+          currentProfileId={profileId || undefined}
+          users={profiles || []}
+          accountingUserId={accountingUserId}
+          fiscalYears={fiscalYears || []}
+          selectedYear={fyYear}
+          isReadOnly={isReadOnly}
+        />
       </div>
-      <MobileSidebar />
-      <MobileBottomNav />
-    </div>
+    </main>
   );
 }

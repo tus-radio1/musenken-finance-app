@@ -140,6 +140,8 @@ export function useSidebarData() {
   const pathname = usePathname();
   const { data, isLoading } = useSWR("sidebar-data", fetchSidebarData, {
     fallbackData: EMPTY_SIDEBAR_DATA,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
   });
 
   const roleNames = data?.roleNames ?? EMPTY_SIDEBAR_DATA.roleNames;

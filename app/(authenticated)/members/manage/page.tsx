@@ -1,4 +1,3 @@
-import { AppSidebar } from "@/components/app-sidebar";
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import {
@@ -13,8 +12,6 @@ import {
   type MemberManageRow,
 } from "./_components/manage-members-client";
 import type { RoleOption } from "./_components/edit-member-dialog";
-import { MobileSidebar } from "@/components/mobile-sidebar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ROLE_TYPES, MANAGE_MEMBER_ROLE_NAMES } from "@/lib/roles/constants";
 import {
   fetchMemberProfiles,
@@ -84,25 +81,16 @@ export default async function MembersManagePage() {
 
   if (!hasAccess) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="flex h-screen">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col">
-            <main className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <h1 className="text-2xl font-bold text-red-600">
-                  アクセス権限がありません
-                </h1>
-                <p className="mt-2 text-muted-foreground">
-                  このページは部長・副部長・会計・Adminのみアクセス可能です。
-                </p>
-              </div>
-            </main>
-          </div>
+      <main className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600">
+            アクセス権限がありません
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            このページは部長・副部長・会計・Adminのみアクセス可能です。
+          </p>
         </div>
-        <MobileSidebar />
-        <MobileBottomNav />
-      </div>
+      </main>
     );
   }
 
@@ -159,29 +147,20 @@ export default async function MembersManagePage() {
   const isAdmin = roleInfo.types.includes(ROLE_TYPES.ADMIN);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-6xl mx-auto w-full">
-              <Card>
-                <CardHeader>
-                  <CardTitle>部員管理</CardTitle>
-                  <CardDescription>
-                    部員の追加・編集・退部処理・削除を行います。
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ManageMembersClient members={members} allRoles={allRoles} isAdmin={isAdmin} />
-                </CardContent>
-              </Card>
-            </div>
-          </main>
-        </div>
+    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
+      <div className="max-w-6xl mx-auto w-full">
+        <Card>
+          <CardHeader>
+            <CardTitle>部員管理</CardTitle>
+            <CardDescription>
+              部員の追加・編集・退部処理・削除を行います。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ManageMembersClient members={members} allRoles={allRoles} isAdmin={isAdmin} />
+          </CardContent>
+        </Card>
       </div>
-      <MobileSidebar />
-      <MobileBottomNav />
-    </div>
+    </main>
   );
 }
