@@ -1,8 +1,5 @@
 import { fetchAllSubsidies, fetchProfilesList } from "./actions";
 import { SubsidiesManageClientPage } from "./client-page";
-import { AppSidebar } from "@/components/app-sidebar";
-import { MobileSidebar } from "@/components/mobile-sidebar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
 
 import { createClient } from "@/utils/supabase/server";
@@ -57,57 +54,41 @@ export default async function SubsidiesManagePage({
 
   if (result.error) {
     return (
-      <div className="min-h-screen bg-background flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex justify-center items-center p-6 overflow-y-auto">
-            <div className="text-center space-y-4">
-              <p className="text-destructive font-medium">{result.error}</p>
-            </div>
-          </main>
+      <main className="flex-1 flex justify-center items-center p-6 overflow-y-auto">
+        <div className="text-center space-y-4">
+          <p className="text-destructive font-medium">{result.error}</p>
         </div>
-        <MobileSidebar />
-        <MobileBottomNav />
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <main className="flex-1 overflow-y-auto p-6 pt-16 md:pt-6 pb-20 md:pb-6">
-            <div className="max-w-7xl mx-auto w-full space-y-6">
-              <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                <h2 className="text-2xl font-bold tracking-tight">
-                  支援金管理
-                </h2>
-                <FiscalYearSelector
-                  fiscalYears={fiscalYears || []}
-                  selectedYear={selectedYear}
-                  basePath="/subsidies/manage"
-                />
-              </div>
-              {isReadOnly && (
-                <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
-                  過年度データのため閲覧専用です
-                </div>
-              )}
-              <SubsidiesManageClientPage
-                key={selectedYear}
-                initialData={result.data || []}
-                profiles={profilesResult.data || []}
-                accountingGroups={groupsResult.data || []}
-                isAdmin={isAdmin}
-                isReadOnly={isReadOnly}
-              />
-            </div>
-          </main>
+    <main className="flex-1 overflow-y-auto p-6 pt-16 md:pt-6 pb-20 md:pb-6">
+      <div className="max-w-7xl mx-auto w-full space-y-6">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+          <h2 className="text-2xl font-bold tracking-tight">
+            支援金管理
+          </h2>
+          <FiscalYearSelector
+            fiscalYears={fiscalYears || []}
+            selectedYear={selectedYear}
+            basePath="/subsidies/manage"
+          />
         </div>
+        {isReadOnly && (
+          <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+            過年度データのため閲覧専用です
+          </div>
+        )}
+        <SubsidiesManageClientPage
+          key={selectedYear}
+          initialData={result.data || []}
+          profiles={profilesResult.data || []}
+          accountingGroups={groupsResult.data || []}
+          isAdmin={isAdmin}
+          isReadOnly={isReadOnly}
+        />
       </div>
-      <MobileSidebar />
-      <MobileBottomNav />
-    </div>
+    </main>
   );
 }

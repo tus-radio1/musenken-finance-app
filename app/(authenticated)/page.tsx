@@ -1,10 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
-import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { RecentApplications } from "@/components/recent-applications";
 import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab";
-import { MobileSidebar } from "@/components/mobile-sidebar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { getSortableDateValue } from "@/lib/date";
 import { getUserTeams } from "@/lib/teams";
 
@@ -140,34 +137,25 @@ export default async function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-7xl mx-auto w-full space-y-8">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h1 className="text-2xl font-bold tracking-tight">ホーム</h1>
-                </div>
-              </div>
+    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
+      <div className="max-w-7xl mx-auto w-full space-y-8">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">ホーム</h1>
+          </div>
+        </div>
 
-              <div className="flex flex-col gap-4">
-                <RecentApplications items={allItems as any} />
-                <DashboardStats
-                  totalCountThisYear={totalCountThisYear}
-                  pendingCountThisYear={pendingCountThisYear}
-                  approvedCountThisYear={approvedCountThisYear}
-                  totalAmountThisYear={totalAmountThisYear}
-                />
-              </div>
-            </div>
-          </main>
+        <div className="flex flex-col gap-4">
+          <RecentApplications items={allItems as any} />
+          <DashboardStats
+            totalCountThisYear={totalCountThisYear}
+            pendingCountThisYear={pendingCountThisYear}
+            approvedCountThisYear={approvedCountThisYear}
+            totalAmountThisYear={totalAmountThisYear}
+          />
         </div>
       </div>
-      <MobileSidebar />
-      <MobileBottomNav />
       <MobileNewTransactionFab categories={categories || []} />
-    </div>
+    </main>
   );
 }

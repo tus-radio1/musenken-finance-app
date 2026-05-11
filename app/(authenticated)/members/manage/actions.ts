@@ -5,6 +5,7 @@ import { createAdminClient } from "@/utils/supabase/server";
 import {
   createUserSchema,
   deriveEmail,
+  deriveInitialPassword,
   generateSecurePassword,
 } from "@/lib/account";
 import { resolveAuthContext } from "@/lib/auth/context";
@@ -46,7 +47,7 @@ export async function addMember(raw: {
   const admin = createAdminClient();
 
   const email = deriveEmail(input.student_number, true);
-  const password = generateSecurePassword();
+  const password = deriveInitialPassword(input.student_number);
 
   // 1) Auth user creation - requires admin client for auth.admin.*
   const { data: created, error: createErr } = await admin.auth.admin.createUser(

@@ -21,7 +21,6 @@ export function deriveEntryYearYY(studentNumber: string): string {
   return studentNumber.slice(2, 4);
 }
 
-/** @deprecated Predictable password derivation. Use generateSecurePassword() instead. */
 export function deriveInitialPassword(studentNumber: string): string {
   const yy = deriveEntryYearYY(studentNumber);
   return `${yy}rc${studentNumber}`;

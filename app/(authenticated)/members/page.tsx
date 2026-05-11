@@ -1,4 +1,3 @@
-import { AppSidebar } from "@/components/app-sidebar";
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import {
@@ -9,8 +8,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { MembersTable, type MemberRow } from "@/components/members-table";
-import { MobileSidebar } from "@/components/mobile-sidebar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { fetchMemberProfiles, type MemberProfileRow } from "@/lib/profiles";
 
@@ -74,29 +71,20 @@ export default async function MembersManagementPage() {
     });
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-6xl mx-auto w-full">
-              <Card>
-                <CardHeader>
-                  <CardTitle>部員情報一覧</CardTitle>
-                  <CardDescription>
-                    登録されているメンバーの基本情報を一覧表示します。
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <MembersTable members={members} />
-                </CardContent>
-              </Card>
-            </div>
-          </main>
-        </div>
+    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
+      <div className="max-w-6xl mx-auto w-full">
+        <Card>
+          <CardHeader>
+            <CardTitle>部員情報一覧</CardTitle>
+            <CardDescription>
+              登録されているメンバーの基本情報を一覧表示します。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MembersTable members={members} />
+          </CardContent>
+        </Card>
       </div>
-      <MobileSidebar />
-      <MobileBottomNav />
-    </div>
+    </main>
   );
 }

@@ -2,12 +2,9 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SubsidyForm } from "@/components/subsidy-form";
-import { AppSidebar } from "@/components/app-sidebar";
 import { SubsidyItemsTable } from "@/components/subsidy-items-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUserTeams } from "@/lib/teams";
-import { MobileSidebar } from "@/components/mobile-sidebar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 
 const PAGE_SIZE = 50;
@@ -32,27 +29,18 @@ export default async function SubsidiesPage({
 
   if (!profileId) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="flex h-screen">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col">
-            <main className="flex-1 flex items-center justify-center p-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>プロフィールが見つかりません</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    ユーザープロフィールが登録されていません。管理者に連絡してください。
-                  </p>
-                </CardContent>
-              </Card>
-            </main>
-          </div>
-        </div>
-        <MobileSidebar />
-        <MobileBottomNav />
-      </div>
+      <main className="flex-1 flex items-center justify-center p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>プロフィールが見つかりません</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              ユーザープロフィールが登録されていません。管理者に連絡してください。
+            </p>
+          </CardContent>
+        </Card>
+      </main>
     );
   }
 
@@ -146,123 +134,114 @@ export default async function SubsidiesPage({
     }).format(amount);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-7xl mx-auto w-full space-y-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    支援金申請
-                  </h1>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    課外活動支援金等の申請と履歴を管理します。
-                  </p>
-                </div>
-                <div className="hidden md:block">
-                  <SubsidyForm categories={accountingGroups || []} />
-                </div>
+    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
+      <div className="max-w-7xl mx-auto w-full space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              支援金申請
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              課外活動支援金等の申請と履歴を管理します。
+            </p>
+          </div>
+          <div className="hidden md:block">
+            <SubsidyForm categories={accountingGroups || []} />
+          </div>
+        </div>
+
+        {/* 集計カード */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="text-xs text-muted-foreground">申請中</div>
+              <div className="text-2xl font-bold text-yellow-600">
+                {pendingCount}件
               </div>
-
-              {/* 集計カード */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="pt-4 pb-3 px-4">
-                    <div className="text-xs text-muted-foreground">申請中</div>
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {pendingCount}件
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4 pb-3 px-4">
-                    <div className="text-xs text-muted-foreground">
-                      申請合計金額
-                    </div>
-                    <div className="text-lg font-bold">
-                      {formatCurrency(totalRequested)}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4 pb-3 px-4">
-                    <div className="text-xs text-muted-foreground">
-                      活動 / 連盟 / 特別
-                    </div>
-                    <div className="text-lg font-bold">
-                      {categoryCounts.activity} / {categoryCounts.league} /{" "}
-                      {categoryCounts.special}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4 pb-3 px-4">
-                    <div className="text-xs text-muted-foreground">
-                      全申請数
-                    </div>
-                    <div className="text-2xl font-bold">
-                      {tableData.length}件
-                    </div>
-                  </CardContent>
-                </Card>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="text-xs text-muted-foreground">
+                申請合計金額
               </div>
+              <div className="text-lg font-bold">
+                {formatCurrency(totalRequested)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="text-xs text-muted-foreground">
+                活動 / 連盟 / 特別
+              </div>
+              <div className="text-lg font-bold">
+                {categoryCounts.activity} / {categoryCounts.league} /{" "}
+                {categoryCounts.special}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="text-xs text-muted-foreground">
+                全申請数
+              </div>
+              <div className="text-2xl font-bold">
+                {tableData.length}件
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>あなたの支援金申請一覧</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <SubsidyItemsTable
-                    items={tableData}
-                    accountingGroups={accountingGroups || []}
-                    isGlobalAdmin={isGlobalAdmin}
-                  />
-                </CardContent>
-              </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>あなたの支援金申請一覧</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SubsidyItemsTable
+              items={tableData}
+              accountingGroups={accountingGroups || []}
+              isGlobalAdmin={isGlobalAdmin}
+            />
+          </CardContent>
+        </Card>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {totalCount}件中 {offset + 1}〜{Math.min(offset + PAGE_SIZE, totalCount)}件
-                  </p>
-                  <div className="flex gap-2">
-                    {hasPrev ? (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/subsidies?page=${page - 1}`}>
-                          前へ
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" disabled>
-                        前へ
-                      </Button>
-                    )}
-                    {hasNext ? (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/subsidies?page=${page + 1}`}>
-                          次へ
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" disabled>
-                        次へ
-                      </Button>
-                    )}
-                  </div>
-                </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {totalCount}件中 {offset + 1}〜{Math.min(offset + PAGE_SIZE, totalCount)}件
+            </p>
+            <div className="flex gap-2">
+              {hasPrev ? (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/subsidies?page=${page - 1}`}>
+                    前へ
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  前へ
+                </Button>
               )}
-
-              <div className="md:hidden">
-                <SubsidyForm categories={accountingGroups || []} />
-              </div>
+              {hasNext ? (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/subsidies?page=${page + 1}`}>
+                    次へ
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  次へ
+                </Button>
+              )}
             </div>
-          </main>
+          </div>
+        )}
+
+        <div className="md:hidden">
+          <SubsidyForm categories={accountingGroups || []} />
         </div>
       </div>
-      <MobileSidebar />
-      <MobileBottomNav />
-    </div>
+    </main>
   );
 }

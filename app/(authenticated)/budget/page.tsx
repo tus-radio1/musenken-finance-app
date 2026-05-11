@@ -1,7 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
-import { AppSidebar } from "@/components/app-sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -18,8 +17,6 @@ import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
 import { ToggleGroupActiveDialog } from "./_components/toggle-group-active-dialog";
 import { AddGroupDialog } from "./_components/add-group-dialog";
 import { DeleteGroupYearButton } from "./_components/delete-group-year-button";
-import { MobileSidebar } from "@/components/mobile-sidebar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { getAccountingGroups, getFiscalYears } from "@/lib/cache";
 
@@ -120,27 +117,18 @@ export default async function BudgetPage({
   // 会計ロールを持たないユーザーはアクセス不可
   if (!hasAccountingRole && !isGlobalAdmin) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="flex h-screen">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col">
-            <main className="flex-1 flex items-center justify-center p-6">
-              <Card className="max-w-md">
-                <CardHeader>
-                  <CardTitle>アクセス権限がありません</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    このページは会計またはAdmin権限を持つユーザーのみアクセスできます。
-                  </p>
-                </CardContent>
-              </Card>
-            </main>
-          </div>
-        </div>
-        <MobileSidebar />
-        <MobileBottomNav />
-      </div>
+      <main className="flex-1 flex items-center justify-center p-6">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>アクセス権限がありません</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              このページは会計またはAdmin権限を持つユーザーのみアクセスできます。
+            </p>
+          </CardContent>
+        </Card>
+      </main>
     );
   }
 
@@ -217,151 +205,142 @@ export default async function BudgetPage({
       isCurrentFY);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-            <div className="max-w-5xl mx-auto w-full space-y-8">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    予算管理
-                  </h1>
-                </div>
-                <YearSelector
-                  fiscalYears={fiscalYears || []}
-                  selectedYear={fyYear}
-                />
-              </div>
-
-              {!isCurrentFY && !isGlobalAdmin && (
-                <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
-                  過年度データのため閲覧専用です
-                </div>
-              )}
-
-              <BudgetOverview data={budgetStatus as any} />
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>会計グループ別予算一覧</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>会計グループ</TableHead>
-                        <TableHead className="text-right">予算額</TableHead>
-                        <TableHead className="text-right">繰入金</TableHead>
-                        <TableHead className="text-right">収入合計</TableHead>
-                        <TableHead className="text-right">支出額</TableHead>
-                        <TableHead className="text-right">申請中</TableHead>
-                        <TableHead className="text-right">残額</TableHead>
-                        <TableHead className="text-right">使用率</TableHead>
-                        <TableHead className="w-10" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {allGroupsWithBudget.map((item: any) => {
-                        const effectiveBudget = item.budget_amount + item.carryover_amount;
-                        const totalUsed = item.expenses + item.pending;
-                        const remaining = effectiveBudget + item.income - totalUsed;
-                        const usageRate =
-                          effectiveBudget + item.income > 0
-                            ? (totalUsed / (effectiveBudget + item.income)) * 100
-                            : 0;
-                        return (
-                          <TableRow key={item.group_id}>
-                            <TableCell className="font-medium">
-                              <span className="flex items-center gap-2">
-                                {item.group_name}
-                                {!item.is_active && (
-                                  <Badge variant="outline">無効</Badge>
-                                )}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.budget_amount)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.carryover_amount)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.income)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.expenses)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(item.pending)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(remaining)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <span
-                                className={`${
-                                  usageRate > 90
-                                    ? "text-red-600 font-semibold"
-                                    : usageRate > 75
-                                      ? "text-orange-600"
-                                      : "text-green-600"
-                                }`}
-                              >
-                                {usageRate.toFixed(1)}%
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              {isGlobalAdmin && !item.is_active && fyYear && (
-                                <DeleteGroupYearButton
-                                  groupId={item.group_id}
-                                  groupName={item.group_name}
-                                  fiscalYear={fyYear}
-                                />
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              {canEdit && fyYear && (
-                <div className="flex flex-wrap gap-3">
-                  <BudgetUpdateDialog
-                    groups={groupsForDialog}
-                    fiscalYear={fyYear}
-                  />
-                  <NewFiscalYearDialog
-                    groups={groupsForDialog.map((g) => ({
-                      id: g.id,
-                      name: g.name,
-                    }))}
-                    existingYears={existingYears}
-                  />
-                  {isGlobalAdmin && (
-                    <>
-                      <AddGroupDialog fiscalYear={fyYear} />
-                      <ToggleGroupActiveDialog
-                        groups={groupsForDialog.map((g) => ({
-                          id: g.id,
-                          name: g.name,
-                          isActive: g.isActive,
-                        }))}
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </main>
+    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
+      <div className="max-w-5xl mx-auto w-full space-y-8">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              予算管理
+            </h1>
+          </div>
+          <YearSelector
+            fiscalYears={fiscalYears || []}
+            selectedYear={fyYear}
+          />
         </div>
+
+        {!isCurrentFY && !isGlobalAdmin && (
+          <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+            過年度データのため閲覧専用です
+          </div>
+        )}
+
+        <BudgetOverview data={budgetStatus as any} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>会計グループ別予算一覧</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>会計グループ</TableHead>
+                  <TableHead className="text-right">予算額</TableHead>
+                  <TableHead className="text-right">繰入金</TableHead>
+                  <TableHead className="text-right">収入合計</TableHead>
+                  <TableHead className="text-right">支出額</TableHead>
+                  <TableHead className="text-right">申請中</TableHead>
+                  <TableHead className="text-right">残額</TableHead>
+                  <TableHead className="text-right">使用率</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allGroupsWithBudget.map((item: any) => {
+                  const effectiveBudget = item.budget_amount + item.carryover_amount;
+                  const totalUsed = item.expenses + item.pending;
+                  const remaining = effectiveBudget + item.income - totalUsed;
+                  const usageRate =
+                    effectiveBudget + item.income > 0
+                      ? (totalUsed / (effectiveBudget + item.income)) * 100
+                      : 0;
+                  return (
+                    <TableRow key={item.group_id}>
+                      <TableCell className="font-medium">
+                        <span className="flex items-center gap-2">
+                          {item.group_name}
+                          {!item.is_active && (
+                            <Badge variant="outline">無効</Badge>
+                          )}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.budget_amount)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.carryover_amount)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.income)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.expenses)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.pending)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(remaining)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span
+                          className={`${
+                            usageRate > 90
+                              ? "text-red-600 font-semibold"
+                              : usageRate > 75
+                                ? "text-orange-600"
+                                : "text-green-600"
+                          }`}
+                        >
+                          {usageRate.toFixed(1)}%
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {isGlobalAdmin && !item.is_active && fyYear && (
+                          <DeleteGroupYearButton
+                            groupId={item.group_id}
+                            groupName={item.group_name}
+                            fiscalYear={fyYear}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {canEdit && fyYear && (
+          <div className="flex flex-wrap gap-3">
+            <BudgetUpdateDialog
+              groups={groupsForDialog}
+              fiscalYear={fyYear}
+            />
+            <NewFiscalYearDialog
+              groups={groupsForDialog.map((g) => ({
+                id: g.id,
+                name: g.name,
+              }))}
+              existingYears={existingYears}
+            />
+            {isGlobalAdmin && (
+              <>
+                <AddGroupDialog fiscalYear={fyYear} />
+                <ToggleGroupActiveDialog
+                  groups={groupsForDialog.map((g) => ({
+                    id: g.id,
+                    name: g.name,
+                    isActive: g.isActive,
+                  }))}
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
-      <MobileSidebar />
-      <MobileBottomNav />
-    </div>
+    </main>
   );
 }
