@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/utils/supabase/server";
+
 import {
   createUserSchema,
   deriveEmail,
@@ -20,6 +21,17 @@ import {
   memberIdSchema,
   validateInput,
 } from "@/lib/validations";
+
+// GoTrue (Supabase Auth) may reject supplementary Unicode characters (U+10000+)
+// in user_metadata. Preserve the original name only in the profiles table.
+function sanitizeForGoTrue(name: string): string {
+  return [...name]
+    .map((ch) => {
+      const cp = ch.codePointAt(0)!;
+      return cp > 0xffff ? `[U+${cp.toString(16).toUpperCase()}]` : ch;
+    })
+    .join("");
+}
 
 // --- 部員追加 ---
 export async function addMember(raw: {
@@ -56,7 +68,7 @@ export async function addMember(raw: {
       password,
       email_confirm: true,
       user_metadata: {
-        name: input.name,
+        name: sanitizeForGoTrue(input.name),
         student_number: input.student_number,
         grade: input.grade,
       },
@@ -151,7 +163,7 @@ export async function updateMember(
   // 2) auth user metadata update - requires admin client for auth.admin.*
   const { error: authErr } = await admin.auth.admin.updateUserById(userId, {
     user_metadata: {
-      name: data.name,
+      name: sanitizeForGoTrue(data.name),
       student_number: data.student_number,
       grade: data.grade,
     },

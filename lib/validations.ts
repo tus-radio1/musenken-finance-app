@@ -6,7 +6,7 @@ export const uuidSchema = z.string().uuid("Invalid UUID format");
 
 export const studentNumberSchema = z
   .string()
-  .regex(/^\d{7}$/g, "Student number must be 7 digits");
+  .regex(/^\d{7}$/, "Student number must be 7 digits");
 
 // --- Server action input schemas ---
 
