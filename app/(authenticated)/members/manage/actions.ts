@@ -161,8 +161,8 @@ export async function updateMember(
     return { error: "ユーザー情報の更新に失敗しました" } as const;
   }
 
-  // 3) ロール同期: 既存の全ロール割り当てを削除して再割り当て - uses RLS-respecting client
-  const { error: roleDelErr } = await auth.supabase.from("user_roles").delete().eq("user_id", userId);
+  // 3) ロール同期: 既存の全ロール割り当てを削除して再割り当て - uses admin client to bypass RLS
+  const { error: roleDelErr } = await admin.from("user_roles").delete().eq("user_id", userId);
   if (roleDelErr) {
     console.error("[updateMember] Role deletion error:", roleDelErr);
     return { error: "ロールの更新に失敗しました" } as const;
@@ -174,7 +174,7 @@ export async function updateMember(
       user_id: userId,
       role_id: roleId,
     }));
-    const { error: insertErr } = await auth.supabase.from("user_roles").insert(inserts);
+    const { error: insertErr } = await admin.from("user_roles").insert(inserts);
     if (insertErr) {
       console.error(insertErr);
       return { error: "ロール更新に失敗しました" } as const;
