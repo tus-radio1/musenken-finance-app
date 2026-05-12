@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const createUserSchema = z.object({
   name: z.string().min(1, "氏名は必須です"),
-  student_number: z.string().regex(/^\d{7}$/g, "学籍番号は7桁の数字です"),
+  student_number: z.string().regex(/^\d{7}$/, "学籍番号は7桁の数字です"),
   grade: z
     .number({ invalid_type_error: "学年は数値で入力してください" })
     .int()

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, X } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, X, ChevronDown } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,6 +13,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -75,7 +81,8 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
   const [filterName, setFilterName] = useState("");
   const [filterStudentNumber, setFilterStudentNumber] = useState("");
   const [filterGrade, setFilterGrade] = useState<string>("all");
-  const [filterRole, setFilterRole] = useState<string>("all");
+  const [filterRoles, setFilterRoles] = useState<string[]>([]);
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
 
   const grades = useMemo(() => {
     const set = new Set(
@@ -92,6 +99,12 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "ja"));
   }, [members]);
 
+  const toggleRole = (role: string) => {
+    setFilterRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+    );
+  };
+
   const toggleSort = (key: SortKey) => {
     setSort((prev) => {
       if (prev?.key === key) {
@@ -103,13 +116,18 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
   };
 
   const hasActiveFilter =
-    filterName || filterStudentNumber || filterGrade !== "all" || filterRole !== "all";
+    !!filterName ||
+    !!filterStudentNumber ||
+    filterGrade !== "all" ||
+    filterRoles.length > 0 ||
+    showActiveOnly;
 
   const clearFilters = () => {
     setFilterName("");
     setFilterStudentNumber("");
     setFilterGrade("all");
-    setFilterRole("all");
+    setFilterRoles([]);
+    setShowActiveOnly(false);
   };
 
   const filtered = useMemo(() => {
@@ -122,11 +140,14 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
         return false;
       if (filterGrade !== "all" && m.grade !== Number(filterGrade))
         return false;
-      if (filterRole !== "all" && !m.roles.split("、").includes(filterRole))
-        return false;
+      if (filterRoles.length > 0) {
+        const memberRoles = m.roles.split("、").map((r) => r.trim());
+        if (!filterRoles.some((r) => memberRoles.includes(r))) return false;
+      }
+      if (showActiveOnly && m.grade === 0) return false;
       return true;
     });
-  }, [members, filterName, filterStudentNumber, filterGrade, filterRole]);
+  }, [members, filterName, filterStudentNumber, filterGrade, filterRoles, showActiveOnly]);
 
   const sorted = useMemo(() => {
     if (!sort) return filtered;
@@ -198,19 +219,51 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
           <label className="text-xs font-medium text-muted-foreground">
             役職
           </label>
-          <Select value={filterRole} onValueChange={setFilterRole}>
-            <SelectTrigger className="h-9 w-32 text-sm">
-              <SelectValue placeholder="全役職" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全役職</SelectItem>
-              {roleOptions.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {r}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-36 justify-between text-sm font-normal"
+              >
+                <span className="truncate">
+                  {filterRoles.length === 0
+                    ? "全役職"
+                    : `${filterRoles.length}件選択中`}
+                </span>
+                <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start">
+              <div className="space-y-1">
+                {roleOptions.map((r) => (
+                  <label
+                    key={r}
+                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted"
+                  >
+                    <Checkbox
+                      checked={filterRoles.includes(r)}
+                      onCheckedChange={() => toggleRole(r)}
+                    />
+                    {r}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="flex items-center gap-2 self-end pb-1">
+          <Checkbox
+            id="active-only"
+            checked={showActiveOnly}
+            onCheckedChange={(v) => setShowActiveOnly(!!v)}
+          />
+          <label
+            htmlFor="active-only"
+            className="cursor-pointer text-sm text-muted-foreground"
+          >
+            現役部員のみ
+          </label>
         </div>
         {hasActiveFilter && (
           <Button
