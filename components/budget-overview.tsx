@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { formatCurrency } from "@/lib/format";
 
 type BudgetStatus = {
   category_id: string;
@@ -20,13 +21,6 @@ const COLORS = {
   pending: "#eab308", // 黄色 - 申請中（受付中、受付済、承認済）
 };
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-  }).format(amount);
-};
-
 function BudgetPieChart({
   remaining,
   expenses,
@@ -42,7 +36,6 @@ function BudgetPieChart({
     { name: "残高", value: Math.max(0, remaining) },
   ].filter((d) => d.value > 0);
 
-  const colors = [COLORS.expenses, COLORS.pending, COLORS.remaining];
   // data にフィルタ後の色を対応させる
   const filteredColors: string[] = [];
   const allEntries = [
@@ -80,7 +73,7 @@ function BudgetPieChart({
           ))}
         </Pie>
         <Tooltip
-          formatter={(value: any) => formatCurrency(Number(value) || 0)}
+          formatter={(value) => formatCurrency(Number(value) || 0)}
           contentStyle={{
             borderRadius: "8px",
             fontSize: "12px",

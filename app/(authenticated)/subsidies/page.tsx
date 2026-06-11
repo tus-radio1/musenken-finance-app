@@ -84,7 +84,7 @@ export default async function SubsidiesPage({
     : null;
 
   // テーブル用にデータを整形
-  const tableData = (subsidyItems || []).map((item: any) => ({
+  const tableData = (subsidyItems || []).map((item) => ({
     id: item.id,
     category: item.category,
     term: item.term,
@@ -96,7 +96,7 @@ export default async function SubsidiesPage({
     status: item.status,
     accounting_group_id: item.accounting_group_id || undefined,
     accounting_group_name: item.accounting_groups?.name || "-",
-    created_at: item.created_at,
+    created_at: item.created_at || "",
     usage_period: item.usage_period || null,
     date: item.date || null,
     justification: item.justification || null,

@@ -1,5 +1,16 @@
 "use server";
 
+/**
+ * 支援金申請の Server Actions。
+ *
+ * 権限モデル:
+ *   - createSubsidyItem: ログイン済みユーザー（status は常に "pending" で開始）
+ *   - updateMySubsidyItem: 申請者本人のみ。pending → 全フィールド編集可、
+ *     approved → receipt_url のみ変更可（領収書提出用）
+ *   - deleteMySubsidyItem: 申請者本人は pending のみ削除可。管理者は全ステータス削除可
+ *   - fetchMySubsidyItems / fetchPendingSubsidyItems: 自分の申請のみ取得
+ */
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { subsidyFormSchema } from "@/lib/schema";
@@ -170,7 +181,9 @@ export async function updateMySubsidyItem(
     }
   } else {
     // pending: general fields + evidence_url (receipt_url is not allowed)
-    const { receipt_url, ...rest } = values;
+    // receipt_url は pending 時に更新不可のため分割代入で除外
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { receipt_url: _receipt_url, ...rest } = values;
     updateData = { ...rest };
     if (values.date) {
       updateData.date = formatDateForDatabase(values.date);

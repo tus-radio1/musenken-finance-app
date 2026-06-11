@@ -146,7 +146,7 @@ export default async function Home() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <RecentApplications items={allItems as any} />
+          <RecentApplications items={allItems} />
           <DashboardStats
             totalCountThisYear={totalCountThisYear}
             pendingCountThisYear={pendingCountThisYear}

@@ -4,17 +4,8 @@ import LedgerView from "@/components/ledger-view";
 import { getUserTeams, TeamInfo } from "@/lib/teams";
 import { getAccountingUserId } from "@/lib/system-config";
 import { getFiscalYears, getAccountingGroups } from "@/lib/cache";
-
-type Role = {
-  name: string | null;
-  type: string | null;
-  accounting_group_id: string | null;
-};
-
-type AccountingGroup = {
-  id: string;
-  name: string;
-};
+import { fetchLedgerTransactions } from "./actions";
+import type { LedgerInitialData } from "@/lib/ledger";
 
 export default async function LedgerPage({
   searchParams,
@@ -67,14 +58,14 @@ export default async function LedgerPage({
       fyYear = parsedYear;
     } else {
       // Invalid year parameter; fall back to current or latest fiscal year
-      const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+      const currentFY = fiscalYears?.find((fy) => fy.is_current);
       fyYear = currentFY?.year ?? undefined;
       if (fyYear === undefined && fiscalYears && fiscalYears.length > 0) {
         fyYear = fiscalYears[0]?.year ?? undefined;
       }
     }
   } else {
-    const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+    const currentFY = fiscalYears?.find((fy) => fy.is_current);
     fyYear = currentFY?.year ?? undefined;
     if (fyYear === undefined && fiscalYears && fiscalYears.length > 0) {
       fyYear = fiscalYears[0]?.year ?? undefined;
@@ -82,7 +73,7 @@ export default async function LedgerPage({
   }
 
   const isCurrentFY =
-    fiscalYears?.find((fy: any) => fy.year === fyYear)?.is_current ?? false;
+    fiscalYears?.find((fy) => fy.year === fyYear)?.is_current ?? false;
   const isReadOnly = !isCurrentFY && !isGlobalAdmin;
 
   // 過年度の場合、その年度に予算が設定されていたグループのみに絞り込む
@@ -97,16 +88,19 @@ export default async function LedgerPage({
       getAccountingGroups(),
     ]);
 
+    type AccountingGroupCached = { id: string; name: string; is_active: boolean; type: string | null };
+    const typedGroups = (allGroups || []) as AccountingGroupCached[];
+
     const groupsWithBudget = new Set(
-      (budgetsForYear || []).map((b: any) => b.accounting_group_id),
+      (budgetsForYear || []).map((b) => b.accounting_group_id),
     );
 
     if (teamFullAccess) {
       // 全アクセス権ユーザー（管理者・会計・議長・副議長）:
       // その年度に予算があった全グループを表示（inactive含む）
-      const historicalTeams: TeamInfo[] = ((allGroups || []) as any[])
-        .filter((g: any) => groupsWithBudget.has(g.id))
-        .map((g: any) => ({
+      const historicalTeams: TeamInfo[] = typedGroups
+        .filter((g) => groupsWithBudget.has(g.id))
+        .map((g) => ({
           id: g.id,
           name: g.name,
           type: (g.type === "leader" ? "leader" : "general") as "general" | "leader",
@@ -118,14 +112,14 @@ export default async function LedgerPage({
       // 一般ユーザー: generalグループ＋ユーザーが所属するグループのうち、
       // その年度に予算があったもの（inactive含む）
       const eligibleGroupIds = new Set([
-        ...((allGroups || []) as any[])
-          .filter((g: any) => g.type === "general" || !g.type)
-          .map((g: any) => g.id),
+        ...typedGroups
+          .filter((g) => g.type === "general" || !g.type)
+          .map((g) => g.id),
         ...(roleGroupIds ?? []),
       ]);
-      const historicalTeams: TeamInfo[] = ((allGroups || []) as any[])
-        .filter((g: any) => groupsWithBudget.has(g.id) && eligibleGroupIds.has(g.id))
-        .map((g: any) => ({
+      const historicalTeams: TeamInfo[] = typedGroups
+        .filter((g) => groupsWithBudget.has(g.id) && eligibleGroupIds.has(g.id))
+        .map((g) => ({
           id: g.id,
           name: g.name,
           type: (g.type === "leader" ? "leader" : "general") as "general" | "leader",
@@ -133,6 +127,19 @@ export default async function LedgerPage({
       if (historicalTeams.length > 0) {
         displayTeams = historicalTeams;
       }
+    }
+  }
+
+  // 初期表示用の取引データをサーバー側で取得し、LedgerView に渡す (P-1)
+  const firstGroupId = displayTeams[0]?.id;
+  let initialData: LedgerInitialData | null = null;
+  if (firstGroupId) {
+    const res = await fetchLedgerTransactions({
+      accountingGroupId: firstGroupId,
+      fyYear,
+    });
+    if (!("error" in res)) {
+      initialData = res;
     }
   }
 
@@ -147,9 +154,10 @@ export default async function LedgerPage({
           currentProfileId={profileId || undefined}
           users={profiles || []}
           accountingUserId={accountingUserId}
-          fiscalYears={fiscalYears || []}
+          fiscalYears={(fiscalYears || []).map((fy) => ({ ...fy, is_current: fy.is_current ?? false }))}
           selectedYear={fyYear}
           isReadOnly={isReadOnly}
+          initialData={initialData}
         />
       </div>
     </main>

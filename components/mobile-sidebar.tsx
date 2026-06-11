@@ -12,6 +12,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import { useSidebarDataContext } from "@/components/sidebar-data-provider";
 import { UserNav } from "@/components/user-nav";
 
@@ -82,11 +83,6 @@ export function MobileSidebar() {
     };
   }, [handleTouchStart, handleTouchEnd]);
 
-  // ページ遷移時にドロワーを閉じる
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
   return (
     <>
       {/* ハンバーガーメニューボタン */}
@@ -117,7 +113,12 @@ export function MobileSidebar() {
               const Icon = item.icon;
               const active = pathname === item.href;
               return (
-                <Link key={item.href} href={item.href} className="block">
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="block"
+                  onClick={() => setOpen(false)}
+                >
                   <Button
                     variant={active ? "secondary" : "ghost"}
                     className={cn(
@@ -140,16 +141,16 @@ export function MobileSidebar() {
                 申請中の支援金
               </span>
               <div className="mt-1 space-y-1">
-                {pendingSubsidies.map((s: any) => (
+                {pendingSubsidies.map((s) => (
                   <div
                     key={s.id}
                     className="flex items-center justify-between gap-1 text-xs py-1 px-1 rounded hover:bg-muted/50 transition-colors"
                   >
-                    <span className="truncate flex-1" title={s.name}>
+                    <span className="truncate flex-1" title={s.name ?? undefined}>
                       {s.name}
                     </span>
                     <span className="text-muted-foreground whitespace-nowrap">
-                      ¥{Number(s.requested_amount).toLocaleString()}
+                      {formatCurrency(Number(s.requested_amount))}
                     </span>
                   </div>
                 ))}

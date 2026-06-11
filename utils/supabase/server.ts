@@ -3,11 +3,12 @@ import "server-only";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import type { Database } from "@/lib/database.types";
 
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -18,14 +19,14 @@ export async function createClient() {
         set(name: string, value: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options });
-          } catch (error) {
+          } catch {
             // Server ComponentからはCookieをセットできないため無視する
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: "", ...options });
-          } catch (error) {
+          } catch {
             // Server ComponentからはCookieを削除できないため無視する
           }
         },
@@ -39,7 +40,7 @@ export async function createClient() {
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createAdmin(url, serviceRole, {
+  return createAdmin<Database>(url, serviceRole, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

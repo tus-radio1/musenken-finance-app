@@ -1,3 +1,10 @@
+/**
+ * ユーザーアカウント関連のユーティリティ。
+ *
+ * 学籍番号(7桁)を起点にメールアドレス・初期パスワード・入学年度を導出する。
+ * Supabase Auth (GoTrue) のユーザー作成・メタデータ参照もここで抽象化する。
+ */
+
 import { randomBytes } from "crypto";
 import { z } from "zod";
 
@@ -51,21 +58,3 @@ export function extractStudentNumberFromUser(
   return match ? match[1] : null;
 }
 
-/**
- * @deprecated profileId === user.id. Use resolveAuthContext() from lib/auth/context.ts instead.
- */
-export async function findProfileIdByStudentNumber(
-  supabase: any,
-  _studentNumber: string | null
-): Promise<string | null> {
-  // プロファイルIDはAuthユーザーIDと一致するため、学籍番号検索は行わず
-  // 認証情報から直接IDを取得する（RLSによる500回避）
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user?.id ?? null;
-  } catch {
-    return null;
-  }
-}

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * 会計年度セレクタ。
+ *
+ * 年度一覧は fiscal_years テーブルから取得し、選択値を URL クエリパラメータ (?year=YYYY)
+ * として反映する。年度の定義は4月始まり（lib/date.ts のヘッダーコメント参照）。
+ */
+
 import { useRouter } from "next/navigation";
 
 interface FiscalYearSelectorProps {

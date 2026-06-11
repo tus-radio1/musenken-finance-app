@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,18 +23,22 @@ import {
 } from "@/components/ui/select";
 import { updateUserPassword } from "./actions";
 
+// Hydration-safe "mounted" detection without set-state-in-effect (E-3)
+const noop = () => () => {};
+const getTrue = () => true;
+const getFalse = () => false;
+
+// パスワード要件（サーバー側 updateUserPasswordSchema と同一条件）
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+
 export function SettingsClient({ fullName }: { fullName: string }) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(noop, getTrue, getFalse);
   const { theme, setTheme } = useTheme();
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
-
-  // useEffect only runs on the client, so now we can safely show the UI
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handlePasswordUpdate = async () => {
     if (!password || !confirmPassword) {
@@ -47,8 +51,15 @@ export function SettingsClient({ fullName }: { fullName: string }) {
       return;
     }
 
-    if (password.length < 6) {
-      toast.error("パスワードは6文字以上である必要があります");
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      toast.error("パスワードは8文字以上で入力してください");
+      return;
+    }
+
+    if (!PASSWORD_PATTERN.test(password)) {
+      toast.error(
+        "パスワードには大文字・小文字・数字をそれぞれ1文字以上含めてください",
+      );
       return;
     }
 
@@ -61,12 +72,30 @@ export function SettingsClient({ fullName }: { fullName: string }) {
       setPassword("");
       setConfirmPassword("");
     } else {
-      toast.error(`エラー: ${result.error}`);
+      toast.error(`パスワードの更新に失敗しました: ${result.error}`);
     }
   };
 
   return (
     <div className="space-y-6">
+      {/* アカウント情報 */}
+      {fullName && (
+        <Card>
+          <CardHeader>
+            <CardTitle>アカウント情報</CardTitle>
+            <CardDescription>
+              ログイン中のアカウント情報です。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">氏名</Label>
+              <p className="text-sm font-medium">{fullName}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* パスワード設定 */}
       <Card>
         <CardHeader>
@@ -84,6 +113,9 @@ export function SettingsClient({ fullName }: { fullName: string }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              8文字以上、大文字・小文字・数字をそれぞれ1文字以上含めてください。
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm-password">新しいパスワード（確認）</Label>

@@ -1,3 +1,8 @@
+/**
+ * プロフィール情報の取得・一覧ヘルパー。
+ * 部員一覧画面やサイドバーで使用するプロフィールデータの取得を担う。
+ */
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type ProfileQueryError = {

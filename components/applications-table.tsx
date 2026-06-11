@@ -47,6 +47,7 @@ type Transaction = {
   receipt_url: string | null;
   receipt_public_url: string | null;
   remarks: string | null;
+  created_by: string | null;
 };
 
 type SortKey = "date" | "amount";

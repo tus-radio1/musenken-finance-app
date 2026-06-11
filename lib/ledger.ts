@@ -1,4 +1,22 @@
+/**
+ * 出納帳の集計・統合ロジック。
+ *
+ * 現在は amount の正負のみで income / expense を判定しているが、
+ * 将来仕様 (docs/club-wide-ledger-spec.md — 部全体会計・財布別記録) で
+ * 以下のフィールドが transactions テーブルに追加される予定:
+ *   - transaction_kind: "income" | "expense" | "transfer"
+ *   - financial_account_id: 財布 (金庫 / 銀行口座) の外部キー
+ *
+ * その際は AggregateOptions に渡すだけで既存の呼び出し元を変更せずに
+ * フィルタ・集計を拡張できる設計にしている。
+ * calculateIncomeTotal / calculateExpenseTotal が拡張の主な接点となる。
+ */
+
 import { getSortableDateValue } from "@/lib/date";
+
+// ---------------------------------------------------------------------------
+// 型定義
+// ---------------------------------------------------------------------------
 
 export type TransactionRow = {
   id: string;
@@ -15,6 +33,39 @@ export type TransactionRow = {
   is_subsidy?: boolean;
   subsidy_id?: string;
   subsidy_item_id?: string | null;
+};
+
+/**
+ * 出納帳の表示行。TransactionRow をプロフィール名・領収書URL等で拡張したもの。
+ * LedgerView が受け取る初期データの個別行の型として使用する。
+ */
+export type LedgerTransaction = {
+  id: string;
+  date: string | null;
+  created_by: string | null;
+  created_by_name?: string | null;
+  description: string | null;
+  amount: number;
+  receipt_public_url?: string | null;
+  approval_status: string | null;
+  approved_by_name?: string | null;
+  rejected_reason?: string | null;
+  remarks?: string | null;
+  is_subsidy?: boolean;
+  subsidy_id?: string;
+  accounting_group_id?: string | null;
+  receipt_url?: string | null;
+  approved_by?: string | null;
+};
+
+/**
+ * fetchLedgerTransactions が成功時に返すデータ構造。
+ * LedgerView の initialData props として受け渡す。
+ */
+export type LedgerInitialData = {
+  data: LedgerTransaction[];
+  budgetAmount: number;
+  carryoverAmount: number;
 };
 
 export type SubsidyItemData = {
@@ -117,4 +168,94 @@ export function synthesizeLedgerRows(
   });
 
   return combinedRows;
+}
+
+// ---------------------------------------------------------------------------
+// 集計ヘルパー
+//
+// 将来 transaction_kind (income / expense / transfer) や
+// financial_account_id によるフィルタが追加されても、options を拡張するだけで
+// 呼び出し元を変更せずに済むシグネチャ設計にしている。
+// 現時点では amount の正負のみで income / expense を判定する。
+// ---------------------------------------------------------------------------
+
+/**
+ * 集計オプション。
+ *
+ * 将来仕様で transaction_kind / financial_account_id フィルタが必要になった際に
+ * このオプションを拡張する。既存呼び出し側は変更不要。
+ */
+export type AggregateOptions = {
+  /** true にすると transfer 種別の行を集計から除外する（将来用。現在は未使用） */
+  excludeTransfers?: boolean;
+  /** 指定された financial_account_id の行のみを集計対象とする（将来用。現在は未使用） */
+  financialAccountId?: string;
+};
+
+type AmountLike = { amount: number; transaction_kind?: string; financial_account_id?: string };
+
+/**
+ * 集計対象の行を options に基づいてフィルタリングする内部ヘルパー。
+ */
+function filterForAggregation<T extends AmountLike>(
+  rows: readonly T[],
+  options?: AggregateOptions,
+): T[] {
+  let result = rows as T[];
+  if (options?.excludeTransfers) {
+    result = result.filter((r) => r.transaction_kind !== "transfer");
+  }
+  if (options?.financialAccountId) {
+    const id = options.financialAccountId;
+    result = result.filter((r) => r.financial_account_id === id);
+  }
+  return result;
+}
+
+/**
+ * 収入合計を計算する。amount >= 0 の行を合算する。
+ */
+export function calculateIncomeTotal(
+  rows: readonly AmountLike[],
+  options?: AggregateOptions,
+): number {
+  const filtered = filterForAggregation(rows, options);
+  return filtered.reduce((sum, r) => {
+    const amt = Number(r.amount) || 0;
+    return amt >= 0 ? sum + amt : sum;
+  }, 0);
+}
+
+/**
+ * 支出合計を計算する。amount < 0 の行を絶対値で合算する。
+ */
+export function calculateExpenseTotal(
+  rows: readonly AmountLike[],
+  options?: AggregateOptions,
+): number {
+  const filtered = filterForAggregation(rows, options);
+  return filtered.reduce((sum, r) => {
+    const amt = Number(r.amount) || 0;
+    return amt < 0 ? sum + Math.abs(amt) : sum;
+  }, 0);
+}
+
+/**
+ * 収入・支出の合計と予算残高をまとめて返す。
+ * LedgerView のサマリーカードで使用する。
+ */
+export function calculateLedgerTotals(
+  rows: readonly AmountLike[],
+  budgetAmount: number,
+  carryoverAmount: number,
+  options?: AggregateOptions,
+): { income: number; expense: number; budgetRemaining: number } {
+  const income = calculateIncomeTotal(rows, options);
+  const expense = calculateExpenseTotal(rows, options);
+  const budgetRemaining =
+    (Number(budgetAmount) || 0) +
+    (Number(carryoverAmount) || 0) +
+    income -
+    expense;
+  return { income, expense, budgetRemaining };
 }

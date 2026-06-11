@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import type { Json } from "@/lib/database.types";
 
 interface AuditEventParams {
   tableName: string;
@@ -16,8 +17,8 @@ export async function logAuditEvent(params: AuditEventParams): Promise<void> {
       table_name: params.tableName,
       record_id: params.recordId,
       action: params.action,
-      old_data: params.oldData ?? null,
-      new_data: params.newData ?? null,
+      old_data: (params.oldData as Json) ?? null,
+      new_data: (params.newData as Json) ?? null,
       changed_by: params.changedBy,
     });
     if (error) {

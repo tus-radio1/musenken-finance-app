@@ -1,3 +1,10 @@
+/**
+ * クライアント側フォームの Zod スキーマ定義。
+ *
+ * react-hook-form の zodResolver に渡してフォームバリデーションに使用する。
+ * サーバー側の最終検証は lib/validations.ts のスキーマが担う。
+ */
+
 import { z } from "zod";
 
 export const formSchema = z.object({
@@ -12,6 +19,7 @@ export const formSchema = z.object({
     required_error: "会計グループを選択してください",
   }),
   description: z.string().min(1, "摘要を入力してください"),
+  // 将来拡張(部全体会計): financial_account_id と transaction_kind を optional フィールドとして追加予定
   // 領収書URL（任意）
   receipt_url: z.string().nullable().optional(),
   // 備考（任意）
