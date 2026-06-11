@@ -44,8 +44,9 @@ export default function LoginPage() {
       toast.success("ログインしました");
       router.push("/");
       router.refresh();
-    } catch (error: any) {
-      toast.error(error.message || "認証エラーが発生しました");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "認証エラーが発生しました";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

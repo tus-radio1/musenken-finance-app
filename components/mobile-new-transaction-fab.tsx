@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { TransactionForm } from "@/components/transaction-form";
 import { useState } from "react";
 
-export function MobileNewTransactionFab({ categories }: { categories: any[] }) {
+export function MobileNewTransactionFab({ categories }: { categories: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
 
   return (

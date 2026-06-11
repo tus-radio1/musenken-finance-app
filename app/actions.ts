@@ -1,5 +1,21 @@
 "use server";
 
+/**
+ * 取引関連の Server Actions。
+ *
+ * 権限モデル:
+ *   - createTransaction: ログイン済みユーザー（approval_status は常に "pending" で開始）
+ *   - updateTransactionStatus: グローバル管理者 or 対象グループの leader。自身の申請は承認不可
+ *   - updateTransaction: 作成者本人 / 管理者 / 会計 / leader。一般ユーザーは pending 以外を編集不可
+ *   - deleteTransaction: 管理者は無条件、作成者は pending のみ削除可
+ *
+ * 承認フロー (approval_status) の許可遷移:
+ *   pending → approved | rejected   (updateTransactionStatus — leader/admin)
+ *   管理者/会計は updateTransaction で任意のステータスへ直接変更可能
+ *   ※ 将来仕様で transaction_kind = "transfer" が追加された場合、
+ *     ペアとなる2行を同時に承認する追加ロジックが必要になる
+ */
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/utils/supabase/server";
@@ -191,6 +207,8 @@ export async function createTransaction(
       ? -Math.abs(parsedValues.amount)
       : Math.abs(parsedValues.amount);
 
+  // 将来拡張(部全体会計): insertData に financial_account_id, transaction_kind を追加。
+  // transaction_kind = "transfer" の場合は同一 transfer_id で2行を同時 insert する。
   const insertData = {
     id: recordId,
     date: formatDateForDatabase(parsedValues.date),
@@ -201,6 +219,8 @@ export async function createTransaction(
     fiscal_year_id: fy?.year ?? null,
     receipt_url: parsedValues.receipt_url ?? null,
     remarks: parsedValues.remarks ?? null,
+    // 全取引を pending で開始し、leader/admin の承認を経て approved に遷移する。
+    // 管理者でも初回は pending — 不正防止のため自己承認を禁止しているため。
     approval_status: "pending",
   };
 
@@ -259,6 +279,7 @@ export async function updateTransactionStatus(
     return { error: "対象のデータが見つかりません" };
   }
 
+  // 承認権限: グローバル管理者 または 対象取引の会計グループの leader のみ
   const isGlobalAdmin = access.isAdmin;
   const isGroupLeader = access.roles.some(
     (r) =>
@@ -270,6 +291,7 @@ export async function updateTransactionStatus(
     return { error: "承認権限がありません" };
   }
 
+  // 自己承認の禁止 — 利益相反を防ぐため、申請者自身は承認操作できない
   if (transaction.created_by === auth.profileId) {
     return { error: "自分の申請を承認することはできません" };
   }
@@ -416,6 +438,9 @@ export async function updateTransaction(
     );
   }
 
+  // 承認ステータスの直接変更は管理者・会計のみ許可。
+  // 通常の承認フロー (pending → approved/rejected) は updateTransactionStatus を使う。
+  // ここでの直接変更は過去データの修正や運用上の例外対応に限定される想定。
   if (
     values.approval_status !== undefined &&
     (isGlobalAdmin || isAccountingUser)

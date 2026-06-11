@@ -1,38 +1,28 @@
+import {
+  PageLoadingShell,
+  SkeletonBlock,
+  SkeletonTable,
+} from "@/components/page-loading";
+
 export default function MembersManageLoading() {
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="rounded-lg border bg-card">
-          <div className="p-6 space-y-2">
-            <div className="h-6 bg-muted rounded animate-pulse w-24" />
-            <div className="h-4 bg-muted rounded animate-pulse w-72" />
-          </div>
-          <div className="px-6 pb-6">
-            {/* Search/filter bar */}
-            <div className="flex gap-3 mb-4">
-              <div className="h-10 bg-muted rounded animate-pulse w-48" />
-              <div className="h-10 bg-muted rounded animate-pulse w-28" />
-            </div>
-            {/* Table header */}
-            <div className="flex gap-4 py-3 border-b">
-              <div className="h-4 bg-muted rounded animate-pulse w-24" />
-              <div className="h-4 bg-muted rounded animate-pulse w-24" />
-              <div className="h-4 bg-muted rounded animate-pulse w-16" />
-              <div className="h-4 bg-muted rounded animate-pulse w-28" />
-              <div className="h-4 bg-muted rounded animate-pulse w-20" />
-            </div>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex gap-4 py-3 border-b last:border-b-0">
-                <div className="h-4 bg-muted rounded animate-pulse w-24" />
-                <div className="h-4 bg-muted rounded animate-pulse w-24" />
-                <div className="h-4 bg-muted rounded animate-pulse w-16" />
-                <div className="h-4 bg-muted rounded animate-pulse w-28" />
-                <div className="h-4 bg-muted rounded animate-pulse w-20" />
-              </div>
-            ))}
-          </div>
-        </div>
+    <PageLoadingShell maxWidth="max-w-6xl">
+      <div className="rounded-lg border bg-card p-6 space-y-2">
+        <SkeletonBlock className="h-6 w-24" />
+        <SkeletonBlock className="h-4 w-72" />
       </div>
-    </main>
+
+      {/* 検索・フィルターバー */}
+      <div className="flex gap-3">
+        <SkeletonBlock className="h-10 w-48" />
+        <SkeletonBlock className="h-10 w-28" />
+      </div>
+
+      {/* テーブル */}
+      <SkeletonTable
+        columns={["w-24", "w-24", "w-16", "w-28", "w-20"]}
+        rows={8}
+      />
+    </PageLoadingShell>
   );
 }

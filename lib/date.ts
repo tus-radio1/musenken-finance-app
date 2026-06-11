@@ -1,9 +1,18 @@
+/**
+ * 日付変換・フォーマットユーティリティ。
+ *
+ * すべての日付処理は JST (Asia/Tokyo) を基準にする。
+ * DB には "YYYY-MM-DD" 形式の date-only 文字列で保存し、
+ * タイムゾーンずれによる日付境界の食い違いを防いでいる。
+ *
+ * 会計年度の定義: N年4月〜N+1年3月 を「N年度」とする。
+ * 3/31 は前年度、4/1 は当年度に属する。
+ * この境界ロジックは supabase/functions/update-fiscal-year/index.ts の
+ * computeFiscalYear() と fiscal_years テーブルの start_date/end_date で管理する。
+ */
+
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const JAPAN_TIME_ZONE = "Asia/Tokyo";
-
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
-}
 
 function formatDatePartsInTimeZone(date: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {

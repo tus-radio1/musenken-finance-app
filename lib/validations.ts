@@ -1,3 +1,11 @@
+/**
+ * Server Action 入力のバリデーションスキーマ集。
+ *
+ * 各 Server Action はこのモジュールのスキーマで入力を検証してから
+ * DB 操作に進む。クライアント側 (lib/schema.ts) のスキーマとは役割が異なり、
+ * こちらはサーバー側の最終防衛線として厳密に検証する。
+ */
+
 import { z } from "zod";
 
 // --- Common field schemas ---

@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * 取引の承認/却下ボタン。
+ *
+ * 承認フロー許可遷移:
+ *   pending → approved  (グローバル管理者 or 対象グループ leader)
+ *   pending → rejected  (同上)
+ * 制約: 自分の申請は承認不可 (isMyTransaction で制御)。
+ * サーバー側の権限チェックは app/actions.ts の updateTransactionStatus が二重に行う。
+ */
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, X, Loader2 } from "lucide-react";
@@ -18,7 +28,8 @@ type Props = {
   status: string;
   canApprove: boolean;
   isMyTransaction: boolean;
-  amount: number;
+  /** 将来の承認条件分岐用（金額閾値による承認フロー等） */
+  amount?: number;
 };
 
 export function ApprovalActions({
@@ -26,10 +37,14 @@ export function ApprovalActions({
   status,
   canApprove,
   isMyTransaction,
-  amount,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  amount: _amount,
 }: Props) {
   const [loading, setLoading] = useState(false);
 
+  // 将来拡張(部全体会計): transaction_kind = "transfer" の場合、
+  // ペアとなる2行を同時に承認/却下する追加ロジックが必要。
+  // cf. docs/club-wide-ledger-spec.md — 承認フロー
   const handleAction = async (newStatus: "approved" | "rejected") => {
     if (
       !confirm(newStatus === "approved" ? "承認しますか？" : "却下しますか？")
@@ -40,8 +55,8 @@ export function ApprovalActions({
     const res = await updateTransactionStatus(transactionId, newStatus);
     setLoading(false);
 
-    if ((res as any).error) {
-      toast.error((res as any).error);
+    if ("error" in res) {
+      toast.error(res.error);
     } else {
       toast.success(newStatus === "approved" ? "承認しました" : "却下しました");
       window.dispatchEvent(new Event("ledger-refresh"));

@@ -23,9 +23,33 @@ import { deleteTransaction } from "@/app/actions";
 import { toast } from "sonner";
 import { TransactionForm } from "@/components/transaction-form";
 
+type LedgerTransaction = {
+  id: string;
+  date: string | null;
+  created_by: string | null;
+  created_by_name?: string | null;
+  description: string | null;
+  amount: number;
+  receipt_public_url?: string | null;
+  approval_status: string | null;
+  approved_by_name?: string | null;
+  rejected_reason?: string | null;
+  remarks?: string | null;
+  accounting_group_id?: string | null;
+  receipt_url?: string | null;
+  approved_by?: string | null;
+  is_subsidy?: boolean;
+  subsidy_id?: string;
+};
+
+type Category = {
+  id: string;
+  name: string;
+};
+
 type Props = {
-  transaction: any;
-  categories: any[];
+  transaction: LedgerTransaction;
+  categories: Category[];
   canEdit: boolean;
   canDelete: boolean;
   userRole?: "admin" | "accounting" | "general" | null;
@@ -47,8 +71,8 @@ export function TransactionRowActions({
 
   const handleDelete = async () => {
     const res = await deleteTransaction(transaction.id);
-    if ((res as any).error) {
-      toast.error((res as any).error);
+    if ("error" in res) {
+      toast.error(res.error);
     } else {
       toast.success("削除しました");
       window.dispatchEvent(new Event("ledger-refresh"));

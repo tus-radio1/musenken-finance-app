@@ -1,3 +1,11 @@
+/**
+ * ロールに基づくアクセス制御の判定ロジック。
+ *
+ * user_roles → roles テーブルを JOIN してユーザーのロール一覧を取得し、
+ * グローバル管理者・会計・部員管理権限などの判定を行う。
+ * Server Action の認可プリアンブルで resolveAuthWithRoles() 経由で呼ばれる。
+ */
+
 import type { AuthContext } from "@/lib/auth/types";
 import type { RoleAssignment, RoleAccessContext } from "./types";
 import {

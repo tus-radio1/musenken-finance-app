@@ -1,7 +1,13 @@
 "use client";
 
+/**
+ * 支援金申請フォーム
+ * ダイアログ内に表示される新規申請フォーム。
+ * セクション: 種別選択 → 収支・日付 → 期・経費種別 → グループ → 項目・金額 → 理由・備考 → 書類
+ */
+
 import { useEffect, useState, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, Upload, CalendarIcon } from "lucide-react";
@@ -50,6 +56,12 @@ import { subsidyFormSchema } from "@/lib/schema";
 import { uploadReceiptAction } from "@/app/actions";
 import { createSubsidyItem } from "@/app/(authenticated)/subsidies/actions";
 import { compressImageToWebp } from "@/lib/image";
+import {
+  CATEGORY_LABELS,
+  CATEGORY_TERMS,
+  EXPENSE_TYPE_LABELS,
+  CATEGORY_EXPENSE_TYPES,
+} from "@/lib/constants/subsidy";
 
 type Category = {
   id: string;
@@ -61,39 +73,11 @@ type Props = {
   triggerButton?: React.ReactNode;
 };
 
-// 支援金種別ごとの表示名
-const CATEGORY_LABELS: Record<string, string> = {
-  activity: "活動支援金",
-  league: "連盟登録支援金",
-  special: "特別支援金",
-};
+/** Generate a unique file name for subsidy evidence uploads (module-scoped to avoid purity lint) */
+function generateEvidenceFileName(fileExt: string | undefined): string {
+  return `subsidy-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+}
 
-// 支援金種別ごとに選択可能な期数
-const CATEGORY_TERMS: Record<string, number[]> = {
-  activity: [1, 2],
-  league: [1, 2],
-  special: [1, 2, 3],
-};
-
-// 経費種別の表示名
-const EXPENSE_TYPE_LABELS: Record<string, string> = {
-  facility: "施設等使用料",
-  participation: "試合等参加費",
-  equipment: "備品購入費",
-  registration: "連盟登録費",
-  travel: "旅費",
-  accommodation: "宿泊費",
-  tournament: "大会参加費等",
-  expensive_goods: "高額物品購入費等",
-  other: "その他",
-};
-
-// 支援金種別ごとに選択可能な経費種別
-const CATEGORY_EXPENSE_TYPES: Record<string, string[]> = {
-  activity: ["facility", "participation", "equipment"],
-  league: ["registration"],
-  special: ["tournament", "expensive_goods", "other"],
-};
 
 export function SubsidyForm({ categories, triggerButton }: Props) {
   const router = useRouter();
@@ -118,7 +102,8 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
     },
   });
 
-  const selectedCategory = form.watch("category");
+  // useWatch で category を監視 (react-hooks/incompatible-library 回避)
+  const selectedCategory = useWatch({ control: form.control, name: "category" });
 
   // 支援金種別が変わったら経費種別と期をリセット
   useEffect(() => {
@@ -131,12 +116,13 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
     const validExpenseTypes = CATEGORY_EXPENSE_TYPES[selectedCategory] || [];
     const currentExpenseType = form.getValues("expense_type");
     if (!currentExpenseType || !validExpenseTypes.includes(currentExpenseType)) {
-      form.setValue("expense_type", validExpenseTypes[0] as any);
+      form.setValue("expense_type", validExpenseTypes[0] as z.infer<typeof subsidyFormSchema>["expense_type"]);
     }
   }, [selectedCategory, form]);
 
-  useEffect(() => {
-    if (open) {
+  // ダイアログの開閉時にフォームとファイルをリセットする
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
       form.reset({
         category: "activity",
         term: 1,
@@ -152,7 +138,8 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       });
       setFile(null);
     }
-  }, [open, form]);
+    setOpen(nextOpen);
+  };
 
   const availableTerms = useMemo(
     () => CATEGORY_TERMS[selectedCategory] || [1],
@@ -164,6 +151,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
     [selectedCategory],
   );
 
+  // --- 送信処理 ---
   async function onSubmit(values: z.infer<typeof subsidyFormSchema>) {
     try {
       if (!file) {
@@ -177,9 +165,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       try {
         const compressedFile = await compressImageToWebp(file);
         const fileExt = compressedFile.name.split(".").pop();
-        const fileName = `subsidy-${Date.now()}-${Math.random()
-          .toString(36)
-          .substring(2)}.${fileExt}`;
+        const fileName = generateEvidenceFileName(fileExt);
 
         const formData = new FormData();
         formData.append("file", compressedFile);
@@ -222,7 +208,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {triggerButton ? triggerButton : <Button>＋ 支援金申請</Button>}
       </DialogTrigger>
@@ -236,7 +222,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-            {/* 支援金種別 */}
+            {/* --- セクション: 支援金種別 --- */}
             <FormField
               control={form.control}
               name="category"
@@ -269,6 +255,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               )}
             />
 
+            {/* --- セクション: 収支区分・日付 --- */}
             <div className="grid grid-cols-2 gap-4">
               {/* 収支区分 */}
               <FormField
@@ -348,6 +335,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               />
             </div>
 
+            {/* --- セクション: 申請期・経費種別 --- */}
             <div className="grid grid-cols-2 gap-4">
               {/* 申請期 */}
               <FormField
@@ -405,7 +393,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               />
             </div>
 
-            {/* 会計グループ */}
+            {/* --- セクション: 会計グループ --- */}
             <FormField
               control={form.control}
               name="accounting_group_id"
@@ -434,7 +422,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               )}
             />
 
-            {/* 項目名 */}
+            {/* --- セクション: 項目名・金額 --- */}
             <FormField
               control={form.control}
               name="name"
@@ -452,7 +440,6 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               )}
             />
 
-            {/* 申請金額 */}
             <FormField
               control={form.control}
               name="requested_amount"
@@ -467,7 +454,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               )}
             />
 
-            {/* 申請理由 */}
+            {/* --- セクション: 申請理由・使用時期・備考 --- */}
             <FormField
               control={form.control}
               name="justification"
@@ -488,7 +475,6 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               )}
             />
 
-            {/* 使用時期 */}
             <FormField
               control={form.control}
               name="usage_period"
@@ -507,7 +493,6 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               )}
             />
 
-            {/* 備考 */}
             <FormField
               control={form.control}
               name="remarks"
@@ -528,7 +513,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               )}
             />
 
-            {/* 根拠書類アップロード */}
+            {/* --- セクション: 根拠書類アップロード --- */}
             <div className="space-y-2">
               <FormLabel>根拠書類</FormLabel>
               <FormDescription>

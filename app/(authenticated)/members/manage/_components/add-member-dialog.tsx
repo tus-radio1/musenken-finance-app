@@ -48,8 +48,9 @@ export function AddMemberDialog() {
         setForm({ name: "", student_number: "", grade: 1 });
         setOpen(false);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "入力エラーがあります");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "入力エラーがあります";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

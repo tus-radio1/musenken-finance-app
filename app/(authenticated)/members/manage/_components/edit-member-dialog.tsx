@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Pencil, X, Plus } from "lucide-react";
+import { Loader2, Pencil, X } from "lucide-react";
 import { updateMember } from "../actions";
 
 export type RoleOption = {
@@ -86,8 +86,9 @@ export function EditMemberDialog({ member, allRoles }: EditMemberDialogProps) {
         toast.success("部員情報を更新しました");
         setOpen(false);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "更新エラーが発生しました");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "更新エラーが発生しました";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
