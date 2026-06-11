@@ -32,7 +32,7 @@ export default async function SubsidiesManagePage({
 
   // Fallback to current or latest fiscal year if no valid selected year from params
   if (selectedYear === undefined) {
-    const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+    const currentFY = fiscalYears?.find((fy) => fy.is_current);
     selectedYear = currentFY?.year ?? undefined;
     if (!selectedYear && fiscalYears && fiscalYears.length > 0) {
       selectedYear = fiscalYears[0]?.year ?? undefined;
@@ -40,7 +40,7 @@ export default async function SubsidiesManagePage({
   }
 
   const isCurrentFY =
-    fiscalYears?.find((fy: any) => fy.year === selectedYear)?.is_current ??
+    fiscalYears?.find((fy) => fy.year === selectedYear)?.is_current ??
     false;
 
   const [result, profilesResult, groupsResult] = await Promise.all([
@@ -70,7 +70,7 @@ export default async function SubsidiesManagePage({
             支援金管理
           </h2>
           <FiscalYearSelector
-            fiscalYears={fiscalYears || []}
+            fiscalYears={(fiscalYears || []).map((fy) => ({ ...fy, is_current: fy.is_current ?? false }))}
             selectedYear={selectedYear}
             basePath="/subsidies/manage"
           />

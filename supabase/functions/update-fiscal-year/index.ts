@@ -2,8 +2,12 @@
 // Automatically switches the `is_current` flag in the `fiscal_years` table
 // so that only the current fiscal year is marked as active.
 //
-// Fiscal year definition: April of year N through March of year N+1 belongs to fiscal year N.
-// Schedule: Invoked annually on March 31 15:00 UTC (= April 1 00:00 JST) via pg_cron.
+// 会計年度の定義: N年4月〜N+1年3月 を「N年度」とする。
+// 境界: 3/31 23:59 JST は前年度、4/1 00:00 JST は当年度。
+// computeFiscalYear() は JST の月で判定する (month >= 4 → 当暦年, month <= 3 → 前暦年)。
+//
+// Schedule: pg_cron により毎年 3/31 15:00 UTC (= 4/1 00:00 JST) に実行。
+// 既に対象年度の fiscal_years レコードが存在しない場合はスキップする（安全策）。
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -21,7 +25,9 @@ function computeFiscalYear(now: Date): number {
   return month >= 4 ? year : year - 1;
 }
 
-Deno.serve(async (req: Request) => {
+// Deno.serve のシグネチャで req パラメータが必須だが、この関数では使用しない。
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+Deno.serve(async (_req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

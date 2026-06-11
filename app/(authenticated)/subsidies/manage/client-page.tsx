@@ -1,109 +1,26 @@
 "use client";
 
-import { useState, useMemo, Fragment } from "react";
+/**
+ * 支援金管理画面: オーケストレーター
+ * 状態管理とビジネスロジックを保持し、表示は子コンポーネントに委譲する。
+ */
+
+import { useState, useMemo } from "react";
 import {
   updateSubsidyStatus,
   updateSubsidyItem,
   deleteSubsidyItem,
 } from "./actions";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Receipt,
-  FileText,
-  Upload,
-  Loader2,
-  ChevronDown,
-  ArrowUpDown,
-  Search,
-} from "lucide-react";
 import { uploadReceiptAction } from "@/app/actions";
 import { compressImageToWebp } from "@/lib/image";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Badge } from "@/components/ui/badge";
-import {
-  dateInputValueToJstTimestamp,
-  formatStoredDate,
-  toDateInputValue,
-} from "@/lib/date";
+import { dateInputValueToJstTimestamp, toDateInputValue } from "@/lib/date";
 
-type SubsidyItem = {
-  id: string;
-  category: string;
-  term: number;
-  expense_type: string;
-  name: string;
-  applicant_id: string;
-  accounting_group_id?: string;
-  requested_amount: number;
-  calculated_amount: number;
-  actual_expense: number;
-  status: string;
-  created_at: string;
-  applicant_name: string;
-  accounting_group_name?: string;
-  receipt_date?: string | null;
-  receipt_url?: string | null;
-  evidence_url?: string | null;
-  remarks?: string;
-  justification?: string | null;
-  usage_period?: string | null;
-};
-
-const CATEGORY_MAP: Record<string, string> = {
-  activity: "活動支援金",
-  league: "連盟支援金",
-  special: "特別支援金",
-};
-
-const EXPENSE_TYPE_MAP: Record<string, string> = {
-  facility: "施設利用料",
-  participation: "参加費",
-  equipment: "備品費",
-  registration: "登録費",
-  travel: "交通費",
-  accommodation: "宿泊費",
-  tournament: "大会参加費等",
-  expensive_goods: "高額物品購入費等",
-  other: "その他",
-};
-
-const STATUS_MAP: Record<string, { label: string; variant: string }> = {
-  pending: { label: "受付中", variant: "secondary" },
-  accounting_received: { label: "受付済", variant: "outline" },
-  rejected: { label: "却下", variant: "destructive" },
-  application_in_progress: { label: "申請中", variant: "secondary" },
-  approved: { label: "審査通過", variant: "default" },
-  application_rejected: { label: "申請拒否", variant: "destructive" },
-  receipt_submitted: { label: "領収書提出済", variant: "default" },
-  paid: { label: "受領済", variant: "default" },
-  unexecuted: { label: "未執行", variant: "outline" },
-};
-
-type SortKey = "created_at" | "requested_amount";
-type SortOrder = "asc" | "desc";
+import { ManageFilterBar } from "./_components/manage-filter-bar";
+import { ManageMobileCardList } from "./_components/manage-mobile-card-list";
+import { ManageDesktopTable } from "./_components/manage-desktop-table";
+import { ManageEditDialog } from "./_components/manage-edit-dialog";
+import type { SubsidyItem, SortKey, SortOrder, EditFormState } from "./_components/types";
 
 export function SubsidiesManageClientPage({
   initialData,
@@ -131,6 +48,7 @@ export function SubsidiesManageClientPage({
         ...profiles,
       ];
 
+  // --- フィルタ・ソート状態 ---
   const [items, setItems] = useState<SubsidyItem[]>(initialData);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTerm, setSelectedTerm] = useState<string>("all");
@@ -140,37 +58,14 @@ export function SubsidiesManageClientPage({
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
+  // --- UI展開状態 ---
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
-
-  const toggleCard = (id: string) => {
-    setOpenCards((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
   const [openDetailRows, setOpenDetailRows] = useState<Set<string>>(new Set());
 
-  const toggleDetailRow = (id: string) => {
-    setOpenDetailRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
+  // --- 編集ダイアログ状態 ---
   const [editingItem, setEditingItem] = useState<SubsidyItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<EditFormState>({
     category: "",
     term: "1",
     accounting_group_id: "",
@@ -195,6 +90,31 @@ export function SubsidiesManageClientPage({
     ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
     : null;
 
+  // --- トグル・ソートハンドラ ---
+  const toggleCard = (id: string) => {
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleDetailRow = (id: string) => {
+    setOpenDetailRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   const handleSortToggle = (key: SortKey) => {
     if (sortKey === key) {
       setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
@@ -204,6 +124,7 @@ export function SubsidiesManageClientPage({
     }
   };
 
+  // --- フィルタリング・ソート ---
   const filteredItems = useMemo(() => {
     const normalizedQuery = searchQuery.toLowerCase().trim();
 
@@ -243,6 +164,7 @@ export function SubsidiesManageClientPage({
     sortOrder,
   ]);
 
+  // --- ステータス変更 ---
   const handleStatusChange = async (id: string, newStatus: string) => {
     const originalItems = [...items];
     setItems((prev) =>
@@ -260,6 +182,7 @@ export function SubsidiesManageClientPage({
     }
   };
 
+  // --- 編集開始 ---
   const handleEditClick = (item: SubsidyItem) => {
     setEditForm({
       category: item.category,
@@ -284,6 +207,7 @@ export function SubsidiesManageClientPage({
     setEditingItem(item);
   };
 
+  // --- 編集送信 ---
   const handleEditSubmit = async () => {
     if (!editingItem) return;
     setIsSubmitting(true);
@@ -415,6 +339,7 @@ export function SubsidiesManageClientPage({
     }
   };
 
+  // --- 削除 ---
   const handleDelete = async (id: string) => {
     if (!window.confirm("本当にこの申請を削除しますか？")) return;
     setIsSubmitting(true);
@@ -429,942 +354,76 @@ export function SubsidiesManageClientPage({
     }
   };
 
+  const handleEditDialogClose = () => {
+    setEditingItem(null);
+    setFile(null);
+    setEvidenceFile(null);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="space-y-3 bg-muted/50 p-4 rounded-lg">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="項目名で検索..."
-            className="pl-9"
-          />
-        </div>
+      {/* フィルタバー */}
+      <ManageFilterBar
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        selectedTerm={selectedTerm}
+        onTermChange={setSelectedTerm}
+        selectedApplicant={selectedApplicant}
+        onApplicantChange={setSelectedApplicant}
+        selectedStatus={selectedStatus}
+        onStatusChange={setSelectedStatus}
+        sortKey={sortKey}
+        sortOrder={sortOrder}
+        onSortToggle={handleSortToggle}
+        profiles={augmentedProfiles}
+      />
 
-        <div className="flex flex-col sm:flex-row gap-3 items-end flex-wrap">
-          <div className="w-full sm:w-auto space-y-1">
-            <label className="text-sm font-medium">カテゴリ</label>
-            <Tabs
-              value={selectedCategory}
-              onValueChange={setSelectedCategory}
-              className="w-full sm:w-64"
-            >
-              <TabsList className="w-full grid grid-cols-4">
-                <TabsTrigger value="all">すべて</TabsTrigger>
-                <TabsTrigger value="activity">活動</TabsTrigger>
-                <TabsTrigger value="league">連盟</TabsTrigger>
-                <TabsTrigger value="special">特別</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="w-full sm:w-36 space-y-1">
-            <label className="text-sm font-medium">期</label>
-            <Select value={selectedTerm} onValueChange={setSelectedTerm}>
-              <SelectTrigger>
-                <SelectValue placeholder="すべての期" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべての期</SelectItem>
-                <SelectItem value="1">第1期</SelectItem>
-                <SelectItem value="2">第2期</SelectItem>
-                <SelectItem value="3">第3期</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="w-full sm:w-40 space-y-1">
-            <label className="text-sm font-medium">申請者</label>
-            <Select value={selectedApplicant} onValueChange={setSelectedApplicant}>
-              <SelectTrigger>
-                <SelectValue placeholder="すべての申請者" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべての申請者</SelectItem>
-                {augmentedProfiles.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="w-full sm:w-40 space-y-1">
-            <label className="text-sm font-medium">状況</label>
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="すべての状況" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべての状況</SelectItem>
-                {Object.entries(STATUS_MAP).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex gap-1">
-            <Button
-              variant={sortKey === "created_at" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-9 px-2 text-xs"
-              onClick={() => handleSortToggle("created_at")}
-            >
-              申請日
-              <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-              {sortKey === "created_at" && (
-                <span className="ml-0.5 text-[10px]">
-                  {sortOrder === "asc" ? "↑" : "↓"}
-                </span>
-              )}
-            </Button>
-            <Button
-              variant={sortKey === "requested_amount" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-9 px-2 text-xs"
-              onClick={() => handleSortToggle("requested_amount")}
-            >
-              申請額
-              <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-              {sortKey === "requested_amount" && (
-                <span className="ml-0.5 text-[10px]">
-                  {sortOrder === "asc" ? "↑" : "↓"}
-                </span>
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
-
+      {/* モバイルカード一覧 (xl未満) */}
       <div className="xl:hidden space-y-3">
-        {filteredItems.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground text-sm">
-            該当する支援金申請はありません
-          </div>
-        ) : (
-          filteredItems.map((item) => (
-            <Collapsible
-              key={item.id}
-              open={openCards.has(item.id)}
-              onOpenChange={() => toggleCard(item.id)}
-            >
-              <div className="border rounded-lg p-4 bg-card space-y-3">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs text-muted-foreground">
-                      {formatStoredDate(item.created_at)}
-                    </div>
-                    <div className="font-medium truncate">{item.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {item.applicant_name}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-base font-semibold">
-                      ¥{item.requested_amount.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
-                      {CATEGORY_MAP[item.category] || item.category}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      {EXPENSE_TYPE_MAP[item.expense_type] || item.expense_type}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      第{item.term}期
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs border ${
-                        STATUS_MAP[item.status]
-                          ? "bg-muted text-muted-foreground"
-                          : ""
-                      }`}
-                    >
-                      {STATUS_MAP[item.status]?.label || item.status}
-                    </span>
-                  </div>
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 px-2">
-                      詳細
-                      <ChevronDown
-                        className={`ml-1 h-3.5 w-3.5 transition-transform ${
-                          openCards.has(item.id) ? "rotate-180" : ""
-                        }`}
-                      />
-                    </Button>
-                  </CollapsibleTrigger>
-                </div>
-
-                {item.usage_period && (
-                  <div className="text-xs text-muted-foreground">
-                    <span className="font-medium">使用時期: </span>
-                    <span>{item.usage_period}</span>
-                  </div>
-                )}
-
-                <CollapsibleContent className="space-y-3 pt-1">
-                  {item.justification && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground font-medium">
-                        申請理由:{" "}
-                      </span>
-                      <span className="whitespace-pre-wrap break-words">
-                        {item.justification}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="w-full">
-                    <Select
-                      value={item.status}
-                      onValueChange={(val) =>
-                        handleStatusChange(item.id, val)
-                      }
-                      disabled={isReadOnly}
-                    >
-                      <SelectTrigger className="w-full h-8 bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(STATUS_MAP).map(
-                          ([key, { label }]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                    <div>
-                      <span className="text-muted-foreground font-medium">算定額: </span>
-                      <span className={item.calculated_amount > 0 ? "font-medium text-emerald-600" : "text-muted-foreground"}>
-                        ¥{item.calculated_amount.toLocaleString()}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground font-medium">実経費額: </span>
-                      <span className={item.actual_expense > 0 ? "font-medium text-blue-600" : "text-muted-foreground"}>
-                        ¥{item.actual_expense.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-sm">
-                    <span className="text-muted-foreground font-medium">受領日: </span>
-                    <span>
-                      {item.receipt_date
-                        ? formatStoredDate(item.receipt_date)
-                        : "—"}
-                    </span>
-                  </div>
-
-                  {(item.receipt_url || item.evidence_url) && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground font-medium block mb-1">添付書類:</span>
-                      <div className="flex flex-col gap-1">
-                        {item.receipt_url && (
-                          <a
-                            href={
-                              item.receipt_url.startsWith("http")
-                                ? item.receipt_url
-                                : publicReceiptBase
-                                  ? `${publicReceiptBase}${item.receipt_url}`
-                                  : "#"
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-blue-600 hover:underline text-xs"
-                          >
-                            <Receipt className="h-4 w-4 mr-1" />
-                            領収書
-                          </a>
-                        )}
-                        {item.evidence_url && (
-                          <a
-                            href={
-                              item.evidence_url.startsWith("http")
-                                ? item.evidence_url
-                                : publicReceiptBase
-                                  ? `${publicReceiptBase}${item.evidence_url}`
-                                  : "#"
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-blue-600 hover:underline text-xs"
-                          >
-                            <FileText className="h-4 w-4 mr-1" />
-                            根拠書類
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {item.remarks && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground font-medium">
-                        備考:{" "}
-                      </span>
-                      <span className="whitespace-pre-wrap break-words">
-                        {item.remarks}
-                      </span>
-                    </div>
-                  )}
-
-                  {!isReadOnly && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditClick(item)}
-                      >
-                        編集
-                      </Button>
-                    </div>
-                  )}
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
-          ))
-        )}
+        <ManageMobileCardList
+          filteredItems={filteredItems}
+          openCards={openCards}
+          onToggleCard={toggleCard}
+          onStatusChange={handleStatusChange}
+          onEditClick={handleEditClick}
+          isReadOnly={isReadOnly}
+          publicReceiptBase={publicReceiptBase}
+        />
       </div>
 
-      <div className="border rounded-lg overflow-x-auto bg-card hidden xl:block">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 text-muted-foreground font-medium border-b">
-            <tr>
-              <th className="p-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium text-muted-foreground hover:text-foreground"
-                  onClick={() => handleSortToggle("created_at")}
-                >
-                  申請日
-                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                  {sortKey === "created_at" && (
-                    <span className="ml-0.5 text-[10px]">
-                      {sortOrder === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </Button>
-              </th>
-              <th className="p-3">申請者</th>
-              <th className="p-3">項目名</th>
-              <th className="p-3">状況</th>
-              <th className="p-3 text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium text-muted-foreground hover:text-foreground ml-auto"
-                  onClick={() => handleSortToggle("requested_amount")}
-                >
-                  申請額
-                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
-                  {sortKey === "requested_amount" && (
-                    <span className="ml-0.5 text-[10px]">
-                      {sortOrder === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </Button>
-              </th>
-              <th className="p-3 text-right">算定額</th>
-              <th className="p-3">添付書類</th>
-              <th className="p-3 w-[60px]">詳細</th>
-              <th className="p-3 w-[80px]"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filteredItems.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={9}
-                  className="p-6 text-center text-muted-foreground"
-                >
-                  該当する支援金申請はありません
-                </td>
-              </tr>
-            ) : (
-              filteredItems.map((item) => (
-                <Fragment key={item.id}>
-                <tr
-                  className="hover:bg-muted/50 transition-colors"
-                >
-                  <td className="p-3">
-                    <span className="text-sm">
-                      {formatStoredDate(item.created_at)}
-                    </span>
-                  </td>
+      {/* デスクトップテーブル (xl以上) */}
+      <ManageDesktopTable
+        filteredItems={filteredItems}
+        openDetailRows={openDetailRows}
+        onToggleDetailRow={toggleDetailRow}
+        onStatusChange={handleStatusChange}
+        onEditClick={handleEditClick}
+        onSortToggle={handleSortToggle}
+        sortKey={sortKey}
+        sortOrder={sortOrder}
+        isReadOnly={isReadOnly}
+        publicReceiptBase={publicReceiptBase}
+      />
 
-                  <td className="p-3">
-                    <div
-                      className="text-sm max-w-[120px] truncate"
-                      title={item.applicant_name}
-                    >
-                      {item.applicant_name}
-                    </div>
-                    {item.accounting_group_name &&
-                      item.accounting_group_name !== "-" && (
-                        <div className="text-xs text-muted-foreground mt-0.5 truncate bg-muted inline-block px-1 rounded">
-                          {item.accounting_group_name}
-                        </div>
-                      )}
-                  </td>
-
-                  <td className="p-3">
-                    <div className="font-medium">{item.name}</div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      <span className="px-1.5 py-0 rounded text-[11px] bg-blue-100 text-blue-800 border border-blue-200">
-                        {CATEGORY_MAP[item.category] || item.category}
-                      </span>
-                      <span className="px-1.5 py-0 rounded text-[11px] bg-muted text-muted-foreground border">
-                        第{item.term}期
-                      </span>
-                      <span className="px-1.5 py-0 rounded text-[11px] bg-muted text-muted-foreground border">
-                        {EXPENSE_TYPE_MAP[item.expense_type] ||
-                          item.expense_type}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="p-3">
-                    <Select
-                      value={item.status}
-                      onValueChange={(val) => handleStatusChange(item.id, val)}
-                      disabled={isReadOnly}
-                    >
-                      <SelectTrigger className="w-[120px] h-8 relative shrink-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(STATUS_MAP).map(([key, { label }]) => (
-                          <SelectItem key={key} value={key}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </td>
-
-                  <td className="p-3 text-right">
-                    <span className="font-medium">
-                      ¥{item.requested_amount.toLocaleString()}
-                    </span>
-                  </td>
-
-                  <td className="p-3 text-right">
-                    <span
-                      className={
-                        item.calculated_amount > 0
-                          ? "font-medium text-emerald-600"
-                          : "text-muted-foreground"
-                      }
-                    >
-                      ¥{item.calculated_amount.toLocaleString()}
-                    </span>
-                  </td>
-
-                  <td className="p-3 text-sm">
-                    <div className="flex flex-col gap-1">
-                      {item.receipt_url ? (
-                        <a
-                          href={
-                            item.receipt_url.startsWith("http")
-                              ? item.receipt_url
-                              : publicReceiptBase
-                                ? `${publicReceiptBase}${item.receipt_url}`
-                                : "#"
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center text-blue-600 hover:underline text-xs"
-                        >
-                          <Receipt className="h-4 w-4 mr-1" />
-                          領収書
-                        </a>
-                      ) : null}
-                      {item.evidence_url ? (
-                        <a
-                          href={
-                            item.evidence_url.startsWith("http")
-                              ? item.evidence_url
-                              : publicReceiptBase
-                                ? `${publicReceiptBase}${item.evidence_url}`
-                                : "#"
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center text-blue-600 hover:underline text-xs"
-                        >
-                          <FileText className="h-4 w-4 mr-1" />
-                          根拠書類
-                        </a>
-                      ) : null}
-                      {!item.receipt_url && !item.evidence_url && "-"}
-                    </div>
-                  </td>
-
-                  <td className="p-3 align-middle">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2"
-                      onClick={() => toggleDetailRow(item.id)}
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${
-                          openDetailRows.has(item.id) ? "rotate-180" : ""
-                        }`}
-                      />
-                    </Button>
-                  </td>
-
-                  <td className="p-3 align-middle text-right shrink-0">
-                    {!isReadOnly && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditClick(item)}
-                      >
-                        編集
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-                {openDetailRows.has(item.id) && (
-                  <tr key={`${item.id}-detail`} className="bg-muted/30">
-                    <td colSpan={9} className="px-4 py-3">
-                      <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-sm">
-                        <div>
-                          <span className="font-medium text-muted-foreground">実経費額: </span>
-                          <span
-                            className={
-                              item.actual_expense > 0
-                                ? "font-medium text-blue-600"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            ¥{item.actual_expense.toLocaleString()}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-muted-foreground">受領日: </span>
-                          <span>{item.receipt_date ? formatStoredDate(item.receipt_date) : "-"}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-muted-foreground">使用時期: </span>
-                          <span>{item.usage_period || "-"}</span>
-                        </div>
-                        {item.justification && (
-                          <div className="col-span-3">
-                            <span className="font-medium text-muted-foreground">申請理由: </span>
-                            <span className="whitespace-pre-wrap break-words">{item.justification}</span>
-                          </div>
-                        )}
-                        <div className="col-span-3">
-                          <span className="font-medium text-muted-foreground">備考: </span>
-                          <span className="whitespace-pre-wrap break-words">{item.remarks || "-"}</span>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                </Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <Dialog
-        open={editingItem !== null}
-        onOpenChange={(open) => !open && setEditingItem(null)}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>申請情報の編集</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
-            {!isAdmin && editingItem?.justification && (
-              <div className="grid grid-cols-4 items-start gap-4">
-                <Label className="text-right text-sm pt-1">申請理由</Label>
-                <div className="col-span-3 text-sm whitespace-pre-wrap break-words bg-muted/50 rounded-md p-2">
-                  {editingItem.justification}
-                </div>
-              </div>
-            )}
-
-            {isAdmin && (
-              <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-sm">申請者</Label>
-                  <div className="col-span-3">
-                    <Select
-                      value={editForm.applicant_id}
-                      onValueChange={(val) =>
-                        setEditForm({ ...editForm, applicant_id: val })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="申請者を選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {augmentedProfiles.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-sm">申請日時</Label>
-                  <div className="col-span-3">
-                    <Input
-                      type="date"
-                      value={editForm.created_at}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, created_at: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-sm">受領日</Label>
-                  <div className="col-span-3">
-                    <Input
-                      type="date"
-                      value={editForm.receipt_date}
-                      onChange={(e) =>
-                        setEditForm({
-                          ...editForm,
-                          receipt_date: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-sm">経費種別</Label>
-                  <div className="col-span-3">
-                    <Select
-                      value={editForm.expense_type}
-                      onValueChange={(val) =>
-                        setEditForm({ ...editForm, expense_type: val })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(EXPENSE_TYPE_MAP).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 items-start gap-4">
-                  <Label className="text-right text-sm pt-1">申請理由</Label>
-                  <div className="col-span-3">
-                    <Textarea
-                      value={editForm.justification}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, justification: e.target.value })
-                      }
-                      placeholder="申請理由を入力"
-                      className="resize-none"
-                      rows={3}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-sm">根拠書類</Label>
-                  <div className="col-span-3">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF &nbsp;|&nbsp; 最大サイズ: 10MB
-                    </p>
-                    <div className="flex items-center gap-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          document.getElementById("admin-evidence-upload")?.click()
-                        }
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        {evidenceFile ? "ファイルを変更" : "ファイルを選択"}
-                      </Button>
-                      <span className="text-sm text-muted-foreground truncate max-w-[150px]">
-                        {evidenceFile
-                          ? evidenceFile.name
-                          : editingItem?.evidence_url
-                            ? "登録済み(変更可)"
-                            : "未登録"}
-                      </span>
-                      <Input
-                        id="admin-evidence-upload"
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={(e) => {
-                          const selectedFile = e.target.files?.[0];
-                          if (selectedFile) setEvidenceFile(selectedFile);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">カテゴリ</Label>
-              <div className="col-span-3">
-                <Select
-                  value={editForm.category}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, category: val })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CATEGORY_MAP).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">期</Label>
-              <div className="col-span-3">
-                <Select
-                  value={editForm.term}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, term: val })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">第1期</SelectItem>
-                    <SelectItem value="2">第2期</SelectItem>
-                    <SelectItem value="3">第3期</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">会計区分</Label>
-              <div className="col-span-3">
-                <Select
-                  value={editForm.accounting_group_id}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, accounting_group_id: val })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="会計区分を選択" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accountingGroups.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">項目名</Label>
-              <div className="col-span-3">
-                <Input
-                  value={editForm.name}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, name: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">申請額</Label>
-              <div className="col-span-3">
-                <Input
-                  type="number"
-                  value={editForm.requested_amount}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      requested_amount: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">算定額</Label>
-              <div className="col-span-3">
-                <Input
-                  type="number"
-                  value={editForm.calculated_amount}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      calculated_amount: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">実経費額</Label>
-              <div className="col-span-3">
-                <Input
-                  type="number"
-                  value={editForm.actual_amount}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      actual_amount: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">領収書画像</Label>
-              <div className="col-span-3">
-                <p className="text-xs text-muted-foreground mb-2">
-                  対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF &nbsp;|&nbsp; 最大サイズ: 10MB
-                </p>
-                <div className="flex items-center gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      document.getElementById("admin-receipt-upload")?.click()
-                    }
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    {file ? "画像を変更" : "画像を選択"}
-                  </Button>
-                  <span className="text-sm text-muted-foreground truncate max-w-[150px]">
-                    {file
-                      ? file.name
-                      : editingItem?.receipt_url
-                        ? "登録済み(変更可)"
-                        : "未登録"}
-                  </span>
-                  <Input
-                    id="admin-receipt-upload"
-                    type="file"
-                    accept="image/*,.pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const selectedFile = e.target.files?.[0];
-                      if (selectedFile) setFile(selectedFile);
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">使用時期</Label>
-              <div className="col-span-3">
-                <Input
-                  value={editForm.usage_period}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, usage_period: e.target.value })
-                  }
-                  placeholder="例：2026年4月〜6月"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right text-sm">備考</Label>
-              <div className="col-span-3">
-                <Input
-                  value={editForm.remarks}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, remarks: e.target.value })
-                  }
-                  placeholder="備考を入力"
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="sm:justify-between">
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (editingItem) handleDelete(editingItem.id);
-              }}
-              disabled={isSubmitting}
-            >
-              削除
-            </Button>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setEditingItem(null);
-                  setFile(null);
-                  setEvidenceFile(null);
-                }}
-                disabled={isSubmitting}
-              >
-                キャンセル
-              </Button>
-              <Button onClick={handleEditSubmit} disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    保存中...
-                  </>
-                ) : (
-                  "保存"
-                )}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 編集ダイアログ */}
+      <ManageEditDialog
+        editingItem={editingItem}
+        onClose={handleEditDialogClose}
+        editForm={editForm}
+        onEditFormChange={setEditForm}
+        onSubmit={handleEditSubmit}
+        onDelete={handleDelete}
+        isSubmitting={isSubmitting}
+        isAdmin={isAdmin}
+        profiles={augmentedProfiles}
+        accountingGroups={accountingGroups}
+        file={file}
+        onFileChange={setFile}
+        evidenceFile={evidenceFile}
+        onEvidenceFileChange={setEvidenceFile}
+      />
     </div>
   );
 }

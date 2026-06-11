@@ -1,6 +1,14 @@
+/**
+ * サイドバー用のチーム(会計グループ)一覧取得。
+ *
+ * ユーザーのロールに応じて閲覧可能な会計グループを返す。
+ * 管理者・会計・部長・副部長は全グループ、一般部員は general タイプ+所属班のみ。
+ */
+
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { getAccountingGroups } from "@/lib/cache";
+import type { Database } from "@/lib/database.types";
 
 export type TeamInfo = {
   id: string;
@@ -9,8 +17,8 @@ export type TeamInfo = {
 };
 
 export async function getUserTeams(
-  supabase: SupabaseClient,
-  admin: SupabaseClient,
+  supabase: SupabaseClient<Database>,
+  admin: SupabaseClient<Database>,
   userId: string,
 ): Promise<{
   teams: TeamInfo[];
@@ -23,17 +31,16 @@ export async function getUserTeams(
   let isAccountingUser = false;
   const myTeams: TeamInfo[] = [];
 
-  const [{ data: profile }, { data: userRoles }, categories] =
+  // NOTE: profiles.role カラムは migration 20260322130000 で削除済み。
+  // 会計ロール判定は user_roles 経由で行う。
+  const [{ data: userRoles }, categories] =
     await Promise.all([
-      supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
       supabase
         .from("user_roles")
         .select("roles(name, type, accounting_group_id)")
         .eq("user_id", userId),
       getAccountingGroups(),
     ]);
-
-  isAccountingUser = profile?.role === ROLE_TYPES.ACCOUNTING;
 
   type Role = {
     name: string | null;
@@ -52,7 +59,8 @@ export async function getUserTeams(
     isAccountingUser = roles.some((r) => r?.name === ROLE_NAMES_JA.ACCOUNTING);
   }
 
-  const safeCategories = ((categories || []) as any[]).filter(
+  type AccountingGroup = { id: string; name: string; is_active: boolean; type: string | null };
+  const safeCategories = ((categories || []) as AccountingGroup[]).filter(
     (c) => c.is_active !== false,
   );
 
@@ -69,10 +77,10 @@ export async function getUserTeams(
     // 全ユーザーに general タイプのグループを表示
     // Use already-cached categories filtered by type and active status
     const generalGroups = safeCategories.filter(
-      (c: any) => c.type === ROLE_TYPES.GENERAL || !c.type,
+      (c) => c.type === ROLE_TYPES.GENERAL || !c.type,
     );
 
-    generalGroups.forEach((g: any) => {
+    generalGroups.forEach((g) => {
       if (!myTeams.some((t) => t.id === g.id)) {
         myTeams.push({ id: g.id, name: g.name, type: ROLE_TYPES.GENERAL as "general" });
       }

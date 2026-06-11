@@ -1,5 +1,17 @@
 "use server";
 
+/**
+ * 出納帳データ取得の Server Action。
+ *
+ * 権限モデル:
+ *   - 管理者・会計・部長・副部長: 全グループのデータ閲覧可
+ *   - 一般部員: general タイプのグループ + 自分が所属するグループのみ
+ * アクセス判定の順序:
+ *   1. isFullAccess (admin/accounting/chair/vice_chair) → 無条件OK
+ *   2. general タイプのグループ → 全ユーザーに公開
+ *   3. 所属グループ → ロール割当で判定
+ */
+
 import { getAccountingUserIdSync } from "@/lib/system-config";
 import {
   fetchLedgerTransactionsSchema,
@@ -47,8 +59,7 @@ export async function fetchLedgerTransactions(params: {
       .select("type")
       .eq("id", requestedGroupId)
       .maybeSingle();
-    isGeneralGroup =
-      (groupInfo as unknown as { type?: string } | null)?.type === "general";
+    isGeneralGroup = groupInfo?.type === "general";
   }
 
   const belongsToRequested = access.roles.some(
@@ -85,11 +96,7 @@ export async function fetchLedgerTransactions(params: {
     subsidyQuery = subsidyQuery.eq("fiscal_year_id", params.fyYear);
   }
 
-  const profilesQuery = auth.supabase
-    .from("profiles")
-    .select("id, name")
-    .is("deleted_at", null);
-
+  // プロフィール取得は取引データ取得後に必要な ID だけを取得する（B-6/P-2 修正）
   const budgetQuery =
     typeof params.fyYear !== "undefined"
       ? auth.supabase
@@ -100,16 +107,28 @@ export async function fetchLedgerTransactions(params: {
           .maybeSingle()
       : Promise.resolve({ data: null, error: null });
 
-  const [txResult, subsidyResult, profilesResult, budgetResult] =
-    await Promise.all([txQuery, subsidyQuery, profilesQuery, budgetQuery]);
+  const [txResult, subsidyResult, budgetResult] =
+    await Promise.all([txQuery, subsidyQuery, budgetQuery]);
 
   if (txResult.error) {
     console.error("[fetchLedgerTransactions] Transaction fetch error:", txResult.error);
     return { error: "データの取得に失敗しました" as const };
   }
 
-  const txRows: TransactionRow[] = (txResult.data ||
-    []) as unknown as TransactionRow[];
+  const txRows: TransactionRow[] = (txResult.data || []).map((row) => ({
+    id: row.id,
+    date: row.date,
+    amount: row.amount,
+    description: row.description,
+    accounting_group_id: row.accounting_group_id,
+    approval_status: row.approval_status,
+    receipt_url: row.receipt_url,
+    created_by: row.created_by,
+    approved_by: row.approved_by,
+    rejected_reason: row.rejected_reason,
+    remarks: row.remarks,
+    subsidy_item_id: row.subsidy_item_id,
+  }));
   const subsidyData = subsidyResult.data ?? [];
 
   // TransactionRow と 仮想行 を結合
@@ -119,24 +138,33 @@ export async function fetchLedgerTransactions(params: {
     requestedGroupId,
   );
 
-  // プロフィール名マップ構築
-  const profileNameMap: Record<string, string> = Object.fromEntries(
-    (profilesResult.data || []).map((p) => {
-      const row = p as unknown as { id: string; name?: string | null };
-      return [row.id, row.name || row.id];
-    }),
-  );
-  profileNameMap[getAccountingUserIdSync()] = "会計";
+  // プロフィール名マップ構築 — 取引に登場する ID のみを取得する（B-6/P-2）
+  const profileIds = new Set<string>();
+  for (const row of combinedRows) {
+    if (row.created_by) profileIds.add(row.created_by);
+    if (row.approved_by) profileIds.add(row.approved_by);
+  }
+  // 会計ユーザーIDは静的に名前を設定するので取得対象から除外可
+  const accountingId = getAccountingUserIdSync();
+  profileIds.delete(accountingId);
+
+  let profileNameMap: Record<string, string> = {};
+  const idArray = Array.from(profileIds);
+  if (idArray.length > 0) {
+    const { data: profilesData } = await auth.supabase
+      .from("profiles")
+      .select("id, name")
+      .in("id", idArray)
+      .is("deleted_at", null);
+    profileNameMap = Object.fromEntries(
+      (profilesData || []).map((p) => [p.id, p.name || p.id]),
+    );
+  }
+  profileNameMap[accountingId] = "会計";
 
   // Budget amount and carryover
-  const budgetAmount =
-    Number(
-      (budgetResult.data as unknown as { amount?: unknown } | null)?.amount,
-    ) || 0;
-  const carryoverAmount =
-    Number(
-      (budgetResult.data as unknown as { carryover_amount?: unknown } | null)?.carryover_amount,
-    ) || 0;
+  const budgetAmount = Number(budgetResult.data?.amount) || 0;
+  const carryoverAmount = Number(budgetResult.data?.carryover_amount) || 0;
 
   const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
     ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`

@@ -1,3 +1,8 @@
+/**
+ * クライアント側の画像圧縮ユーティリティ。
+ * アップロード前に Canvas API で WebP 形式に変換しファイルサイズを削減する。
+ */
+
 export async function compressImageToWebp(file: File): Promise<File> {
   // PDFs should not be processed via Canvas
   if (file.type === "application/pdf") {

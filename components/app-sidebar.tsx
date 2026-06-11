@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import { UserNav } from "@/components/user-nav";
 import { useSidebarDataContext } from "@/components/sidebar-data-provider";
 
@@ -49,16 +50,16 @@ export function AppSidebar() {
             申請中の支援金
           </span>
           <div className="mt-1 space-y-1">
-            {pendingSubsidies.map((s: any) => (
+            {pendingSubsidies.map((s) => (
               <div
                 key={s.id}
                 className="flex items-center justify-between gap-1 text-xs py-1 px-1 rounded hover:bg-muted/50 transition-colors"
               >
-                <span className="truncate flex-1" title={s.name}>
+                <span className="truncate flex-1" title={s.name ?? undefined}>
                   {s.name}
                 </span>
                 <span className="text-muted-foreground whitespace-nowrap">
-                  ¥{Number(s.requested_amount).toLocaleString()}
+                  {formatCurrency(Number(s.requested_amount))}
                 </span>
               </div>
             ))}

@@ -19,6 +19,7 @@ import { AddGroupDialog } from "./_components/add-group-dialog";
 import { DeleteGroupYearButton } from "./_components/delete-group-year-button";
 import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { getAccountingGroups, getFiscalYears } from "@/lib/cache";
+import { formatCurrency } from "@/lib/format";
 
 const BudgetOverview = dynamic(
   () =>
@@ -33,13 +34,6 @@ const BudgetOverview = dynamic(
     ),
   },
 );
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-  }).format(amount);
-}
 
 export default async function BudgetPage({
   searchParams,
@@ -67,7 +61,7 @@ export default async function BudgetPage({
   if (selectedYearParam) {
     fyYear = parseInt(selectedYearParam, 10);
   } else {
-    const currentFY = fiscalYears?.find((fy: any) => fy.is_current);
+    const currentFY = fiscalYears?.find((fy) => fy.is_current);
     fyYear = currentFY?.year ?? undefined;
     if (!fyYear && fiscalYears && fiscalYears.length > 0) {
       fyYear = fiscalYears[0]?.year ?? undefined;
@@ -81,6 +75,8 @@ export default async function BudgetPage({
   if (typeof fyYear !== "undefined") {
     budgetQuery = budgetQuery.eq("fiscal_year_id", fyYear);
   }
+
+  type BudgetUsageRow = { accounting_group_id: string; expenses: number; pending: number; income: number };
 
   const [
     { data: userRoles },
@@ -96,19 +92,24 @@ export default async function BudgetPage({
     budgetQuery,
     fyYear
       ? supabase.rpc("get_budget_usage", { p_fiscal_year_id: fyYear })
-      : Promise.resolve({ data: [] as any[], error: null }),
+      : Promise.resolve({ data: [] as BudgetUsageRow[], error: null }),
   ]);
 
   // ロール情報取得
+  type RoleInfo = { name: string | null; type: string | null; accounting_group_id: string | null };
   let isGlobalAdmin = false;
   let hasAccountingRole = false;
   const myGroupRoles: Record<string, string> = {};
-  const roles = (userRoles || []).map((ur: any) => ur.roles).filter(Boolean);
-  isGlobalAdmin = roles.some((r: any) => r.type === ROLE_TYPES.ADMIN);
+  const roles = (userRoles || []).flatMap((ur) => {
+    const rr = (ur as unknown as { roles?: RoleInfo | RoleInfo[] | null }).roles;
+    if (Array.isArray(rr)) return rr;
+    return rr ? [rr] : [];
+  });
+  isGlobalAdmin = roles.some((r) => r.type === ROLE_TYPES.ADMIN);
   hasAccountingRole = roles.some(
-    (r: any) => r.name === ROLE_NAMES_JA.ACCOUNTING,
+    (r) => r.name === ROLE_NAMES_JA.ACCOUNTING,
   );
-  roles.forEach((r: any) => {
+  roles.forEach((r) => {
     if (r?.accounting_group_id && r?.type) {
       myGroupRoles[r.accounting_group_id] = r.type;
     }
@@ -140,8 +141,11 @@ export default async function BudgetPage({
     console.error("get_budget_usage RPCエラー:", usageError);
   }
 
+  type AccountingGroupCached = { id: string; name: string; is_active: boolean; type: string | null };
+  const typedCategories = (categories || []) as AccountingGroupCached[];
+
   const usageMap: Record<string, { expenses: number; pending: number; income: number }> = {};
-  (usageRows || []).forEach((row: any) => {
+  (usageRows || []).forEach((row) => {
     usageMap[row.accounting_group_id] = {
       expenses: Number(row.expenses),
       pending: Number(row.pending),
@@ -149,9 +153,9 @@ export default async function BudgetPage({
     };
   });
 
-  const budgetStatus = (budgets || []).map((b: any) => {
-    const group = (categories || []).find(
-      (c: any) => c.id === b.accounting_group_id,
+  const budgetStatus = (budgets || []).map((b) => {
+    const group = typedCategories.find(
+      (c) => c.id === b.accounting_group_id,
     );
     return {
       budget_id: b.id,
@@ -166,9 +170,9 @@ export default async function BudgetPage({
   });
 
   // Active accounting groups only (inactive groups are excluded from the table)
-  const allGroupsWithBudget = (categories || []).filter((c: any) => c.is_active !== false).map((c: any) => {
+  const allGroupsWithBudget = typedCategories.filter((c) => c.is_active !== false).map((c) => {
     const budget = (budgets || []).find(
-      (b: any) => b.accounting_group_id === c.id,
+      (b) => b.accounting_group_id === c.id,
     );
     return {
       group_id: c.id,
@@ -183,21 +187,21 @@ export default async function BudgetPage({
   });
 
   // Data for dialogs
-  const groupsForDialog = (categories || []).map((c: any) => {
+  const groupsForDialog = typedCategories.map((c) => {
     const budget = (budgets || []).find(
-      (b: any) => b.accounting_group_id === c.id,
+      (b) => b.accounting_group_id === c.id,
     );
     return {
-      id: c.id as string,
-      name: c.name as string,
-      isActive: (c.is_active ?? true) as boolean,
+      id: c.id,
+      name: c.name,
+      isActive: c.is_active ?? true,
       currentBudget: budget ? Number(budget.amount) : 0,
       currentCarryover: budget ? Number(budget.carryover_amount) : 0,
     };
   });
-  const existingYears = (fiscalYears || []).map((fy: any) => fy.year as number);
+  const existingYears = (fiscalYears || []).map((fy) => fy.year);
   const isCurrentFY =
-    fiscalYears?.find((fy: any) => fy.year === fyYear)?.is_current ?? false;
+    fiscalYears?.find((fy) => fy.year === fyYear)?.is_current ?? false;
   const canEdit =
     isGlobalAdmin ||
     ((hasAccountingRole ||
@@ -214,7 +218,7 @@ export default async function BudgetPage({
             </h1>
           </div>
           <YearSelector
-            fiscalYears={fiscalYears || []}
+            fiscalYears={(fiscalYears || []).map((fy) => ({ ...fy, is_current: fy.is_current ?? false }))}
             selectedYear={fyYear}
           />
         </div>
@@ -225,7 +229,7 @@ export default async function BudgetPage({
           </div>
         )}
 
-        <BudgetOverview data={budgetStatus as any} />
+        <BudgetOverview data={budgetStatus} />
 
         <Card>
           <CardHeader>
@@ -247,7 +251,7 @@ export default async function BudgetPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allGroupsWithBudget.map((item: any) => {
+                {allGroupsWithBudget.map((item) => {
                   const effectiveBudget = item.budget_amount + item.carryover_amount;
                   const totalUsed = item.expenses + item.pending;
                   const remaining = effectiveBudget + item.income - totalUsed;

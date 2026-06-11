@@ -1,3 +1,10 @@
+/**
+ * サーバー側キャッシュヘルパー。
+ *
+ * unstable_cache で会計グループ・会計年度などの低頻度更新データをキャッシュし、
+ * 毎リクエストの DB アクセスを削減する。
+ */
+
 import "server-only";
 
 import { unstable_cache } from "next/cache";

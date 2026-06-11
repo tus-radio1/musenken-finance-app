@@ -56,7 +56,7 @@ export default async function ApplicationsPage({
     : null;
 
   // テーブル用にデータを整形
-  const tableData = (transactions || []).map((tx: any) => ({
+  const tableData = (transactions || []).map((tx) => ({
     id: tx.id,
     date: tx.date,
     amount: tx.amount,
