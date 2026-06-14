@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { LedgerTransaction, SortKey, SortDir } from "./types";
+import { TRANSACTION_KIND_LABELS } from "./types";
 
 // ---------------------------------------------------------------------------
 // ソート可能なヘッダーセル
@@ -85,6 +86,8 @@ type Props = {
   userRoleStr: "admin" | "accounting" | "general";
   users?: { id: string; name: string }[];
   accountingUserId?: string;
+  /** Show financial account and transaction kind columns */
+  showExtendedColumns?: boolean;
 };
 
 export function LedgerDesktopTable({
@@ -100,6 +103,7 @@ export function LedgerDesktopTable({
   userRoleStr,
   users,
   accountingUserId,
+  showExtendedColumns = false,
 }: Props) {
   return (
     <div className="hidden xl:block">
@@ -127,6 +131,12 @@ export function LedgerDesktopTable({
               currentSortDir={sortDir}
               onSort={onSort}
             />
+            {showExtendedColumns && (
+              <>
+                <TableHead>財布</TableHead>
+                <TableHead>種別</TableHead>
+              </>
+            )}
             <SortableHeader
               label="金額"
               sortKey="amount"
@@ -186,8 +196,29 @@ export function LedgerDesktopTable({
                       支援金
                     </Badge>
                   )}
+                  {r.transaction_kind === "transfer" && (
+                    <Badge
+                      variant="secondary"
+                      className="mr-1 bg-purple-100 text-purple-800 hover:bg-purple-100 border-none"
+                    >
+                      移動
+                    </Badge>
+                  )}
                   <span>{r.description || "-"}</span>
                 </TableCell>
+                {showExtendedColumns && (
+                  <>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {r.financial_account_name || "-"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {r.transaction_kind
+                        ? TRANSACTION_KIND_LABELS[r.transaction_kind] ||
+                          r.transaction_kind
+                        : "-"}
+                    </TableCell>
+                  </>
+                )}
                 <TableCell className="text-right">
                   <span
                     className={

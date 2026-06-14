@@ -66,6 +66,36 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_accounts: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -366,12 +396,15 @@ export type Database = {
           date: string
           deleted_at: string | null
           description: string
+          financial_account_id: string
           fiscal_year_id: number | null
           id: string
           receipt_url: string | null
           rejected_reason: string | null
           remarks: string | null
           subsidy_item_id: string | null
+          transaction_kind: Database["public"]["Enums"]["transaction_kind"]
+          transfer_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -385,12 +418,15 @@ export type Database = {
           date: string
           deleted_at?: string | null
           description: string
+          financial_account_id: string
           fiscal_year_id?: number | null
           id?: string
           receipt_url?: string | null
           rejected_reason?: string | null
           remarks?: string | null
           subsidy_item_id?: string | null
+          transaction_kind: Database["public"]["Enums"]["transaction_kind"]
+          transfer_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -404,12 +440,15 @@ export type Database = {
           date?: string
           deleted_at?: string | null
           description?: string
+          financial_account_id?: string
           fiscal_year_id?: number | null
           id?: string
           receipt_url?: string | null
           rejected_reason?: string | null
           remarks?: string | null
           subsidy_item_id?: string | null
+          transaction_kind?: Database["public"]["Enums"]["transaction_kind"]
+          transfer_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -446,6 +485,13 @@ export type Database = {
             columns: ["subsidy_item_id"]
             isOneToOne: false
             referencedRelation: "subsidy_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_financial_account_id_fkey"
+            columns: ["financial_account_id"]
+            isOneToOne: false
+            referencedRelation: "financial_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -499,12 +545,16 @@ export type Database = {
           created_by_name: string | null
           date: string | null
           description: string | null
+          financial_account_id: string | null
+          financial_account_name: string | null
           fiscal_year_id: number | null
           id: string | null
           receipt_url: string | null
           rejected_reason: string | null
           remarks: string | null
           subsidy_item_id: string | null
+          transaction_kind: string | null
+          transfer_id: string | null
         }
         Relationships: [
           {
@@ -546,6 +596,19 @@ export type Database = {
       }
     }
     Functions: {
+      create_transfer: {
+        Args: {
+          p_date: string
+          p_amount: number
+          p_from_account_id: string
+          p_to_account_id: string
+          p_description: string
+          p_receipt_url?: string | null
+          p_remarks?: string | null
+          p_created_by?: string | null
+        }
+        Returns: string
+      }
       get_budget_usage: {
         Args: { p_fiscal_year_id: number }
         Returns: {
@@ -556,7 +619,9 @@ export type Database = {
         }[]
       }
       has_role: { Args: { role_name: string }; Returns: boolean }
+      is_accounting_or_admin: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
+      is_club_group: { Args: { p_accounting_group_id: string }; Returns: boolean }
     }
     Enums: {
       approval_status:
@@ -590,6 +655,7 @@ export type Database = {
         | "application_rejected"
         | "accounting_received"
         | "application_in_progress"
+      transaction_kind: "income" | "expense" | "transfer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -754,6 +820,7 @@ export const Constants = {
         "accounting_received",
         "application_in_progress",
       ],
+      transaction_kind: ["income", "expense", "transfer"],
     },
   },
 } as const

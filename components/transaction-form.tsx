@@ -87,6 +87,11 @@ type TransactionData = {
   approved_by?: string | null;
 };
 
+type FinancialAccount = {
+  id: string;
+  name: string;
+};
+
 type Props = {
   categories: Category[];
   initialData?: TransactionData;
@@ -96,6 +101,9 @@ type Props = {
   userRole?: "admin" | "accounting" | "general" | null;
   users?: { id: string; name: string }[];
   accountingUserId?: string;
+  financialAccounts?: FinancialAccount[];
+  /** Default financial_account_id to pre-select */
+  defaultFinancialAccountId?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -111,6 +119,8 @@ function TransactionFormInner({
   users,
   accountingUserId,
   onClose,
+  financialAccounts,
+  defaultFinancialAccountId,
 }: {
   categories: Category[];
   initialData?: TransactionData;
@@ -118,6 +128,8 @@ function TransactionFormInner({
   users?: { id: string; name: string }[];
   accountingUserId: string;
   onClose: () => void;
+  financialAccounts?: FinancialAccount[];
+  defaultFinancialAccountId?: string;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -133,6 +145,11 @@ function TransactionFormInner({
             amount: Math.abs(initialData.amount),
             type: (initialData.amount < 0 ? "expense" : "income") as FormValues["type"],
             accounting_group_id: initialData.accounting_group_id ?? "",
+            financial_account_id:
+              (initialData as Record<string, unknown>).financial_account_id as string ??
+              defaultFinancialAccountId ??
+              financialAccounts?.[0]?.id ??
+              "",
             description: initialData.description ?? "",
             remarks: initialData.remarks || "",
             created_by: initialData.created_by ?? undefined,
@@ -144,10 +161,14 @@ function TransactionFormInner({
             amount: 0,
             type: "expense",
             accounting_group_id: "",
+            financial_account_id:
+              defaultFinancialAccountId ??
+              financialAccounts?.[0]?.id ??
+              "",
             description: "",
             remarks: "",
           },
-    [initialData],
+    [initialData, financialAccounts, defaultFinancialAccountId],
   );
 
   const form = useForm<FormValues>({
@@ -340,10 +361,6 @@ function TransactionFormInner({
         </div>
 
         {/* 会計グループ */}
-        {/* 将来拡張(部全体会計): この直後に financial_account_id (財布選択) と
-            transaction_kind (収入/支出/資金移動) フィールドを追加する。
-            資金移動時は別フォーム (TransferForm) への切替も検討。
-            cf. docs/club-wide-ledger-spec.md */}
         <FormField
           control={form.control}
           name="accounting_group_id"
@@ -372,6 +389,37 @@ function TransactionFormInner({
             </FormItem>
           )}
         />
+
+        {/* 財布 (Financial Account) */}
+        {financialAccounts && financialAccounts.length > 0 && (
+          <FormField
+            control={form.control}
+            name="financial_account_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>財布</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="財布を選択してください" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {financialAccounts.map((fa) => (
+                      <SelectItem key={fa.id} value={fa.id}>
+                        {fa.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         {/* 概要 */}
         <FormField
@@ -450,6 +498,8 @@ export function TransactionForm({
   userRole,
   users,
   accountingUserId = ACCOUNTING_USER_ID_FALLBACK,
+  financialAccounts,
+  defaultFinancialAccountId,
 }: Props) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -491,6 +541,8 @@ export function TransactionForm({
             users={users}
             accountingUserId={accountingUserId}
             onClose={() => setOpen(false)}
+            financialAccounts={financialAccounts}
+            defaultFinancialAccountId={defaultFinancialAccountId}
           />
         )}
       </DialogContent>
