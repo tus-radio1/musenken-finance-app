@@ -15,10 +15,13 @@
 import { getAccountingUserIdSync } from "@/lib/system-config";
 import {
   fetchLedgerTransactionsSchema,
+  createTransferSchema,
   validateInput,
 } from "@/lib/validations";
 import { resolveAuthWithRoles } from "@/lib/auth/context";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
+import { revalidatePath } from "next/cache";
+import { canViewClubLedger } from "@/lib/auth/permissions";
 
 import {
   TransactionRow,
@@ -51,22 +54,26 @@ export async function fetchLedgerTransactions(params: {
 
   const requestedGroupId = params.accountingGroupId;
 
-  // general タイプのグループは全ユーザーに公開
-  let isGeneralGroup = false;
-  if (!isFullAccess) {
-    const { data: groupInfo } = await auth.supabase
-      .from("accounting_groups")
-      .select("type")
-      .eq("id", requestedGroupId)
-      .maybeSingle();
-    isGeneralGroup = groupInfo?.type === "general";
+  // Check group type for access control
+  const { data: groupInfo } = await auth.supabase
+    .from("accounting_groups")
+    .select("type")
+    .eq("id", requestedGroupId)
+    .maybeSingle();
+
+  const isClubGroup = groupInfo?.type === "club";
+  const isGeneralGroup = groupInfo?.type === "general";
+
+  // Club-wide group: only accounting/admin can view
+  if (isClubGroup && !canViewClubLedger(access)) {
+    return { error: "アクセス権限がありません" as const };
   }
 
   const belongsToRequested = access.roles.some(
     (r) => r.accountingGroupId && r.accountingGroupId === requestedGroupId,
   );
 
-  if (!isFullAccess && !isGeneralGroup && !belongsToRequested) {
+  if (!isClubGroup && !isFullAccess && !isGeneralGroup && !belongsToRequested) {
     return { error: "アクセス権限がありません" as const };
   }
 
@@ -74,7 +81,7 @@ export async function fetchLedgerTransactions(params: {
   let txQuery = auth.supabase
     .from("transactions")
     .select(
-      "id, date, amount, description, accounting_group_id, approval_status, receipt_url, created_by, approved_by, rejected_reason, remarks, subsidy_item_id",
+      "id, date, amount, description, accounting_group_id, approval_status, receipt_url, created_by, approved_by, rejected_reason, remarks, subsidy_item_id, financial_account_id, transaction_kind, transfer_id",
     )
     .eq("accounting_group_id", requestedGroupId)
     .order("date", { ascending: false });
@@ -115,6 +122,16 @@ export async function fetchLedgerTransactions(params: {
     return { error: "データの取得に失敗しました" as const };
   }
 
+  // Fetch financial account names for display
+  const { data: financialAccounts } = await auth.supabase
+    .from("financial_accounts")
+    .select("id, name")
+    .order("display_order");
+  const faNameMap: Record<string, string> = {};
+  for (const fa of financialAccounts || []) {
+    faNameMap[fa.id] = fa.name;
+  }
+
   const txRows: TransactionRow[] = (txResult.data || []).map((row) => ({
     id: row.id,
     date: row.date,
@@ -128,6 +145,10 @@ export async function fetchLedgerTransactions(params: {
     rejected_reason: row.rejected_reason,
     remarks: row.remarks,
     subsidy_item_id: row.subsidy_item_id,
+    financial_account_id: row.financial_account_id,
+    financial_account_name: faNameMap[row.financial_account_id] ?? null,
+    transaction_kind: row.transaction_kind,
+    transfer_id: row.transfer_id,
   }));
   const subsidyData = subsidyResult.data ?? [];
 
@@ -187,4 +208,78 @@ export async function fetchLedgerTransactions(params: {
   }));
 
   return { data: enriched, budgetAmount, carryoverAmount };
+}
+
+/**
+ * Fetch active financial accounts for form selectors.
+ */
+export async function fetchFinancialAccounts() {
+  const authResult = await resolveAuthWithRoles();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
+
+  const { data, error } = await auth.supabase
+    .from("financial_accounts")
+    .select("id, name, type, is_active, display_order")
+    .eq("is_active", true)
+    .order("display_order");
+
+  if (error) {
+    console.error("[fetchFinancialAccounts] Error:", error);
+    return { error: "財布データの取得に失敗しました" as const };
+  }
+
+  return { data: data || [] };
+}
+
+/**
+ * Create a fund transfer (資金移動) between two financial accounts.
+ * Atomically inserts 2 transaction rows via the create_transfer RPC.
+ * Only accounting staff and admins can create transfers.
+ */
+export async function createTransfer(params: {
+  date: string;
+  amount: number;
+  fromAccountId: string;
+  toAccountId: string;
+  description: string;
+  receiptUrl?: string | null;
+  remarks?: string | null;
+}) {
+  const validation = validateInput(createTransferSchema, params);
+  if (!validation.success) {
+    return { error: validation.error };
+  }
+
+  const authResult = await resolveAuthWithRoles();
+  if (!authResult.ok) return { error: authResult.error };
+  const auth = authResult.context;
+  const access = authResult.access;
+
+  // Only accounting/admin can create transfers
+  if (!access.isAdmin && !access.hasAccountingRole) {
+    return { error: "資金移動の作成には会計担当または管理者権限が必要です" };
+  }
+
+  const { data: transferId, error: rpcError } = await auth.supabase.rpc(
+    "create_transfer",
+    {
+      p_date: params.date,
+      p_amount: params.amount,
+      p_from_account_id: params.fromAccountId,
+      p_to_account_id: params.toAccountId,
+      p_description: params.description,
+      p_receipt_url: params.receiptUrl ?? null,
+      p_remarks: params.remarks ?? null,
+      p_created_by: auth.profileId,
+    },
+  );
+
+  if (rpcError) {
+    console.error("[createTransfer] RPC error:", rpcError);
+    return { error: "資金移動の作成に失敗しました" };
+  }
+
+  revalidatePath("/ledger");
+  return { success: true, transferId };
 }

@@ -16,15 +16,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchLedgerTransactions } from "@/app/(authenticated)/ledger/actions";
+import {
+  fetchLedgerTransactions,
+  fetchFinancialAccounts,
+} from "@/app/(authenticated)/ledger/actions";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import { createClient } from "@/utils/supabase/client";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
-import { calculateLedgerTotals } from "@/lib/ledger";
-import type { LedgerTransaction, LedgerInitialData } from "@/lib/ledger";
+import {
+  calculateLedgerTotals,
+  calculateClubLedgerSummary,
+} from "@/lib/ledger";
+import type {
+  LedgerTransaction,
+  LedgerInitialData,
+  FinancialAccountInfo,
+} from "@/lib/ledger";
 
 import {
   LedgerSummary,
+  ClubLedgerSummary,
   LedgerFilterBar,
   LedgerDesktopTable,
   LedgerMobileCards,
@@ -101,8 +112,19 @@ export default function LedgerView({
   // --- フィルタ state ---
   const [filterText, setFilterText] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterAccountId, setFilterAccountId] = useState<string>("all");
+  const [filterKind, setFilterKind] = useState<string>("all");
+
+  // --- Financial accounts ---
+  const [financialAccounts, setFinancialAccounts] = useState<
+    FinancialAccountInfo[]
+  >([]);
 
   const isAdminOrAccounting = isAccountingUser || isGlobalAdmin;
+
+  // Detect if selected group is 部全体 (club-wide) by checking team name
+  const selectedTeam = teams.find((t) => t.id === selectedGroup);
+  const isClubWideGroup = selectedTeam?.name === "部全体";
 
   const userRoleStr = isGlobalAdmin
     ? ROLE_TYPES.ADMIN
@@ -127,6 +149,16 @@ export default function LedgerView({
     },
     [sortKey, sortDir],
   );
+
+  // --- Financial accounts effect (load once) ---
+  useEffect(() => {
+    void (async () => {
+      const res = await fetchFinancialAccounts();
+      if (!("error" in res) && res.data) {
+        setFinancialAccounts(res.data.map((fa) => ({ id: fa.id, name: fa.name })));
+      }
+    })();
+  }, []);
 
   // --- グループ / 年度変更 + Realtime + ledger-refresh を統合した effect ---
   // fetchData を effect 内のローカル関数として定義し、
@@ -210,6 +242,12 @@ export default function LedgerView({
     [rows, budgetAmount, carryoverAmount],
   );
 
+  // --- Club-wide summary (only when club group is selected) ---
+  const clubSummary = useMemo(() => {
+    if (!isClubWideGroup) return null;
+    return calculateClubLedgerSummary(rows, rows, financialAccounts);
+  }, [rows, isClubWideGroup, financialAccounts]);
+
   // --- フィルタ + ソート ---
   const processedRows = useMemo(() => {
     let result = [...rows];
@@ -228,6 +266,16 @@ export default function LedgerView({
 
     if (filterStatus !== "all") {
       result = result.filter((r) => r.approval_status === filterStatus);
+    }
+
+    if (filterAccountId !== "all") {
+      result = result.filter(
+        (r) => r.financial_account_id === filterAccountId,
+      );
+    }
+
+    if (filterKind !== "all") {
+      result = result.filter((r) => r.transaction_kind === filterKind);
     }
 
     if (sortKey && sortDir) {
@@ -269,7 +317,7 @@ export default function LedgerView({
     }
 
     return result;
-  }, [rows, filterText, filterStatus, sortKey, sortDir]);
+  }, [rows, filterText, filterStatus, filterAccountId, filterKind, sortKey, sortDir]);
 
   // --- 描画 ---
   return (
@@ -308,11 +356,18 @@ export default function LedgerView({
       </div>
 
       {/* サマリーカード */}
-      <LedgerSummary
-        budgetAmount={budgetAmount}
-        carryoverAmount={carryoverAmount}
-        totals={totals}
-      />
+      {isClubWideGroup && clubSummary ? (
+        <ClubLedgerSummary
+          summary={clubSummary}
+          financialAccounts={financialAccounts}
+        />
+      ) : (
+        <LedgerSummary
+          budgetAmount={budgetAmount}
+          carryoverAmount={carryoverAmount}
+          totals={totals}
+        />
+      )}
 
       {/* 取引一覧 */}
       <Card>
@@ -328,6 +383,15 @@ export default function LedgerView({
             onFilterTextChange={setFilterText}
             filterStatus={filterStatus}
             onFilterStatusChange={setFilterStatus}
+            financialAccounts={
+              isClubWideGroup ? financialAccounts : undefined
+            }
+            filterAccountId={filterAccountId}
+            onFilterAccountChange={
+              isClubWideGroup ? setFilterAccountId : undefined
+            }
+            filterKind={filterKind}
+            onFilterKindChange={isClubWideGroup ? setFilterKind : undefined}
           />
 
           {/* モバイル表示 */}
@@ -341,6 +405,7 @@ export default function LedgerView({
             userRoleStr={userRoleStr}
             users={users}
             accountingUserId={accountingUserId}
+            showExtendedColumns={isClubWideGroup}
           />
 
           {/* デスクトップ表示 */}
@@ -357,6 +422,7 @@ export default function LedgerView({
             userRoleStr={userRoleStr}
             users={users}
             accountingUserId={accountingUserId}
+            showExtendedColumns={isClubWideGroup}
           />
         </CardContent>
       </Card>

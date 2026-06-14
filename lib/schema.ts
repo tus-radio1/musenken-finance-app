@@ -18,8 +18,10 @@ export const formSchema = z.object({
   accounting_group_id: z.string({
     required_error: "会計グループを選択してください",
   }),
+  financial_account_id: z.string({
+    required_error: "財布を選択してください",
+  }),
   description: z.string().min(1, "摘要を入力してください"),
-  // 将来拡張(部全体会計): financial_account_id と transaction_kind を optional フィールドとして追加予定
   // 領収書URL（任意）
   receipt_url: z.string().nullable().optional(),
   // 備考（任意）
@@ -41,6 +43,27 @@ export const formSchema = z.object({
     ])
     .optional(),
 });
+
+export const transferFormSchema = z
+  .object({
+    date: z.date({
+      required_error: "日付を選択してください",
+    }),
+    amount: z.coerce.number().min(1, "金額は1円以上で入力してください"),
+    from_account_id: z.string({
+      required_error: "移動元財布を選択してください",
+    }),
+    to_account_id: z.string({
+      required_error: "移動先財布を選択してください",
+    }),
+    description: z.string().min(1, "摘要を入力してください"),
+    receipt_url: z.string().nullable().optional(),
+    remarks: z.string().nullable().optional(),
+  })
+  .refine((data) => data.from_account_id !== data.to_account_id, {
+    message: "移動元と移動先は異なる財布を選択してください",
+    path: ["to_account_id"],
+  });
 
 export const subsidyFormSchema = z.object({
   category: z.enum(["activity", "league", "special"], {

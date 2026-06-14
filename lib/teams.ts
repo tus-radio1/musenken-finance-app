@@ -71,7 +71,8 @@ export async function getUserTeams(
 
   if (isFullAccess) {
     safeCategories.forEach((c) => {
-      myTeams.push({ id: c.id, name: c.name, type: ROLE_TYPES.GENERAL as "general" });
+      // Include club-type groups for full-access users (accounting/admin)
+      myTeams.push({ id: c.id, name: c.name, type: (c.type === "leader" ? "leader" : c.type === "club" ? "general" : "general") as "general" | "leader" });
     });
   } else {
     // 全ユーザーに general タイプのグループを表示

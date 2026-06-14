@@ -207,20 +207,38 @@ export async function createTransaction(
       ? -Math.abs(parsedValues.amount)
       : Math.abs(parsedValues.amount);
 
-  // 将来拡張(部全体会計): insertData に financial_account_id, transaction_kind を追加。
-  // transaction_kind = "transfer" の場合は同一 transfer_id で2行を同時 insert する。
+  // Determine transaction_kind from type (income/expense)
+  const transactionKind = parsedValues.type === "expense" ? "expense" : "income";
+
+  // Check if the accounting group is club-wide (type=club)
+  // If so, verify the user has accounting/admin permission
+  const { data: groupInfo } = await auth.supabase
+    .from("accounting_groups")
+    .select("type")
+    .eq("id", parsedValues.accounting_group_id)
+    .maybeSingle();
+
+  if (groupInfo?.type === "club") {
+    const access = authResult.access;
+    if (!access.isAdmin && !access.hasAccountingRole) {
+      return { error: "部全体取引の作成には会計担当または管理者権限が必要です" };
+    }
+  }
+
   const insertData = {
     id: recordId,
     date: formatDateForDatabase(parsedValues.date),
     amount: finalAmount,
     accounting_group_id: parsedValues.accounting_group_id,
+    financial_account_id: parsedValues.financial_account_id,
+    transaction_kind: transactionKind,
     description: parsedValues.description,
     created_by: auth.profileId,
     fiscal_year_id: fy?.year ?? null,
     receipt_url: parsedValues.receipt_url ?? null,
     remarks: parsedValues.remarks ?? null,
-    // 全取引を pending で開始し、leader/admin の承認を経て approved に遷移する。
-    // 管理者でも初回は pending — 不正防止のため自己承認を禁止しているため。
+    // All transactions start as pending; leader/admin approval required.
+    // Even admins start as pending to prevent self-approval.
     approval_status: "pending",
   };
 
@@ -415,6 +433,8 @@ export async function updateTransaction(
     fiscal_year_id: fy?.year ?? null,
     date: formatDateForDatabase(values.date),
     accounting_group_id: values.accounting_group_id,
+    financial_account_id: values.financial_account_id,
+    transaction_kind: effectiveType === "expense" ? "expense" : "income",
   };
 
   if (values.receipt_url !== undefined) {
