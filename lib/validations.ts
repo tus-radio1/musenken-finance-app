@@ -196,6 +196,30 @@ export const createAccountingGroupSchema = z.object({
   type: z.string().min(1, "Group type is required").max(100),
 });
 
+/** createTransfer */
+export const createTransferSchema = z
+  .object({
+    date: z.string().min(1, "Date is required"),
+    amount: z.number().int().min(1, "Amount must be positive"),
+    fromAccountId: uuidSchema,
+    toAccountId: uuidSchema,
+    description: z.string().min(1, "Description is required"),
+    receiptUrl: z.string().nullable().optional(),
+    remarks: z.string().nullable().optional(),
+  })
+  .refine((data) => data.fromAccountId !== data.toAccountId, {
+    message: "Source and destination accounts must be different",
+    path: ["toAccountId"],
+  });
+
+/** fetchLedgerTransactions (extended with financial account and kind filters) */
+export const fetchClubLedgerTransactionsSchema = z.object({
+  accountingGroupId: uuidSchema,
+  fyYear: z.number().int().optional(),
+  financialAccountId: uuidSchema.optional(),
+  transactionKind: z.enum(["income", "expense", "transfer"]).optional(),
+});
+
 // --- Utility: Safe validation wrapper ---
 
 export type ValidationResult<T> =

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 出納帳のフィルタバー（テキスト検索・ステータスフィルタ・件数表示）。
+ * 出納帳のフィルタバー（テキスト検索・ステータスフィルタ・財布フィルタ・種別フィルタ・件数表示）。
  */
 
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { FinancialAccountInfo } from "./types";
 
 type Props = {
   loading: boolean;
@@ -21,6 +22,12 @@ type Props = {
   onFilterTextChange: (text: string) => void;
   filterStatus: string;
   onFilterStatusChange: (status: string) => void;
+  /** Financial accounts for wallet filter. When empty/undefined, the filter is hidden. */
+  financialAccounts?: FinancialAccountInfo[];
+  filterAccountId?: string;
+  onFilterAccountChange?: (accountId: string) => void;
+  filterKind?: string;
+  onFilterKindChange?: (kind: string) => void;
 };
 
 export function LedgerFilterBar({
@@ -31,7 +38,16 @@ export function LedgerFilterBar({
   onFilterTextChange,
   filterStatus,
   onFilterStatusChange,
+  financialAccounts,
+  filterAccountId,
+  onFilterAccountChange,
+  filterKind,
+  onFilterKindChange,
 }: Props) {
+  const showAccountFilter =
+    financialAccounts && financialAccounts.length > 0 && onFilterAccountChange;
+  const showKindFilter = !!onFilterKindChange;
+
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
       <div className="text-sm text-muted-foreground">
@@ -39,18 +55,47 @@ export function LedgerFilterBar({
           ? "読み込み中..."
           : `${filteredCount}件${filteredCount !== totalCount ? ` / ${totalCount}件中` : ""}`}
       </div>
-      <div className="flex gap-2 w-full sm:w-auto">
+      <div className="flex gap-2 w-full sm:w-auto flex-wrap">
         <Input
           placeholder="検索..."
           value={filterText}
           onChange={(e) => onFilterTextChange(e.target.value)}
           className="h-8 w-full sm:w-48"
         />
-        {/* 将来拡張(部全体会計): ステータスフィルタの前に財布フィルタ (金庫/銀行口座/全財布)
-            と種別フィルタ (収入/支出/資金移動) の Select を追加する。
-            Props に onFilterAccountChange / onFilterKindChange を追加し、
-            LedgerView 側で useMemo のフィルタ条件に組み込む。
-            cf. docs/club-wide-ledger-spec.md */}
+        {showAccountFilter && (
+          <Select
+            value={filterAccountId || "all"}
+            onValueChange={onFilterAccountChange}
+          >
+            <SelectTrigger className="h-8 w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全財布</SelectItem>
+              {financialAccounts.map((fa) => (
+                <SelectItem key={fa.id} value={fa.id}>
+                  {fa.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {showKindFilter && (
+          <Select
+            value={filterKind || "all"}
+            onValueChange={onFilterKindChange}
+          >
+            <SelectTrigger className="h-8 w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全種別</SelectItem>
+              <SelectItem value="income">収入</SelectItem>
+              <SelectItem value="expense">支出</SelectItem>
+              <SelectItem value="transfer">資金移動</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <Select value={filterStatus} onValueChange={onFilterStatusChange}>
           <SelectTrigger className="h-8 w-32">
             <SelectValue />

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { LedgerTransaction } from "./types";
+import { TRANSACTION_KIND_LABELS } from "./types";
 
 type Props = {
   rows: LedgerTransaction[];
@@ -35,6 +36,7 @@ type Props = {
   userRoleStr: "admin" | "accounting" | "general";
   users?: { id: string; name: string }[];
   accountingUserId?: string;
+  showExtendedColumns?: boolean;
 };
 
 export function LedgerMobileCards({
@@ -47,6 +49,7 @@ export function LedgerMobileCards({
   userRoleStr,
   users,
   accountingUserId,
+  showExtendedColumns = false,
 }: Props) {
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
 
@@ -148,6 +151,29 @@ export function LedgerMobileCards({
                 </div>
 
                 <CollapsibleContent className="space-y-3 pt-1">
+                  {showExtendedColumns && (
+                    <div className="flex gap-4 text-sm">
+                      {r.financial_account_name && (
+                        <div>
+                          <span className="text-muted-foreground font-medium">
+                            財布:{" "}
+                          </span>
+                          <span>{r.financial_account_name}</span>
+                        </div>
+                      )}
+                      {r.transaction_kind && (
+                        <div>
+                          <span className="text-muted-foreground font-medium">
+                            種別:{" "}
+                          </span>
+                          <span>
+                            {TRANSACTION_KIND_LABELS[r.transaction_kind] ||
+                              r.transaction_kind}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {r.remarks && (
                     <div className="text-sm">
                       <span className="text-muted-foreground font-medium">

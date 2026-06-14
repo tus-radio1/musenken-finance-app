@@ -33,6 +33,10 @@ export type TransactionRow = {
   is_subsidy?: boolean;
   subsidy_id?: string;
   subsidy_item_id?: string | null;
+  financial_account_id?: string | null;
+  financial_account_name?: string | null;
+  transaction_kind?: string | null;
+  transfer_id?: string | null;
 };
 
 /**
@@ -56,6 +60,10 @@ export type LedgerTransaction = {
   accounting_group_id?: string | null;
   receipt_url?: string | null;
   approved_by?: string | null;
+  financial_account_id?: string | null;
+  financial_account_name?: string | null;
+  transaction_kind?: string | null;
+  transfer_id?: string | null;
 };
 
 /**
@@ -192,7 +200,7 @@ export type AggregateOptions = {
   financialAccountId?: string;
 };
 
-type AmountLike = { amount: number; transaction_kind?: string; financial_account_id?: string };
+type AmountLike = { amount: number; transaction_kind?: string | null; financial_account_id?: string | null; approval_status?: string | null };
 
 /**
  * 集計対象の行を options に基づいてフィルタリングする内部ヘルパー。
@@ -258,4 +266,73 @@ export function calculateLedgerTotals(
     income -
     expense;
   return { income, expense, budgetRemaining };
+}
+
+// ---------------------------------------------------------------------------
+// Club-wide ledger summary helpers
+// ---------------------------------------------------------------------------
+
+export type FinancialAccountInfo = {
+  id: string;
+  name: string;
+};
+
+export type ClubLedgerSummary = {
+  income: number;
+  expense: number;
+  balance: number;
+  transferTotal: number;
+  walletBalances: Record<string, number>;
+};
+
+/**
+ * Calculate the club-wide ledger summary.
+ *
+ * - income/expense: only approved, non-transfer rows in the current fiscal year
+ * - walletBalances: cumulative across all years up to the selected fiscal year
+ *   (caller must pass allRows including historical data for balance calculation)
+ * - transferTotal: sum of absolute positive amounts of approved transfer rows
+ *   in the current fiscal year
+ */
+export function calculateClubLedgerSummary(
+  currentYearRows: readonly AmountLike[],
+  allRowsForBalance: readonly AmountLike[],
+  financialAccounts: readonly FinancialAccountInfo[],
+): ClubLedgerSummary {
+  // Income/expense: exclude transfers, only approved rows
+  const nonTransferApproved = currentYearRows.filter(
+    (r) =>
+      r.transaction_kind !== "transfer" &&
+      r.approval_status !== "rejected" &&
+      r.approval_status !== "pending",
+  );
+  const income = calculateIncomeTotal(nonTransferApproved);
+  const expense = calculateExpenseTotal(nonTransferApproved);
+  const balance = income - expense;
+
+  // Transfer total for current year: sum of positive approved transfer amounts
+  const transferTotal = currentYearRows
+    .filter(
+      (r) =>
+        r.transaction_kind === "transfer" &&
+        r.amount > 0 &&
+        r.approval_status !== "rejected" &&
+        r.approval_status !== "pending",
+    )
+    .reduce((sum, r) => sum + r.amount, 0);
+
+  // Wallet balances: cumulative across all rows (all years), approved only
+  const walletBalances: Record<string, number> = {};
+  for (const fa of financialAccounts) {
+    walletBalances[fa.id] = 0;
+  }
+  for (const r of allRowsForBalance) {
+    if (r.approval_status === "rejected" || r.approval_status === "pending") continue;
+    const faId = r.financial_account_id;
+    if (faId && faId in walletBalances) {
+      walletBalances[faId] += Number(r.amount) || 0;
+    }
+  }
+
+  return { income, expense, balance, transferTotal, walletBalances };
 }
