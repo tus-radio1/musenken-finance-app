@@ -202,6 +202,30 @@ export async function createTransaction(
     return { error: "会計年度の取得に失敗しました" };
   }
 
+  // Resolve financial account. The expense application screen (経費申請) has no
+  // wallet selector, so financial_account_id arrives empty. Fall back to the
+  // default cash account (金庫), matching the backfill convention.
+  let financialAccountId = parsedValues.financial_account_id;
+  if (!financialAccountId) {
+    const { data: defaultAccount, error: accountError } = await auth.supabase
+      .from("financial_accounts")
+      .select("id")
+      .eq("type", "cash")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (accountError || !defaultAccount) {
+      console.error(
+        "[createTransaction] Default financial account fetch error:",
+        accountError,
+      );
+      return { error: "財布の取得に失敗しました" };
+    }
+    financialAccountId = defaultAccount.id;
+  }
+
   const finalAmount =
     parsedValues.type === "expense"
       ? -Math.abs(parsedValues.amount)
@@ -230,7 +254,7 @@ export async function createTransaction(
     date: formatDateForDatabase(parsedValues.date),
     amount: finalAmount,
     accounting_group_id: parsedValues.accounting_group_id,
-    financial_account_id: parsedValues.financial_account_id,
+    financial_account_id: financialAccountId,
     transaction_kind: transactionKind,
     description: parsedValues.description,
     created_by: auth.profileId,
