@@ -76,6 +76,12 @@ export async function addMember(raw: {
   );
   if (createErr || !created.user) {
     console.error(createErr);
+    // Duplicate email = the derived email ({student_number}@...) is already
+    // registered. Surface a specific message so the operator can correct the
+    // student number instead of seeing a generic failure.
+    if (createErr?.code === "email_exists") {
+      return { error: "この学籍番号はすでに登録されています" } as const;
+    }
     return { error: "ユーザー作成に失敗しました" } as const;
   }
 
