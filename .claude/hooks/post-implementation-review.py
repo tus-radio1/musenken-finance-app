@@ -59,7 +59,7 @@ def count_lines(content: str) -> int:
     """Count meaningful lines in content."""
     lines = content.split("\n")
     # Count non-empty, non-comment lines
-    meaningful = [l for l in lines if l.strip() and not l.strip().startswith("#")]
+    meaningful = [ln for ln in lines if ln.strip() and not ln.strip().startswith("#")]
     return len(meaningful)
 
 
@@ -120,9 +120,11 @@ def main():
                     "hookEventName": "PostToolUse",
                     "additionalContext": (
                         f"[Code Review Suggestion] {reason} in this session. "
-                        "Consider having Codex review the implementation. "
-                        "**Recommended**: Use Task tool with subagent_type='general-purpose' "
-                        "to consult Codex with git diff and preserve main context."
+                        "Consider a review of the implementation: default lane is a "
+                        "Claude Sonnet subagent (Opus for high-risk: security, "
+                        "architecture, data model). For high-risk diffs, additionally "
+                        "consider `/codex:review` as a cross-tool lane "
+                        "(lanes: .claude/rules/model-routing.md)."
                     )
                 }
             }

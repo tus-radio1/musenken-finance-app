@@ -36,6 +36,7 @@ type LedgerTransaction = {
   rejected_reason?: string | null;
   remarks?: string | null;
   accounting_group_id?: string | null;
+  financial_account_id?: string | null;
   receipt_url?: string | null;
   approved_by?: string | null;
   is_subsidy?: boolean;

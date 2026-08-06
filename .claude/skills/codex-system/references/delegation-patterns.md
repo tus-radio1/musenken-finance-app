@@ -39,10 +39,9 @@ Task received
 
 ```bash
 codex exec \
-  --model gpt-5-codex \
+  --model "${CODEX_MODEL:-gpt-5.6-sol}" \
   --config model_reasoning_effort="high" \
   --sandbox read-only \
-  --full-auto \
   "Review the architecture of src/auth/ module. Focus on:
    1. Single Responsibility adherence
    2. Dependency direction (should flow inward)
@@ -57,10 +56,9 @@ codex exec \
 
 ```bash
 codex exec \
-  --model gpt-5-codex \
+  --model "${CODEX_MODEL:-gpt-5.6-sol}" \
   --config model_reasoning_effort="high" \
   --sandbox read-only \
-  --full-auto \
   "This bug has resisted 2 fix attempts:
 
    Symptom: Race condition in user session handling
@@ -79,10 +77,9 @@ codex exec \
 
 ```bash
 codex exec \
-  --model gpt-5-codex \
+  --model "${CODEX_MODEL:-gpt-5.6-sol}" \
   --config model_reasoning_effort="xhigh" \
   --sandbox read-only \
-  --full-auto \
   "Optimize the algorithm in src/data/aggregator.py:
 
    Current: O(n²) nested loops for data aggregation
@@ -103,10 +100,9 @@ codex exec \
 
 ```bash
 codex exec \
-  --model gpt-5-codex \
+  --model "${CODEX_MODEL:-gpt-5.6-sol}" \
   --config model_reasoning_effort="xhigh" \
   --sandbox read-only \
-  --full-auto \
   "Security audit of src/api/auth.py:
 
    Check for:

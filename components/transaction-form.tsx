@@ -80,6 +80,7 @@ type TransactionData = {
   amount: number;
   description: string | null;
   accounting_group_id?: string | null;
+  financial_account_id?: string | null;
   approval_status?: string | null;
   receipt_url?: string | null;
   remarks?: string | null;
@@ -146,7 +147,7 @@ function TransactionFormInner({
             type: (initialData.amount < 0 ? "expense" : "income") as FormValues["type"],
             accounting_group_id: initialData.accounting_group_id ?? "",
             financial_account_id:
-              (initialData as Record<string, unknown>).financial_account_id as string ??
+              initialData.financial_account_id ??
               defaultFinancialAccountId ??
               financialAccounts?.[0]?.id ??
               "",

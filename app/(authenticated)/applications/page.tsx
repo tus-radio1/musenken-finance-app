@@ -38,7 +38,7 @@ export default async function ApplicationsPage({
   const { data: transactions, count } = await supabase
     .from("transactions")
     .select(
-      "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name), receipt_url, remarks, created_by",
+      "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name), financial_account_id, receipt_url, remarks, created_by",
       { count: "exact" },
     )
     .eq("created_by", user.id)
@@ -63,6 +63,7 @@ export default async function ApplicationsPage({
     description: tx.description,
     approval_status: tx.approval_status,
     accounting_group_id: tx.accounting_group_id || undefined,
+    financial_account_id: tx.financial_account_id,
     accounting_group_name: tx.accounting_groups?.name || "-",
     receipt_url: tx.receipt_url || null,
     receipt_public_url: tx.receipt_url?.startsWith("http")

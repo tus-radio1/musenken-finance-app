@@ -37,8 +37,7 @@ You are the **execution arm** of the main orchestrator. Your responsibilities:
 - Synthesize and structure research findings
 - Create documentation in `.claude/docs/`
 
-> **Multimodal file processing (PDF/video/audio/image) is handled by Gemini**: Use gemini-explore subagent for those.
-> This agent handles everything else: research, analysis, implementation, and Codex delegation.
+> This agent handles research, analysis, implementation, Codex delegation, and multimodal content (PDF/images) using Claude's built-in multimodal capabilities.
 
 ## Calling Codex CLI
 
@@ -46,10 +45,10 @@ When planning, design decisions, debugging, or complex implementation is needed:
 
 ```bash
 # Analysis (read-only)
-codex exec --model gpt-5.4 --sandbox read-only --full-auto "{question}" 2>/dev/null
+codex exec --model "${CODEX_MODEL:-gpt-5.6-sol}" -c model_reasoning_effort="${CODEX_PLAN_EFFORT:-high}" --sandbox read-only "{question}" 2>/dev/null
 
 # Implementation work (can write files)
-codex exec --model gpt-5.4 --sandbox workspace-write --full-auto "{task}" 2>/dev/null
+codex exec --model "${CODEX_MODEL:-gpt-5.6-sol}" -c model_reasoning_effort="${CODEX_IMPL_EFFORT:-medium}" --sandbox workspace-write "{task}" 2>/dev/null
 ```
 
 **When to call Codex:**
@@ -59,6 +58,17 @@ codex exec --model gpt-5.4 --sandbox workspace-write --full-auto "{task}" 2>/dev
 - Complex code: "Implement this algorithm"
 - Trade-offs: "Which approach is better?"
 - Code review: "Review this implementation"
+
+## Calling Antigravity CLI (Cross-Model Second Opinion)
+
+When the orchestrator asks for an independent second opinion on a design/plan
+(policy: `.claude/rules/antigravity-delegation.md`):
+
+```bash
+agy --model "${ANTIGRAVITY_MODEL:-gemini-3.1-pro}" --sandbox -p "{decision + proposal + constraints}" 2>/dev/null
+```
+
+Antigravity verifies — it does not author. Return verdict + top risks concisely.
 
 ## Research & Investigation
 

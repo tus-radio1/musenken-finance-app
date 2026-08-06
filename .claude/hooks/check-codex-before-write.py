@@ -7,9 +7,7 @@ for design decisions, complex implementations, or architectural changes.
 """
 
 import json
-import os
 import sys
-from pathlib import Path
 
 # Input validation constants
 MAX_PATH_LENGTH = 4096
@@ -70,8 +68,6 @@ SIMPLE_EDIT_PATTERNS = [
 
 def should_suggest_codex(file_path: str, content: str | None = None) -> tuple[bool, str]:
     """Determine if Codex consultation should be suggested."""
-    path = Path(file_path)
-    filename = path.name.lower()
     filepath_lower = file_path.lower()
 
     # Skip simple edits
@@ -123,11 +119,16 @@ def main():
                     "hookEventName": "PreToolUse",
                     "additionalContext": (
                         f"[Codex Consultation Reminder] {reason}. "
-                        "Consider consulting Codex before making this change. "
+                        "If this change is high-stakes design (architecture, data model, "
+                        "security-sensitive), consider a Codex design consultation before "
+                        "writing — Claude owns the final decision "
+                        "(lanes: .claude/rules/model-routing.md). "
                         "**Recommended**: Use Task tool with subagent_type='general-purpose' "
                         "to preserve main context. "
                         "(Direct call OK for quick questions: "
-                        "`codex exec --model gpt-5.4 --sandbox read-only --full-auto '...'`)"
+                        "`codex exec --model \"${CODEX_MODEL:-gpt-5.6-sol}\" "
+                        "-c model_reasoning_effort=\"${CODEX_PLAN_EFFORT:-high}\" "
+                        "--sandbox read-only '...'`)"
                     )
                 }
             }

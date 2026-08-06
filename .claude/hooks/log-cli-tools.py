@@ -1,47 +1,45 @@
 #!/usr/bin/env python3
 """
-PostToolUse hook: Log Codex/Gemini CLI input/output to JSONL file.
+PostToolUse hook: Log external CLI (Codex, Antigravity) input/output to JSONL file.
 
-Triggers after Bash tool calls containing 'codex' or 'gemini' commands.
+Triggers after Bash tool calls containing 'codex' or 'agy' commands.
 Logs are stored in .claude/logs/cli-tools.jsonl
 
-All agents (Claude Code, subagents, Codex, Gemini) can read this log.
+All agents (Claude Code, subagents, Codex) can read this log.
 """
 
 import json
-import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_FILE = LOG_DIR / "cli-tools.jsonl"
 
 
-def extract_codex_prompt(command: str) -> str | None:
-    """Extract prompt from codex exec command."""
-    # Pattern: codex exec ... "prompt" or codex exec ... 'prompt'
-    patterns = [
-        r'codex\s+exec\s+.*?--full-auto\s+"([^"]+)"',
-        r"codex\s+exec\s+.*?--full-auto\s+'([^']+)'",
-        r'codex\s+exec\s+.*?"([^"]+)"\s*2>/dev/null',
-        r"codex\s+exec\s+.*?'([^']+)'\s*2>/dev/null",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, command, re.DOTALL)
-        if match:
-            return match.group(1).strip()
+def detect_cli_tool(command: str) -> str | None:
+    """Detect which external CLI this command invokes."""
+    if re.search(r"\bcodex\s+exec\b", command):
+        return "codex"
+    if re.search(r"\bagy\s+", command):
+        return "antigravity"
     return None
 
 
-def extract_gemini_prompt(command: str) -> str | None:
-    """Extract prompt from gemini command."""
-    # Pattern: gemini -p "prompt" or gemini -p 'prompt'
-    patterns = [
-        r'gemini\s+-p\s+"([^"]+)"',
-        r"gemini\s+-p\s+'([^']+)'",
-    ]
+def extract_prompt(command: str, tool: str) -> str | None:
+    """Extract prompt from a codex exec / agy print command."""
+    if tool == "codex":
+        patterns = [
+            r'codex\s+exec\s+.*?"([^"]+)"\s*2>/dev/null',
+            r"codex\s+exec\s+.*?'([^']+)'\s*2>/dev/null",
+        ]
+    else:
+        # agy ... -p "prompt" / --print "prompt" / --prompt "prompt"
+        patterns = [
+            r'agy\s+.*?(?:-p|--print|--prompt)\s+"([^"]+)"',
+            r"agy\s+.*?(?:-p|--print|--prompt)\s+'([^']+)'",
+        ]
     for pattern in patterns:
         match = re.search(pattern, command, re.DOTALL)
         if match:
@@ -88,22 +86,14 @@ def main() -> None:
     command = tool_input.get("command", "")
     output = tool_response.get("stdout", "") or tool_response.get("content", "")
 
-    # Check if this is a codex or gemini command
-    is_codex = "codex" in command.lower()
-    is_gemini = "gemini" in command.lower() and "codex" not in command.lower()
-
-    if not (is_codex or is_gemini):
+    # Check if this is an external CLI command (codex / agy)
+    tool = detect_cli_tool(command)
+    if tool is None:
         return
 
-    # Extract prompt based on tool type
-    if is_codex:
-        tool = "codex"
-        prompt = extract_codex_prompt(command)
-        model = extract_model(command) or "gpt-5.4"
-    else:
-        tool = "gemini"
-        prompt = extract_gemini_prompt(command)
-        model = "gemini-3-pro-preview"
+    prompt = extract_prompt(command, tool)
+    default_model = "gpt-5.6-sol" if tool == "codex" else "gemini-3.1-pro"
+    model = extract_model(command) or default_model
 
     if not prompt:
         # Could not extract prompt, skip logging
@@ -115,7 +105,7 @@ def main() -> None:
 
     # Create log entry
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "tool": tool,
         "model": model,
         "prompt": truncate_text(prompt),
@@ -131,7 +121,7 @@ def main() -> None:
         json.dumps(
             {
                 "hookSpecificOutput": {
-                    "additionalContext": f"[LOG] {tool.capitalize()} call logged to .claude/logs/cli-tools.jsonl",
+                    "additionalContext": f"[LOG] {tool} call logged to .claude/logs/cli-tools.jsonl",
                 }
             }
         )
