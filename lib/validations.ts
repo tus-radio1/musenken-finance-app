@@ -30,6 +30,13 @@ export const deleteTransactionSchema = z.object({
   id: uuidSchema,
 });
 
+/** UUID references required when updating a transaction */
+export const updateTransactionReferencesSchema = z.object({
+  id: uuidSchema,
+  accountingGroupId: uuidSchema,
+  financialAccountId: uuidSchema,
+});
+
 /** setGlobalAdmin */
 export const setGlobalAdminSchema = z.object({
   userId: uuidSchema,

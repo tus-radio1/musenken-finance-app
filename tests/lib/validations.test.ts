@@ -4,6 +4,7 @@ import {
   studentNumberSchema,
   updateTransactionStatusSchema,
   deleteTransactionSchema,
+  updateTransactionReferencesSchema,
   updateUserPasswordSchema,
   upsertBudgetSchema,
   addMemberSchema,
@@ -28,6 +29,34 @@ describe("uuidSchema", () => {
 
   it("rejects a non-UUID string", () => {
     const result = uuidSchema.safeParse("not-a-uuid");
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateTransactionReferencesSchema
+// ---------------------------------------------------------------------------
+
+describe("updateTransactionReferencesSchema", () => {
+  const validUUID = "550e8400-e29b-41d4-a716-446655440000";
+
+  it("accepts valid transaction reference UUIDs", () => {
+    const result = updateTransactionReferencesSchema.safeParse({
+      id: validUUID,
+      accountingGroupId: validUUID,
+      financialAccountId: validUUID,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty financial account ID", () => {
+    const result = updateTransactionReferencesSchema.safeParse({
+      id: validUUID,
+      accountingGroupId: validUUID,
+      financialAccountId: "",
+    });
+
     expect(result.success).toBe(false);
   });
 });

@@ -30,6 +30,7 @@ import {
 } from "@/lib/system-config";
 import {
   updateTransactionStatusSchema,
+  updateTransactionReferencesSchema,
   deleteTransactionSchema,
 } from "@/lib/validations";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
@@ -377,9 +378,13 @@ export async function updateTransaction(
   id: string,
   values: z.infer<typeof formSchema> & { receipt_url?: string | null },
 ) {
-  // Validate id
-  const idValidation = z.string().uuid().safeParse(id);
-  if (!idValidation.success) {
+  // UUID columns must be validated before PostgREST casts the JSON payload.
+  const referencesValidation = updateTransactionReferencesSchema.safeParse({
+    id,
+    accountingGroupId: values.accounting_group_id,
+    financialAccountId: values.financial_account_id,
+  });
+  if (!referencesValidation.success) {
     return { error: "入力データが不正です" };
   }
 

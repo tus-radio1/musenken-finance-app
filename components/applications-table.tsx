@@ -43,6 +43,7 @@ type Transaction = {
   description: string;
   approval_status: string;
   accounting_group_id?: string;
+  financial_account_id: string;
   accounting_group_name: string;
   receipt_url: string | null;
   receipt_public_url: string | null;
