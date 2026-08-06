@@ -3,37 +3,19 @@
 UserPromptSubmit hook: Route to appropriate agent based on user intent.
 
 Routing rules:
-- Multimodal files (PDF/video/audio/image) → Gemini CLI (HIGHEST PRIORITY)
 - Codebase understanding / large analysis → Opus subagent (1M context)
-- External research / survey → Opus subagent
-- Planning, design, complex code → Codex CLI
+- External research / survey → Opus subagent (Antigravity may assist)
+- Complex implementation / debugging → Codex CLI; planning is Claude-led
+  (Codex consulted for high-stakes design; see .claude/rules/model-routing.md)
+- Code review → Sonnet subagent default (Opus high-risk); /codex:review optional
+
+Multimodal files (PDF/video/audio/image) are handled directly by Claude (Opus 4.7+).
 """
 
 import json
-import re
 import sys
 
-# Multimodal file extensions that MUST be processed by Gemini
-MULTIMODAL_EXTENSIONS = [
-    # PDF
-    ".pdf",
-    # Video
-    ".mp4", ".mov", ".avi", ".mkv", ".webm",
-    # Audio
-    ".mp3", ".wav", ".m4a", ".flac", ".ogg",
-    # Image (for detailed analysis — screenshots can be read by Claude directly)
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg",
-]
-
-# Pattern to detect file paths with multimodal extensions
-MULTIMODAL_PATTERN = re.compile(
-    r'[\w./\\~-]+\.(?:' +
-    '|'.join(ext.lstrip('.') for ext in MULTIMODAL_EXTENSIONS) +
-    r')(?:\s|$|["\']|,)',
-    re.IGNORECASE,
-)
-
-# Triggers for Codex (planning, design, debugging, complex implementation)
+# Triggers for Codex (design consultation, debugging, complex implementation)
 CODEX_TRIGGERS = {
     "ja": [
         "設計", "どう設計", "アーキテクチャ",
@@ -42,7 +24,6 @@ CODEX_TRIGGERS = {
         "どちらがいい", "比較して", "トレードオフ",
         "実装方法", "どう実装",
         "リファクタリング", "リファクタ",
-        "レビュー",
         "考えて", "分析して", "深く",
         "最適化",
     ],
@@ -53,7 +34,6 @@ CODEX_TRIGGERS = {
         "compare", "trade-off", "tradeoff", "which is better",
         "how to implement", "implementation", "complex",
         "refactor", "simplify",
-        "review", "check this",
         "think", "analyze", "deeply",
         "optimize", "performance",
     ],
@@ -77,40 +57,69 @@ OPUS_RESEARCH_TRIGGERS = {
     ],
 }
 
+# Triggers for Antigravity (cross-model second opinion, Gemini 3.x)
+ANTIGRAVITY_TRIGGERS = {
+    "ja": [
+        "セカンドオピニオン", "別のモデル", "他のモデル",
+        "クロスチェック", "geminiに聞", "独立検証", "独立した検証",
+    ],
+    "en": [
+        "second opinion", "cross-check", "cross check",
+        "another model", "different model", "ask gemini", "ask antigravity",
+        "independent verification", "independent review", "final review gate",
+    ],
+}
 
-def detect_multimodal_files(prompt: str) -> str | None:
-    """Detect multimodal file references in the prompt. Returns matched file path or None."""
-    match = MULTIMODAL_PATTERN.search(prompt)
-    if match:
-        return match.group(0).strip().rstrip('"\',')
-    return None
+# Triggers for review + Codex Plugin commands (review, rescue, delegation)
+CODEX_PLUGIN_TRIGGERS = {
+    "ja": [
+        "レビュー", "レビューして", "コードレビュー", "レビューお願い",
+        "チェックして", "出荷前",
+        "codexに任せ", "codexに渡", "codexに委",
+        "バグ調査", "調査して",
+    ],
+    "en": [
+        "review", "review this", "code review", "review my",
+        "before shipping", "pre-ship",
+        "delegate to codex", "hand to codex", "ask codex to",
+        "codex rescue", "codex review",
+    ],
+}
 
 
-def detect_agent(prompt: str) -> tuple[str | None, str, bool]:
+def detect_agent(prompt: str) -> tuple[str | None, str]:
     """Detect which agent should handle this prompt.
 
-    Returns (agent, trigger, is_multimodal).
+    Returns (agent, trigger).
     """
     prompt_lower = prompt.lower()
 
-    # HIGHEST PRIORITY: Multimodal file detection → Gemini
-    multimodal_file = detect_multimodal_files(prompt)
-    if multimodal_file:
-        return "gemini-multimodal", multimodal_file, True
+    # Antigravity triggers first (explicit second-opinion requests are specific;
+    # generic words like "review" would otherwise route them to Codex)
+    for triggers in ANTIGRAVITY_TRIGGERS.values():
+        for trigger in triggers:
+            if trigger in prompt_lower:
+                return "antigravity", trigger
 
     # Codex triggers (planning, design, debug, complex code)
     for triggers in CODEX_TRIGGERS.values():
         for trigger in triggers:
             if trigger in prompt_lower:
-                return "codex", trigger, False
+                return "codex", trigger
+
+    # Codex Plugin triggers (review, rescue, delegation)
+    for triggers in CODEX_PLUGIN_TRIGGERS.values():
+        for trigger in triggers:
+            if trigger in prompt_lower:
+                return "codex-plugin", trigger
 
     # Opus research triggers (codebase analysis + external research)
     for triggers in OPUS_RESEARCH_TRIGGERS.values():
         for trigger in triggers:
             if trigger in prompt_lower:
-                return "opus-research", trigger, False
+                return "opus-research", trigger
 
-    return None, "", False
+    return None, ""
 
 
 def main():
@@ -122,33 +131,52 @@ def main():
         if len(prompt) < 10:
             sys.exit(0)
 
-        agent, trigger, is_multimodal = detect_agent(prompt)
+        agent, trigger = detect_agent(prompt)
 
-        if is_multimodal:
+        if agent == "codex":
             output = {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
                     "additionalContext": (
-                        f"[Multimodal File Detected] Found '{trigger}' in prompt. "
-                        "**MUST** use Gemini CLI to process this file. "
-                        "Pass the file to Gemini with specific extraction instructions: "
-                        f'`gemini -p "Extract: {{what to extract}}" < {trigger} 2>/dev/null` '
-                        "Do NOT attempt to read this file directly — use Gemini for content extraction."
+                        f"[Agent Routing] Detected '{trigger}' — Claude leads planning; "
+                        "for high-stakes design, debugging, or complex implementation, "
+                        "consult/delegate to Codex CLI. Consider: "
+                        "`codex exec --model \"${CODEX_MODEL:-gpt-5.6-sol}\" "
+                        "-c model_reasoning_effort=\"${CODEX_PLAN_EFFORT:-high}\" --sandbox read-only "
+                        '"{task description}"` for a design opinion or deep analysis '
+                        "(lanes: .claude/rules/model-routing.md)."
                     )
                 }
             }
             print(json.dumps(output))
 
-        elif agent == "codex":
+        elif agent == "codex-plugin":
             output = {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
                     "additionalContext": (
-                        f"[Agent Routing] Detected '{trigger}' — this task may benefit from "
-                        "Codex CLI for planning, design, or complex implementation. Consider: "
-                        "`codex exec --model gpt-5.4 --sandbox read-only --full-auto "
-                        '"{task description}"` for design decisions, planning, debugging, '
-                        "or complex analysis."
+                        f"[Review Routing] Detected '{trigger}' — default review lane is a "
+                        "Claude Sonnet subagent (Opus for high-risk: security, architecture, "
+                        "data model). For high-risk diffs, additionally consider the cross-tool "
+                        "lane: `/codex:review` (code review), "
+                        "`/codex:adversarial-review` (design challenge), "
+                        "`/codex:rescue` (task delegation). "
+                        "Add `--background` for async execution, check with `/codex:status`."
+                    )
+                }
+            }
+            print(json.dumps(output))
+
+        elif agent == "antigravity":
+            output = {
+                "hookSpecificOutput": {
+                    "hookEventName": "UserPromptSubmit",
+                    "additionalContext": (
+                        f"[Antigravity] Detected '{trigger}' — a cross-model second opinion "
+                        "was requested. Use Antigravity CLI (Gemini 3.x): "
+                        "`agy --model \"${ANTIGRAVITY_MODEL:-gemini-3.1-pro}\" --sandbox -p "
+                        '"{decision + proposal + constraints}"`. '
+                        "Policy: .claude/rules/antigravity-delegation.md."
                     )
                 }
             }

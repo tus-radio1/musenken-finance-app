@@ -1,35 +1,54 @@
 ---
 name: init
-description: Analyze project structure and update AGENTS.md with detected tech stack, commands, and configurations.
+description: Analyze project structure, write the thick requirements doc (.claude/docs/DESIGN.md), populate the thin "Repository Identity" pointer in CLAUDE.md (Zone B), and mirror identity into AGENTS.md.
 disable-model-invocation: true
 ---
 
 # Initialize Project Configuration
 
-Analyze this project and update **only the project-specific sections** of AGENTS.md.
+Analyze this project and:
+
+1. Generate the **thick** 要件定義書 at `.claude/docs/DESIGN.md` (macro requirements & design — *what* this project builds and *why*).
+2. Populate the **thin** **Repository Identity (Zone B)** pointer in `CLAUDE.md` (a brief identity line + a pointer to DESIGN.md — no thick content here).
+3. Mirror the identity into the project-specific sections of `AGENTS.md`.
+
+## Document hierarchy (where content lives)
+
+- `CLAUDE.md` = orchestrator contract. Zone B holds only a **thin identity + pointer**.
+- `.claude/docs/DESIGN.md` = 要件定義書 (thick macro requirements/design). This is where rich project content belongs.
+- `PROGRESS.md` = micro work progress (maintained by `/checkpointing`).
+
+## CLAUDE.md zones
+
+Zone contract (3-zone layout, markers, ownership, markers-missing rule): `.claude/rules/claude-md-zones.md`.
+**This skill writes ONLY Zone B** (between the two markers) — never Zone A or Zone C.
 
 ## Important
 
-- Do **NOT** modify the "Extensions" section and below in existing AGENTS.md
-- Only update the top project-specific sections
+- For `AGENTS.md`, do NOT modify the "Extensions" section and below — only update the top project-specific sections.
 
 ## Steps
 
 ### 1. Project Analysis
 
-Find these files to identify the tech stack:
+Run the bundled detector instead of hand-scanning manifests:
 
-- `package.json` → Node.js/TypeScript project
-- `pyproject.toml` / `setup.py` / `requirements.txt` → Python project
-- `Cargo.toml` → Rust project
-- `go.mod` → Go project
-- `Makefile` / `Dockerfile` → Build/deploy config
-- `.github/workflows/` → CI/CD config
+```bash
+python3 .claude/skills/init/detect_stack.py
+```
 
-Also detect:
+Interpret the JSON:
 
-- npm scripts / poe tasks / make targets → Common commands
-- Major libraries/frameworks
+- `languages`, `package_managers`, `manifests` — detected tech stack
+  (pyproject/package.json/Cargo.toml/go.mod/setup.py/requirements.txt, Makefile,
+  Dockerfile).
+- `commands` — inferred lint/test/format/typecheck commands.
+- `libraries` — top-level dependencies.
+- `ci` — CI systems (e.g. `github-actions`).
+- `claude_md_markers` — boundary-marker presence (see Step 4).
+
+Exit codes: `0` normal · `2` CLAUDE.md boundary markers missing (handle per Step 4
+before writing Zone B). Use this JSON to fill DESIGN.md (Step 3) and Zone B.
 
 ### 2. Ask User
 
@@ -39,9 +58,59 @@ Use AskUserQuestion tool to ask:
 2. **Code language**: English or Japanese for comments/variable names?
 3. **Additional rules**: Any other coding conventions to follow?
 
-### 3. Partial Update of AGENTS.md
+### 3. Generate the thick DESIGN.md (要件定義書)
 
-Use Edit tool to update only the top section (up to first `---`) with this format:
+`.claude/docs/DESIGN.md` is the **macro requirements & design** document. This is where
+the rich project content goes (not CLAUDE.md). Read the existing template first, then
+fill each section **as far as the project evidence allows**, using the analysis from
+step 1 and the user's answers from step 2. Leave a section as its placeholder only when
+there is genuinely no basis to fill it.
+
+Map your findings onto the fixed section structure (keep the Japanese+English headings
+and the leading document-map links intact):
+
+| Section | What to fill in |
+|---------|-----------------|
+| `## 背景・目的 (Background & Purpose)` | The user's project overview answer; the problem it solves and for whom. |
+| `## スコープ (Scope)` | In Scope / Out of Scope bullets inferred from the overview and codebase. |
+| `## 機能要件 (Functional Requirements)` | Table rows (ID / 要件 / 優先度 / 備考) for features evident in the code or stated by the user. |
+| `## 非機能要件 (Non-Functional Requirements)` | Table rows (カテゴリ / 要件 / 指標) for performance, security, maintainability, etc. |
+| `## アーキテクチャ (Architecture)` | Overview narrative + the Agent Roles table (orchestrator / delegated agents). |
+| `## 技術選定 (Tech Stack & Rationale)` | Table rows (領域 / 採用技術 / 理由 / 代替案) from the detected stack. |
+| `## 制約 (Constraints)` | Bullets for technical / org / compatibility constraints. |
+| `## Key Decisions` | Seed any decisions already made (with today's date). |
+| `## TODO / Open Questions` | Items needing follow-up. |
+
+Do **not** fabricate requirements for a distribution-template repo: when initializing a
+real project, prefer concrete evidence; when nothing is known, leave the placeholder.
+
+### 4. Update CLAUDE.md Zone B (thin pointer only)
+
+First verify the 3-zone markers exist. Reuse the Step 1 detector output:
+`claude_md_markers.template_boundary` and `claude_md_markers.repo_boundary` must
+both be `true` (equivalently, `detect_stack.py` exits `0`, not `2`).
+If either is missing (exit code `2`), stop per `.claude/rules/claude-md-zones.md`
+(user runs `./scripts/update.sh`).
+
+Replace the content **between** the two markers with a **thin** identity + pointer (keep
+the marker lines and their ━ separators intact). The thick content lives in DESIGN.md —
+do **not** duplicate tech stack / requirements here. Use the Edit tool by anchoring on
+the full block between the two boundary box lines.
+
+```markdown
+## Repository Identity
+
+<!-- Managed by /init. Re-run /init to refresh. -->
+
+{One-line identity: what this project is, in a single sentence}
+
+Macro requirements & design live in **[.claude/docs/DESIGN.md](.claude/docs/DESIGN.md)** (要件定義書).
+Keep this section thin — a brief identity line + pointer. Thick content belongs in DESIGN.md.
+```
+
+### 5. Partial Update of AGENTS.md
+
+Mirror the same information into `AGENTS.md` so Codex sees it. Update only the top section (up to the first `---`) with this format:
 
 ```markdown
 # Project Overview
@@ -60,32 +129,25 @@ Use Edit tool to update only the top section (up to first `---`) with this forma
 - **Package Manager**: {Detected tools}
 - **Dev Tools**: {Detected tools}
 - **Main Libraries**: {Detected libraries}
-```
 
-### 4. Update Common Commands
-
-Update the `## Common Commands` section with detected commands:
-
-```markdown
 ## Common Commands
 
 ```bash
-# Detected commands (example)
-{npm run dev / poe test / make build etc.}
+{Detected commands}
 ```
 ```
 
-### 5. Check Unnecessary Rules
+### 6. Check Unnecessary Rules
 
 Check rules in `.claude/rules/` and suggest removing unnecessary ones:
 
 - Non-Python project → `dev-environment.md` (uv/ruff/ty) may not be needed
 - No-test project → `testing.md` may not be needed
 
-### 6. Report Completion
+### 7. Report Completion
 
 Report to user (in Japanese):
 
 - Detected tech stack
-- Updated sections
+- Files updated (`.claude/docs/DESIGN.md`, `CLAUDE.md` Zone B, `AGENTS.md`)
 - Recommended rules to remove (if any)

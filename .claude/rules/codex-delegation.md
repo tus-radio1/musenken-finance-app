@@ -1,15 +1,21 @@
 # Codex Delegation Rule
 
-**Codex CLI handles planning, design, and complex code implementation.**
+**Codex CLI is Claude's implementation executor and design consultant. Claude
+leads and finalizes planning; Codex implements and advises.**
+
+> Preflight: ensure codex CLI is current (see codex-system skill).
+> Model/effort lane selection: `.claude/rules/model-routing.md` (SSOT).
 
 ## Two Roles of Codex
 
-### 1. Planning & Design
+### 1. Design Consultation
+
+Claude owns and finalizes plans; Codex is consulted for an expert design
+opinion (`${CODEX_MODEL}` at `${CODEX_PLAN_EFFORT}`) when the stakes warrant it:
 
 - Architecture design, module structure
-- Implementation planning (step decomposition, dependency ordering)
+- Implementation-plan sanity checks (step decomposition, dependency ordering)
 - Trade-off evaluation, technology selection
-- Code review (quality and correctness analysis)
 
 ### 2. Complex Code Implementation
 
@@ -20,18 +26,28 @@
 
 ## Delegation Decision
 
-Default to Codex-first delegation for development tasks.
+Claude leads planning and delegates implementation to Codex by default.
 
-Consult Codex when **any** of these apply (recommended default):
+Delegate **implementation** to Codex when the change is non-trivial (multi-file,
+complex algorithm, unclear root cause, multi-step). Ask Codex for a **design
+opinion** (consultation, not ownership) when **any** of these apply:
 
-- Design/architecture decisions are involved.
-- Change spans 2+ files with behavior impact.
-- Root cause is unclear.
+- High-stakes design/architecture decisions are involved (architecture, data
+  model, security-sensitive).
 - User requests comparison/trade-off analysis.
-- You need a step-by-step implementation plan.
-- You are unsure and want a safe implementation direction.
+- You are unsure between two implementation directions.
 
-Skip Codex only for obvious one-file tiny edits.
+Do NOT delegate to Codex when:
+
+- Obvious one-file tiny edits, typo fixes
+- Tasks that simply follow explicit user instructions
+- git commit, test execution, lint
+- **Routine planning** → Claude leads it directly
+- **Default code review** → Sonnet subagent (Opus for high-risk); `/codex:review`
+  is an optional cross-tool lane, recommended in addition for high-risk changes
+- **Codebase analysis** → general-purpose subagent (Opus 1M context)
+- **External information retrieval / web research** → general-purpose subagent (Opus, WebSearch/WebFetch); Antigravity may assist as needed
+- **Second opinion on an already-completed design/plan** → Antigravity CLI (`.claude/rules/antigravity-delegation.md`)
 
 ## Prompt Contract (Always Include)
 
@@ -45,69 +61,12 @@ Detailed templates: `@.claude/docs/CODEX_HANDOFF_PLAYBOOK.md`
 
 ## How to Consult
 
-### Subagent Pattern (Recommended)
+Exec syntax, subagent/direct patterns, implementation calls, and the sandbox-modes table: see the **codex-system skill** (`.claude/skills/codex-system/SKILL.md`) — this rule covers only *when* to delegate.
 
-```
-Task tool parameters:
-- subagent_type: "general-purpose"
-- run_in_background: true (for parallel work)
-- prompt: |
-    Consult Codex about: {topic}
+## Codex Plugin for Claude Code (codex-plugin-cc)
 
-    codex exec --model gpt-5.4 --sandbox read-only --full-auto "
-    Objective: {single-sentence objective}
-    Constraints:
-    - {constraint 1}
-    Relevant files:
-    - {file paths}
-    Acceptance checks:
-    - {commands}
-    Output format:
-    ## Analysis
-    ## Recommendation
-    ## Implementation Plan
-    ## Risks
-    ## Next Steps
-    " 2>/dev/null
-
-    Return CONCISE summary (key recommendation + rationale).
-```
-
-### Direct Call (Short questions only)
-
-```bash
-codex exec --model gpt-5.4 --sandbox read-only --full-auto "Objective: {brief question}" 2>/dev/null
-```
-
-### Having Codex Implement Code
-
-```bash
-codex exec --model gpt-5.4 --sandbox workspace-write --full-auto "
-Objective: Implement {detailed implementation task}
-Constraints:
-- Follow existing project conventions
-- Keep diffs minimal
-Relevant files:
-- {file paths}
-Acceptance checks:
-- {commands}
-Output format:
-## Changes Made
-## Validation
-## Remaining Risks
-" 2>/dev/null
-```
-
-### Sandbox Modes
-
-| Mode | Sandbox | Use Case |
-|------|---------|----------|
-| Analysis | `read-only` | Design review, debugging, trade-off analysis |
-| Implementation | `workspace-write` | Implementation, fixes, refactoring |
+Plugin slash commands (`/codex:review`, `/codex:rescue`, job management) and plugin-vs-CLI guidance: see the codex-system skill.
 
 ## Language Protocol
 
-1. Ask Codex in **English**
-2. Receive response in **English**
-3. Execute based on advice
-4. Report to user in **English**
+See `.claude/rules/language.md` (SSOT): ask Codex in English; report to the user per that rule.
