@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key-not-a-jwt
+          SUPABASE_SERVICE_ROLE_KEY: dummy-service-role-key-not-a-jwt
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  db:
+    name: db
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      # Keep auth, storage-api, PostgREST, and postgres-meta: migrations need
+      # auth/storage schemas and type generation needs the metadata API.
+      - name: Start Supabase
+        run: supabase start -x studio,imgproxy,mailpit,realtime,edge-runtime,logflare,vector,supavisor
+      - name: Apply all migrations and seed from scratch
+        run: supabase db reset --local
+      - name: Lint database schema
+        run: supabase db lint --local --fail-on error --level error
+      # Informational drift check. The committed types were generated from the
+      # remote project in a different format (CLI 2.120 emits unformatted TS)
+      # and currently differ semantically from the migrations (e.g.
+      # transactions.transaction_kind). Remove continue-on-error once
+      # lib/database.types.ts is regenerated with `npm run db:types`.
+      - name: Check generated types drift
+        run: supabase gen types typescript --local > lib/database.types.ts && git diff --stat --exit-code lib/database.types.ts
+        continue-on-error: true
