@@ -51,6 +51,9 @@ supabase/.temp/
 .claude/logs/*
 
 # Claude Code Orchestra local state
+!.claude/docs/
+.claude/docs/research/*
+!.claude/docs/research/.gitkeep
 .claude/settings.local.json
 .claude/settings.orchestra.json
 .codex/config.orchestra.toml
