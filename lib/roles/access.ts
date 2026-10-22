@@ -50,16 +50,3 @@ export async function requireRoleAccess(
   }
   return result.access;
 }
-
-// ---------------------------------------------------------------------------
-// Legacy budget rule, kept unchanged until R5 replaces it with canEditBudget.
-// ---------------------------------------------------------------------------
-
-/** @deprecated R5 replaces this with canEditBudget (lib/roles/permissions.ts). */
-export function canManageBudget(
-  access: RoleAccessContext,
-  accountingGroupId: string,
-): boolean {
-  const types = access.groupRoleTypes[accountingGroupId];
-  return access.isAdmin || (types?.includes("leader") ?? false);
-}

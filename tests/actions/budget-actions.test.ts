@@ -48,6 +48,8 @@ function accessFor(actor: Actor) {
 }
 
 let actor: Actor;
+let existingBudget: { id: string } | null;
+let budgetWriteRows: Array<{ id: string }>;
 
 function resolveQuery(call: QueryCall): QueryResult {
   if (call.table === "fiscal_years" && call.op === "select") {
@@ -60,10 +62,10 @@ function resolveQuery(call: QueryCall): QueryResult {
     return { data: { year: CURRENT_FY, is_current: true } };
   }
   if (call.table === "budgets" && call.op === "select") {
-    return { data: null };
+    return { data: existingBudget };
   }
   if (call.table === "budgets") {
-    return { data: [{ id: BUDGET_ID }] };
+    return { data: budgetWriteRows };
   }
   return { error: null };
 }
@@ -108,6 +110,8 @@ function budgetWrites() {
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   actor = "admin";
+  existingBudget = null;
+  budgetWriteRows = [{ id: BUDGET_ID }];
   userDb = createSupabaseMock(resolveQuery);
   adminDb = createSupabaseMock(resolveQuery);
 });
@@ -118,7 +122,7 @@ beforeEach(() => {
 
 describe("upsertBudget", () => {
   // Bug (R5): the page shows the edit dialog to 会計, the server rejected it.
-  it.fails("lets 会計 set the current fiscal year's budget", async () => {
+  it("lets 会計 set the current fiscal year's budget", async () => {
     actor = "accounting";
 
     const result = await upsertBudget(GROUP_ID, 5000, CURRENT_FY);
@@ -128,12 +132,54 @@ describe("upsertBudget", () => {
   });
 
   // Bug (R5, D4): the server let group leaders edit their group's budget.
-  it.fails("rejects a group leader", async () => {
+  it("rejects a group leader", async () => {
     actor = "leader";
 
     const result = await upsertBudget(GROUP_ID, 5000, CURRENT_FY);
 
     expect(result).toHaveProperty("error");
     expect(budgetWrites()).toHaveLength(0);
+  });
+
+  it("lets admins edit a past fiscal year", async () => {
+    const result = await upsertBudget(GROUP_ID, 5000, PAST_FY);
+
+    expect(result).toEqual({ success: true });
+    expect(budgetWrites()[0].payload).toMatchObject({ fiscal_year_id: PAST_FY });
+  });
+
+  it("rejects 会計 editing a past fiscal year", async () => {
+    actor = "accounting";
+
+    const result = await upsertBudget(GROUP_ID, 5000, PAST_FY);
+
+    expect(result).toEqual({ error: "予算の編集権限がありません" });
+    expect(budgetWrites()).toHaveLength(0);
+  });
+
+  it("rejects an unknown fiscal year", async () => {
+    const result = await upsertBudget(GROUP_ID, 5000, 2030);
+
+    expect(result).toEqual({ error: "会計年度が未設定です" });
+    expect(budgetWrites()).toHaveLength(0);
+  });
+
+  it("uses the current fiscal year resolved on the server when none is given", async () => {
+    actor = "accounting";
+
+    const result = await upsertBudget(GROUP_ID, 5000);
+
+    expect(result).toEqual({ success: true });
+    expect(budgetWrites()[0].payload).toMatchObject({ fiscal_year_id: CURRENT_FY });
+  });
+
+  it("reports an error when the update of an existing budget touched no row", async () => {
+    existingBudget = { id: BUDGET_ID };
+    budgetWriteRows = [];
+
+    const result = await upsertBudget(GROUP_ID, 5000, CURRENT_FY);
+
+    expect(result).toEqual({ error: "予算の保存に失敗しました" });
+    expect(budgetWrites()[0].op).toBe("update");
   });
 });

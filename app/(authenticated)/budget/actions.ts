@@ -11,8 +11,11 @@ import {
   validateInput,
 } from "@/lib/validations";
 import { resolveAuthWithRoles } from "@/lib/auth/context";
-import { canManageBudget } from "@/lib/roles/access";
-import { canCreateFiscalYear, canManageGroups } from "@/lib/roles/permissions";
+import {
+  canCreateFiscalYear,
+  canEditBudget,
+  canManageGroups,
+} from "@/lib/roles/permissions";
 
 export async function upsertBudget(
   accountingGroupId: string,
@@ -35,30 +38,30 @@ export async function upsertBudget(
   const auth = authResult.context;
   const access = authResult.access;
 
-  // 役割確認（グローバル管理者 or 当該グループのリーダーのみ編集可）
-  if (!canManageBudget(access, accountingGroupId)) {
-    return { error: "予算の編集権限がありません" };
-  }
+  // 会計年度はサーバー側で解決する（指定があればその年度、なければ現在の年度）。
+  // クライアントが送る年度をそのまま信用せず、実在と is_current を確認する。
+  const fyQuery = auth.supabase.from("fiscal_years").select("year, is_current");
+  const { data: fy, error: fyError } = await (fiscalYear
+    ? fyQuery.eq("year", fiscalYear)
+    : fyQuery.eq("is_current", true)
+  ).maybeSingle();
 
-  // 会計年度を取得（引数で指定されていればそれを使用、なければ現在の年度）
-  let fiscalYearId: number | null = null;
-  if (fiscalYear) {
-    fiscalYearId = fiscalYear;
-  } else {
-    const { data: fy } = await auth.supabase
-      .from("fiscal_years")
-      .select("year")
-      .eq("is_current", true)
-      .single();
-    fiscalYearId = fy?.year ?? null;
+  if (fyError) {
+    console.error("[upsertBudget] Fiscal year fetch error:", fyError);
+    return { error: "会計年度の取得に失敗しました" };
   }
-
-  if (!fiscalYearId) {
+  if (!fy) {
     return { error: "会計年度が未設定です" };
   }
 
+  // 予算の編集: 管理者は常に可、会計は現在の年度のみ、班長は不可（D4）
+  if (!canEditBudget(access, { isCurrent: fy.is_current === true })) {
+    return { error: "予算の編集権限がありません" };
+  }
+  const fiscalYearId = fy.year;
+
   // 既存レコード確認
-  const { data: existing } = await auth.supabase
+  const { data: existing, error: existingError } = await auth.supabase
     .from("budgets")
     .select("id")
     .eq("accounting_group_id", accountingGroupId)
@@ -66,27 +69,35 @@ export async function upsertBudget(
     .limit(1)
     .maybeSingle();
 
-  // createAdminClient needed to bypass RLS for budget writes (no RLS write policy for budgets table)
-  const adminDb = createAdminClient();
-  let dbError: { message: string; code?: string } | null = null;
-  if (existing?.id) {
-    const res = await adminDb
-      .from("budgets")
-      .update({ amount, carryover_amount: carryoverAmount ?? 0 })
-      .eq("id", existing.id);
-    dbError = res.error;
-  } else {
-    const res = await adminDb.from("budgets").insert({
-      accounting_group_id: accountingGroupId,
-      amount,
-      carryover_amount: carryoverAmount ?? 0,
-      fiscal_year_id: fiscalYearId,
-    });
-    dbError = res.error;
+  if (existingError) {
+    console.error("[upsertBudget] Budget fetch error:", existingError);
+    return { error: "予算の保存に失敗しました" };
   }
 
-  if (dbError) {
-    console.error("[upsertBudget] DB error:", dbError);
+  // createAdminClient needed to bypass RLS for budget writes (no RLS write policy for budgets table)
+  const adminDb = createAdminClient();
+  const res = existing?.id
+    ? await adminDb
+        .from("budgets")
+        .update({ amount, carryover_amount: carryoverAmount ?? 0 })
+        .eq("id", existing.id)
+        .select("id")
+    : await adminDb
+        .from("budgets")
+        .insert({
+          accounting_group_id: accountingGroupId,
+          amount,
+          carryover_amount: carryoverAmount ?? 0,
+          fiscal_year_id: fiscalYearId,
+        })
+        .select("id");
+
+  if (res.error) {
+    console.error("[upsertBudget] DB error:", res.error);
+    return { error: "予算の保存に失敗しました" };
+  }
+  if (!res.data || res.data.length !== 1) {
+    console.error("[upsertBudget] Unexpected row count:", res.data?.length);
     return { error: "予算の保存に失敗しました" };
   }
 
