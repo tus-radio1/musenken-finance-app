@@ -311,7 +311,10 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "create_transfer":
+            "can_view_club_ledger":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"create_transfer":
 { Args: { "p_amount": number,"p_created_by"?: string,"p_date": string,"p_description": string,"p_from_account_id": string,"p_receipt_url"?: string,"p_remarks"?: string,"p_to_account_id": string }; Returns: string
                            },
 "get_budget_usage":

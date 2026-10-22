@@ -9,7 +9,7 @@
  *   - 会計: roles.name = "会計"（has_role('会計')）
  *   - 部長・副部長: roles.name
  * 部全体会計（type = "club"）の判定は他より先に行い、部長・副部長には
- * 部全体会計の権限を与えない。
+ * 部全体会計は閲覧のみを許可する。
  */
 
 import { GROUP_TYPES, ROLE_NAMES_JA } from "./constants";
@@ -22,6 +22,7 @@ export type GroupRef = { id: string; type: string | null };
 export type TransactionRef = {
   created_by: string | null;
   approval_status: string | null;
+  accounting_group_type?: string | null;
 };
 
 const PENDING = "pending";
@@ -91,6 +92,7 @@ export function canViewGroup(
   access: RoleAccessContext,
   group: GroupRef | null | undefined,
 ): boolean {
+  if (group && isClubGroup(group)) return canViewClubLedger(access);
   return canUseGroup(access, group);
 }
 
@@ -230,9 +232,9 @@ export function canManageMembers(access: RoleAccessContext): boolean {
   return access.canManageMembers;
 }
 
-/** 部全体会計の閲覧: 会計と管理者のみ。 */
+/** 部全体会計の閲覧: 管理者・会計・部長・副部長。 */
 export function canViewClubLedger(access: RoleAccessContext): boolean {
-  return isAdminOrAccounting(access);
+  return hasAllNonClubGroupAccess(access);
 }
 
 /** 部全体会計の取引作成・編集、資金移動: 会計と管理者のみ。 */
@@ -279,6 +281,12 @@ export function getTransactionRowPermissions(
   },
 ): TransactionRowPermissions {
   if (context.isReadOnly || !context.actorId) return NO_ROW_PERMISSIONS;
+  if (
+    tx.accounting_group_type === GROUP_TYPES.CLUB &&
+    !canCreateClubTransaction(access)
+  ) {
+    return NO_ROW_PERMISSIONS;
+  }
   const actorId = context.actorId;
   return {
     canEdit: canEditTransaction(access, tx, actorId),

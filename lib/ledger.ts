@@ -44,6 +44,7 @@ export type TransactionRow = {
  * LedgerView が受け取る初期データの個別行の型として使用する。
  */
 export type LedgerTransaction = {
+  accounting_group_type?: string | null;
   id: string;
   date: string | null;
   created_by: string | null;

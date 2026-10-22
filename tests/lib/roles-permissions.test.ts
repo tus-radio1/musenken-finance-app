@@ -68,8 +68,6 @@ describe("canViewGroup / canFileTransactionInGroup", () => {
   const cases: Array<[string, RoleAssignment[], GroupRef, boolean]> = [
     ["admin, club", [ROLES.admin], CLUB, true],
     ["会計, club", [ROLES.accounting], CLUB, true],
-    ["部長, club (no club rights)", [ROLES.chair], CLUB, false],
-    ["副部長, club (no club rights)", [ROLES.viceChair], CLUB, false],
     ["leader of G1, club", [ROLES.leaderG1], CLUB, false],
     ["部長, unrelated restricted group", [ROLES.chair], UNRELATED, true],
     ["会計, unrelated restricted group", [ROLES.accounting], UNRELATED, true],
@@ -85,6 +83,27 @@ describe("canViewGroup / canFileTransactionInGroup", () => {
   it.each(cases)("%s → %s", (_label, roles, group, expected) => {
     expect(canViewGroup(access(...roles), group)).toBe(expected);
     expect(canFileTransactionInGroup(access(...roles), group)).toBe(expected);
+  });
+
+  it.each([ROLES.chair, ROLES.viceChair])("lets $name view club data without filing rights", (r) => {
+    expect(canViewClubLedger(access(r))).toBe(true);
+    expect(canViewGroup(access(r), CLUB)).toBe(true);
+    expect(canFileTransactionInGroup(access(r), CLUB)).toBe(false);
+    expect(permissions.canCreateClubTransaction(access(r))).toBe(false);
+    expect(permissions.canManageFinancialAccounts(access(r))).toBe(false);
+    for (const owner of [ACTOR_ID, OTHER_ID]) {
+      expect(permissions.getTransactionRowPermissions(access(r), {
+        ...pendingOf(owner), accounting_group_type: "club",
+      }, { actorId: ACTOR_ID, isCurrentFiscalYear: true, isReadOnly: false })).toEqual({
+        canEdit: false, canDelete: false, canApprove: false, canChangeApprovalStatus: false,
+      });
+    }
+  });
+
+  it("denies club viewing to general members, even with a club group role", () => {
+    const a = access(role("general", "general", CLUB.id));
+    expect(canViewClubLedger(a)).toBe(false);
+    expect(canViewGroup(a, CLUB)).toBe(false);
   });
 
   it("denies a missing group even for admins", () => {
@@ -233,10 +252,10 @@ describe("budget permissions (D4)", () => {
 });
 
 describe("subsidy and club ledger permissions", () => {
-  it("limits subsidy management and the club ledger to admin or 会計", () => {
+  it("keeps subsidy management restricted while allowing club viewing", () => {
     expect(canManageSubsidies(access(ROLES.accounting))).toBe(true);
     expect(canManageSubsidies(access(ROLES.chair))).toBe(false);
-    expect(canViewClubLedger(access(ROLES.chair))).toBe(false);
+    expect(canViewClubLedger(access(ROLES.chair))).toBe(true);
     expect(canViewClubLedger(access(ROLES.accounting))).toBe(true);
   });
 });

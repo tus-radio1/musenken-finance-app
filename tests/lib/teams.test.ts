@@ -47,10 +47,9 @@ describe("selectVisibleTeams", () => {
     expect(teams).not.toContain(CLUB);
   });
 
-  it("shows 部長 every non-club group but not the club ledger", () => {
-    const access = buildRoleAccess([role("部長", "general")]);
-
-    expect(ids(selectVisibleTeams(access, GROUPS))).toEqual([MINE, OTHER, OPEN, UNTYPED]);
+  it.each(["部長", "副部長"])("shows %s the club ledger in getUserTeams", async (name) => {
+    const access = buildRoleAccess([role(name, "general")]);
+    expect(ids(await getUserTeams(access))).toEqual([MINE, OTHER, OPEN, UNTYPED, CLUB]);
   });
 
   it("shows 会計 and admins every active group including the club ledger", () => {

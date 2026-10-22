@@ -123,6 +123,27 @@ async function checkFilingGroup(
   };
 }
 
+/** Reading a club row must never grant the owner permission to write it. */
+async function checkExistingClubWrite(
+  supabase: SupabaseServerClient,
+  access: RoleAccessContext,
+  accountingGroupId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isAdminOrAccounting(access) || !accountingGroupId) return { ok: true };
+  const { data: group, error } = await supabase
+    .from("accounting_groups")
+    .select("id, type")
+    .eq("id", accountingGroupId)
+    .maybeSingle();
+  if (error || !group) {
+    return { ok: false, error: "会計グループの取得に失敗しました" };
+  }
+  if (isClubGroup(group)) {
+    return { ok: false, error: "部全体取引を変更する権限がありません" };
+  }
+  return { ok: true };
+}
+
 export async function signOut() {
   const authResult = await resolveAuthContext();
   if (authResult.ok) {
@@ -480,6 +501,13 @@ export async function updateTransaction(
     return { error: "対象のデータが見つかりません" };
   }
 
+  const clubWrite = await checkExistingClubWrite(
+    auth.supabase,
+    access,
+    transaction.accounting_group_id,
+  );
+  if (!clubWrite.ok) return { error: clubWrite.error };
+
   // 編集できるのは管理者・会計、または pending の自分の取引のみ（班長は不可）。
   if (!canEditTransaction(access, transaction, auth.profileId)) {
     const isOwner = transaction.created_by === auth.profileId;
@@ -766,6 +794,13 @@ export async function deleteTransaction(id: string) {
     console.error("[deleteTransaction] Fetch error:", txFetchError);
     return { error: "対象のデータが見つかりません" };
   }
+
+  const clubWrite = await checkExistingClubWrite(
+    auth.supabase,
+    access,
+    transaction.accounting_group_id,
+  );
+  if (!clubWrite.ok) return { error: clubWrite.error };
 
   if (!canDeleteTransaction(access, transaction, auth.profileId)) {
     return { error: "削除する権限がありません。" };

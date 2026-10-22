@@ -4,6 +4,7 @@ import { RecentApplications } from "@/components/recent-applications";
 import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab";
 import { getSortableDateValue } from "@/lib/date";
 import { getUserTeams } from "@/lib/teams";
+import { canFileTransactionInGroup } from "@/lib/roles/permissions";
 import { requireRoleAccess } from "@/lib/roles/access";
 
 export default async function Home() {
@@ -23,7 +24,11 @@ export default async function Home() {
       .eq("is_current", true)
       .single(),
     user
-      ? requireRoleAccess({ supabase, profileId: user.id }).then(getUserTeams)
+      ? requireRoleAccess({ supabase, profileId: user.id }).then(async (access) =>
+          (await getUserTeams(access)).filter((group) =>
+            canFileTransactionInGroup(access, group),
+          ),
+        )
       : Promise.resolve([] as { id: string; name: string }[]),
   ]);
 

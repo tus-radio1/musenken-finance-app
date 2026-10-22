@@ -37,7 +37,7 @@ const CURRENT_FY = 2026;
 const PAST_FY = 2025;
 const PAST_FY_DATE = new Date("2025-05-01T00:00:00+09:00");
 
-type Actor = "member" | "leader" | "accounting" | "admin" | "outsider";
+type Actor = "member" | "leader" | "accounting" | "admin" | "outsider" | "chair" | "viceChair";
 
 type Role = {
   name: string;
@@ -46,6 +46,8 @@ type Role = {
 };
 
 const ACTOR_ROLES: Record<Actor, Role[]> = {
+  chair: [{ name: "部長", type: "general", accountingGroupId: null }],
+  viceChair: [{ name: "副部長", type: "general", accountingGroupId: null }],
   member: [{ name: "general", type: "general", accountingGroupId: G1 }],
   leader: [{ name: "leader", type: "leader", accountingGroupId: G1 }],
   accounting: [{ name: "会計", type: "accounting", accountingGroupId: null }],
@@ -707,5 +709,43 @@ describe("deleteTransaction", () => {
     expect(result).toEqual({ success: true });
     expect(txWrites("delete")).toHaveLength(1);
     expect(logAuditEvent).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Legacy club rows may be owned by a chair: ownership never grants a write.
+describe.each(["chair", "viceChair"] as const)("club writes by %s", (clubActor) => {
+  beforeEach(() => {
+    actor = clubActor;
+    tx = { ...tx, accounting_group_id: CLUB, created_by: ACTOR_ID };
+  });
+
+  it("rejects creation", async () => {
+    expect(await createTransaction(formValues(), null, TX_ID)).toHaveProperty("error");
+    expect(txWrites("insert")).toHaveLength(0);
+  });
+
+  it.each([false, true])("rejects edit including status change (%s)", async (changeStatus) => {
+    expect(await updateTransaction(TX_ID, formValues(
+      changeStatus ? { approval_status: "approved" } : {},
+    ))).toHaveProperty("error");
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("rejects moving a legacy club row to another group", async () => {
+    expect(await updateTransaction(TX_ID, formValues({ accounting_group_id: OPEN })))
+      .toHaveProperty("error");
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("rejects deletion of an own pending club row", async () => {
+    expect(await deleteTransaction(TX_ID)).toHaveProperty("error");
+    expect(txWrites("delete")).toHaveLength(0);
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each(["approved", "rejected"] as const)("rejects approval decision %s", async (status) => {
+    tx = { ...tx, created_by: OTHER_USER_ID };
+    expect(await updateTransactionStatus(TX_ID, status, "reason")).toHaveProperty("error");
+    expect(txWrites("update")).toHaveLength(0);
   });
 });

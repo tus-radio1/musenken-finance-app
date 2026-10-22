@@ -6,7 +6,11 @@ import { ApplicationsTable } from "@/components/applications-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUserTeams } from "@/lib/teams";
 import { requireRoleAccess } from "@/lib/roles/access";
-import { isAdmin } from "@/lib/roles/permissions";
+import {
+  canCreateClubTransaction,
+  canFileTransactionInGroup,
+  isAdmin,
+} from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
 
@@ -35,13 +39,17 @@ export default async function ApplicationsPage({
   const access = await requireRoleAccess({ supabase, profileId: user.id });
   const accountingGroups = await getUserTeams(access);
 
+  const writableGroups = accountingGroups.filter((group) =>
+    canFileTransactionInGroup(access, group),
+  );
+
   const isGlobalAdmin = isAdmin(access);
 
   // 当該ユーザの過去の申請を取得（会計グループ名付き）
   const { data: transactions, count } = await supabase
     .from("transactions")
     .select(
-      "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name), financial_account_id, receipt_url, remarks, created_by",
+      "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name, type), financial_account_id, receipt_url, remarks, created_by",
       { count: "exact" },
     )
     .eq("created_by", user.id)
@@ -56,6 +64,8 @@ export default async function ApplicationsPage({
   // テーブル用にデータを整形
   const tableData = (transactions || []).map((tx) => ({
     id: tx.id,
+    isReadOnly:
+      tx.accounting_groups?.type === "club" && !canCreateClubTransaction(access),
     date: tx.date,
     amount: tx.amount,
     description: tx.description,
@@ -82,7 +92,7 @@ export default async function ApplicationsPage({
             </p>
           </div>
           <div className="hidden md:block">
-            <TransactionForm categories={accountingGroups || []} />
+            <TransactionForm categories={writableGroups} />
           </div>
         </div>
 
@@ -128,7 +138,7 @@ export default async function ApplicationsPage({
         )}
 
         <div className="md:hidden">
-          <TransactionForm categories={accountingGroups || []} />
+          <TransactionForm categories={writableGroups} />
         </div>
       </div>
     </main>

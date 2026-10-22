@@ -4,7 +4,7 @@
  * 出納帳データ取得の Server Action。
  *
  * 権限モデル（lib/roles/permissions.ts の canViewGroup）:
- *   - 部全体会計（type = club）: 管理者・会計のみ
+ *   - 部全体会計（type = club）: 管理者・会計・部長・副部長（後者は閲覧のみ）
  *   - それ以外: 管理者・会計・部長・副部長は全グループ、一般部員は
  *     type が general / 未設定のグループと自分が所属するグループのみ
  */
@@ -172,6 +172,7 @@ export async function fetchLedgerTransactions(params: {
 
   const enriched = combinedRows.map((t) => ({
     ...t,
+    accounting_group_type: groupInfo?.type ?? null,
     created_by_name: t.created_by
       ? profileNameMap[t.created_by] || "未登録"
       : "未登録",

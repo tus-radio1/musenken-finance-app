@@ -22,6 +22,7 @@ import {
 } from "@/app/(authenticated)/ledger/actions";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import {
+  canCreateClubTransaction,
   isAccounting,
   isAdmin,
   isClubGroup,
@@ -133,6 +134,9 @@ export default function LedgerView({
   // 部全体会計（club-wide）はグループの type で判定する
   const selectedTeam = teams.find((t) => t.id === selectedGroup);
   const isClubWideGroup = selectedTeam ? isClubGroup(selectedTeam) : false;
+
+  const ledgerReadOnly =
+    isReadOnly || (isClubWideGroup && !canCreateClubTransaction(access));
 
   const userRoleStr = isGlobalAdmin
     ? ROLE_TYPES.ADMIN
@@ -408,7 +412,7 @@ export default function LedgerView({
             currentProfileId={currentProfileId}
             access={access}
             isCurrentFiscalYear={isCurrentFiscalYear}
-            isReadOnly={isReadOnly ?? false}
+            isReadOnly={ledgerReadOnly}
             categoriesForSelected={categoriesForSelected}
             userRoleStr={userRoleStr}
             users={users}
@@ -425,7 +429,7 @@ export default function LedgerView({
             currentProfileId={currentProfileId}
             access={access}
             isCurrentFiscalYear={isCurrentFiscalYear}
-            isReadOnly={isReadOnly ?? false}
+            isReadOnly={ledgerReadOnly}
             categoriesForSelected={categoriesForSelected}
             userRoleStr={userRoleStr}
             users={users}
