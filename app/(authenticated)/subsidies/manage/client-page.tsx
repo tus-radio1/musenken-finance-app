@@ -12,7 +12,7 @@ import {
   deleteSubsidyItem,
 } from "./actions";
 import { uploadReceiptAction } from "@/app/actions";
-import { compressImageToWebp } from "@/lib/image";
+import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
 import { toast } from "sonner";
 import { dateInputValueToJstTimestamp, toDateInputValue } from "@/lib/date";
 
@@ -216,16 +216,10 @@ export function SubsidiesManageClientPage({
 
     if (file) {
       try {
-        const compressedFile = await compressImageToWebp(file);
-        const fileExt = compressedFile.name.split(".").pop();
-        const fileName = `${editingItem.id}_${Date.now()}.${fileExt}`;
+        const preparedFile = await prepareReceiptFile(file);
 
         const formData = new FormData();
-        formData.append("file", compressedFile);
-        formData.append("fileName", fileName);
-        if (editingItem.receipt_url) {
-          formData.append("existingPath", editingItem.receipt_url);
-        }
+        formData.append("file", preparedFile);
 
         const result = await uploadReceiptAction(formData);
 
@@ -238,7 +232,12 @@ export function SubsidiesManageClientPage({
         uploadedReceiptUrl = result.filePath;
       } catch (error) {
         console.error("Image processing error:", error);
-        toast.error("画像の再処理またはアップロード中にエラーが発生しました");
+        toast.error(
+          getReceiptFileErrorMessage(
+            error,
+            "画像の再処理またはアップロード中にエラーが発生しました",
+          ),
+        );
         setIsSubmitting(false);
         return;
       }
@@ -248,15 +247,9 @@ export function SubsidiesManageClientPage({
 
     if (evidenceFile) {
       try {
-        const compressedFile = await compressImageToWebp(evidenceFile);
-        const fileExt = compressedFile.name.split(".").pop();
-        const fileName = `evidence_${editingItem.id}_${Date.now()}.${fileExt}`;
+        const preparedFile = await prepareReceiptFile(evidenceFile);
         const formData = new FormData();
-        formData.append("file", compressedFile);
-        formData.append("fileName", fileName);
-        if (editingItem.evidence_url) {
-          formData.append("existingPath", editingItem.evidence_url);
-        }
+        formData.append("file", preparedFile);
         const evidenceResult = await uploadReceiptAction(formData);
         if (evidenceResult.error) {
           toast.error(evidenceResult.error);
@@ -266,7 +259,12 @@ export function SubsidiesManageClientPage({
         uploadedEvidenceUrl = evidenceResult.filePath;
       } catch (error) {
         console.error("Evidence file processing error:", error);
-        toast.error("根拠書類のアップロード中にエラーが発生しました");
+        toast.error(
+          getReceiptFileErrorMessage(
+            error,
+            "根拠書類のアップロード中にエラーが発生しました",
+          ),
+        );
         setIsSubmitting(false);
         return;
       }

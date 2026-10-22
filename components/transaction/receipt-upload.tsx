@@ -13,6 +13,10 @@ import { Upload, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormLabel } from "@/components/ui/form";
+import {
+  MAX_RECEIPT_FILE_SIZE_MB,
+  RECEIPT_FORMAT_LABEL,
+} from "@/lib/receipt-upload";
 
 type Props = {
   file: File | null;
@@ -59,7 +63,7 @@ export function ReceiptUpload({ file, onFileChange }: Props) {
     <div className="space-y-2">
       <FormLabel>領収書データ (任意)</FormLabel>
       <p className="text-xs text-muted-foreground">
-        対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF &nbsp;|&nbsp; 最大サイズ: 10MB
+        対応形式: {RECEIPT_FORMAT_LABEL} &nbsp;|&nbsp; 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
       </p>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">

@@ -10,6 +10,11 @@ import {
 } from "@/lib/validations";
 import { revalidatePath } from "next/cache";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
+import {
+  RECEIPT_PATH_ERROR_MESSAGE,
+  checkReceiptPathUpdates,
+} from "@/lib/receipt-upload";
+import { removeReplacedReceipt } from "@/lib/receipt-storage";
 
 export async function fetchAllSubsidies(year?: number) {
   const authResult = await resolveAuthWithRoles();
@@ -230,6 +235,9 @@ export async function updateSubsidyItem(
   if (!inputValidation.success) {
     return { error: "入力データが不正です" };
   }
+  // Only schema-validated fields are written; unknown keys (status,
+  // fiscal_year_id, deleted_at, ...) are stripped by the schema.
+  const validatedUpdates = inputValidation.data.updates;
 
   const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
@@ -242,10 +250,30 @@ export async function updateSubsidyItem(
     return { error: "権限がありません" };
   }
 
+  // Current file paths, read from the DB for the ownership rule and cleanup.
+  const { data: item, error: fetchError } = await auth.supabase
+    .from("subsidy_items")
+    .select("receipt_url, evidence_url")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .single();
+
+  if (fetchError || !item) {
+    return { error: "支援金申請情報の取得に失敗しました" };
+  }
+
+  // A replaced receipt / evidence path must be an object the editor uploaded
+  // (admins and accounting staff upload into their own storage prefix).
+  const receiptCheck = checkReceiptPathUpdates(validatedUpdates, item, auth.userId);
+  if (!receiptCheck.ok) {
+    return { error: RECEIPT_PATH_ERROR_MESSAGE };
+  }
+  const updatesToWrite = { ...validatedUpdates, ...receiptCheck.normalized };
+
   // Uses createClient() with RLS - authorization is enforced by RLS policies
   const { error } = await auth.supabase
     .from("subsidy_items")
-    .update(updates)
+    .update(updatesToWrite)
     .eq("id", id)
     .is("deleted_at", null);
 
@@ -254,11 +282,22 @@ export async function updateSubsidyItem(
     return { error: "申請情報の更新に失敗しました" };
   }
 
+  // Remove replaced files only after the update succeeded. The helper only
+  // deletes objects in the editor's own prefix, so an applicant's file that an
+  // admin replaced is intentionally left as an orphan.
+  for (const column of receiptCheck.changed) {
+    await removeReplacedReceipt({
+      oldPath: item[column],
+      newPath: receiptCheck.normalized[column],
+      actorUserId: auth.userId,
+    });
+  }
+
   await logAuditEvent({
     tableName: "subsidy_items",
     recordId: id,
     action: "UPDATE",
-    newData: updates as Record<string, unknown>,
+    newData: updatesToWrite as Record<string, unknown>,
     changedBy: auth.profileId,
   });
 

@@ -10,7 +10,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { updateMySubsidyItem, deleteMySubsidyItem } from "@/app/(authenticated)/subsidies/actions";
 import { uploadReceiptAction } from "@/app/actions";
-import { compressImageToWebp } from "@/lib/image";
+import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
 import { getSortableDateValue } from "@/lib/date";
 import {
   AlertDialog,
@@ -192,19 +192,10 @@ export function SubsidyItemsTable({
 
     if (file) {
       try {
-        const compressedFile = await compressImageToWebp(file);
-        const fileExt = compressedFile.name.split(".").pop();
-        const fileName = `${editingItem.id}_${Date.now()}.${fileExt}`;
+        const preparedFile = await prepareReceiptFile(file);
 
         const formData = new FormData();
-        formData.append("file", compressedFile);
-        formData.append("fileName", fileName);
-        const existingPath = isApproved
-          ? editingItem.receipt_url
-          : editingItem.evidence_url;
-        if (existingPath) {
-          formData.append("existingPath", existingPath);
-        }
+        formData.append("file", preparedFile);
 
         const result = await uploadReceiptAction(formData);
         if (result.error) {
@@ -215,7 +206,12 @@ export function SubsidyItemsTable({
         uploadedFileUrl = result.filePath;
       } catch (error) {
         console.error("Image processing error:", error);
-        toast.error("画像の再処理またはアップロード中にエラーが発生しました");
+        toast.error(
+          getReceiptFileErrorMessage(
+            error,
+            "画像の再処理またはアップロード中にエラーが発生しました",
+          ),
+        );
         setIsSubmitting(false);
         return;
       }

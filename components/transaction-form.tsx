@@ -58,7 +58,7 @@ import {
 } from "@/app/actions";
 
 import { formSchema } from "@/lib/schema";
-import { compressImageToWebp } from "@/lib/image";
+import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
 import { parseDateInputValue, parseDateOnly } from "@/lib/date";
 import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
@@ -186,17 +186,10 @@ function TransactionFormInner({
         setIsUploading(true);
 
         try {
-          const compressedFile = await compressImageToWebp(file);
-
-          const fileExt = compressedFile.name.split(".").pop();
-          const fileName = `${transactionId}_${crypto.randomUUID()}.${fileExt}`;
+          const preparedFile = await prepareReceiptFile(file);
 
           const formData = new FormData();
-          formData.append("file", compressedFile);
-          formData.append("fileName", fileName);
-          if (initialData?.receipt_url) {
-            formData.append("existingPath", initialData.receipt_url);
-          }
+          formData.append("file", preparedFile);
 
           const result = await uploadReceiptAction(formData);
 
@@ -209,7 +202,9 @@ function TransactionFormInner({
           receiptPath = result.filePath;
         } catch (error) {
           console.error("Image processing error:", error);
-          toast.error("画像の処理中にエラーが発生しました");
+          toast.error(
+            getReceiptFileErrorMessage(error, "画像の処理中にエラーが発生しました"),
+          );
           setIsUploading(false);
           return;
         }
