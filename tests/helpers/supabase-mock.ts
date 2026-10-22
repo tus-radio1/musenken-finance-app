@@ -7,7 +7,7 @@
 
 import { vi } from "vitest";
 
-export type QueryOp = "select" | "insert" | "update" | "delete" | "upsert";
+export type QueryOp = "select" | "insert" | "update" | "delete" | "upsert" | "rpc";
 
 export type QueryCall = {
   table: string;
@@ -93,6 +93,11 @@ export function createSupabaseMock(resolve: QueryResolver) {
 
   const client = {
     from: vi.fn(from),
+    rpc: vi.fn(async (name: string, params: Record<string, unknown>) => {
+      const call: QueryCall = { table: name, op: "rpc", payload: params, filters: [] };
+      calls.push(call);
+      return { data: null, error: null, ...resolve(call) };
+    }),
     auth: { admin: authAdmin },
   };
 

@@ -690,6 +690,14 @@ describe("createTransaction", () => {
 // ---------------------------------------------------------------------------
 
 describe("deleteTransaction", () => {
+  it.each(["pending", "approved"])("lets non-admin 会計 delete another member's %s transaction", async (status) => {
+    actor = "accounting";
+    tx = { ...tx, created_by: OTHER_USER_ID, approval_status: status };
+    expect(await deleteTransaction(TX_ID)).toEqual({ success: true });
+    expect(txWrites("delete")).toHaveLength(1);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+  });
+
   // Bug (item 6): a DELETE that removed 0 rows was reported as success.
   it("returns an error and skips the audit when no row was deleted", async () => {
     writtenRows = [];
