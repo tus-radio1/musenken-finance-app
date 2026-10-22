@@ -361,28 +361,23 @@ export async function deleteSubsidyItem(id: string) {
   const auth = authResult.context;
   const access = authResult.access;
 
-  // Only admins can soft-delete subsidy items due to RLS policy constraints
-  // The subsidy_items_update_admin_accounting policy has WITH CHECK (deleted_at IS NULL)
-  // which prevents setting deleted_at to non-null, so soft deletes must be restricted to admins
+  // Admins and accounting can soft-delete through the narrow RPC.
   if (!canSoftDeleteSubsidyItems(access)) {
     return { error: "権限がありません" };
   }
 
-  // Soft delete instead of physical delete
-  // Uses createClient() with RLS - authorization is enforced by RLS policies
-  const deletedAt = new Date().toISOString();
-  const { data: deletedRows, error } = await auth.supabase
-    .from("subsidy_items")
-    .update({ deleted_at: deletedAt })
-    .eq("id", id)
-    .is("deleted_at", null)
-    .select("id");
+  // The RPC only sets deleted_at after checking admin/accounting by name.
+  // It returns the affected ID without granting SELECT on deleted items.
+  const { data: deletedId, error } = await auth.supabase.rpc(
+    "soft_delete_subsidy_item",
+    { p_id: id },
+  );
 
   if (error) {
     console.error("deleteSubsidyItem error:", JSON.stringify(error, null, 2));
     return { error: "申請の削除に失敗しました" };
   }
-  if (!deletedRows || deletedRows.length !== 1) {
+  if (deletedId !== id) {
     return { error: SUBSIDY_NOT_UPDATED_ERROR };
   }
 
@@ -390,7 +385,7 @@ export async function deleteSubsidyItem(id: string) {
     tableName: "subsidy_items",
     recordId: id,
     action: "SOFT_DELETE",
-    newData: { deleted_at: deletedAt },
+    newData: { deleted_at: new Date().toISOString() },
     changedBy: auth.profileId,
   });
 

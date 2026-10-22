@@ -178,13 +178,13 @@ export function canReassignTransactionPeople(access: RoleAccessContext): boolean
   return access.isAdmin;
 }
 
-/** 削除: 管理者は常に可、作成者は pending のみ。 */
+/** Admins/accounting may delete any row; owners may delete pending rows. */
 export function canDeleteTransaction(
   access: RoleAccessContext,
   tx: TransactionRef,
   actorId: string,
 ): boolean {
-  if (access.isAdmin) return true;
+  if (isAdminOrAccounting(access)) return true;
   return tx.created_by === actorId && tx.approval_status === PENDING;
 }
 
@@ -212,7 +212,7 @@ export function canCreateFiscalYear(access: RoleAccessContext): boolean {
 
 /** グループの作成・有効化切り替え・年度データ削除。 */
 export function canManageGroups(access: RoleAccessContext): boolean {
-  return access.isAdmin;
+  return isAdminOrAccounting(access);
 }
 
 // ---------------------------------------------------------------------------
@@ -223,9 +223,9 @@ export function canManageSubsidies(access: RoleAccessContext): boolean {
   return isAdminOrAccounting(access);
 }
 
-/** 補助金申請の論理削除（RLS 上、deleted_at を設定できるのは管理者のみ）。 */
+/** Admins and accounting may soft-delete subsidy items. */
 export function canSoftDeleteSubsidyItems(access: RoleAccessContext): boolean {
-  return access.isAdmin;
+  return isAdminOrAccounting(access);
 }
 
 export function canManageMembers(access: RoleAccessContext): boolean {
@@ -268,7 +268,7 @@ const NO_ROW_PERMISSIONS: TransactionRowPermissions = {
 /**
  * Per-row flags for the ledger tables, from the same predicates the Server
  * Actions use. A read-only view (past fiscal year for non-admins) allows
- * nothing. Deleting from the ledger stays admin-only; owners delete their
+ * nothing. Admins and accounting can delete from the ledger; owners delete their
  * pending rows from 経費申請.
  */
 export function getTransactionRowPermissions(
@@ -290,7 +290,7 @@ export function getTransactionRowPermissions(
   const actorId = context.actorId;
   return {
     canEdit: canEditTransaction(access, tx, actorId),
-    canDelete: access.isAdmin,
+    canDelete: isAdminOrAccounting(access),
     canApprove: canApproveTransaction(
       access,
       tx,

@@ -9,7 +9,6 @@ import { requireRoleAccess } from "@/lib/roles/access";
 import {
   canCreateClubTransaction,
   canFileTransactionInGroup,
-  isAdmin,
 } from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
@@ -42,8 +41,6 @@ export default async function ApplicationsPage({
   const writableGroups = accountingGroups.filter((group) =>
     canFileTransactionInGroup(access, group),
   );
-
-  const isGlobalAdmin = isAdmin(access);
 
   // 当該ユーザの過去の申請を取得（会計グループ名付き）
   const { data: transactions, count } = await supabase
@@ -101,7 +98,7 @@ export default async function ApplicationsPage({
             <CardTitle>あなたの申請一覧</CardTitle>
           </CardHeader>
           <CardContent>
-            <ApplicationsTable transactions={tableData} accountingGroups={accountingGroups || []} isGlobalAdmin={isGlobalAdmin} />
+            <ApplicationsTable transactions={tableData} accountingGroups={accountingGroups || []} access={access} actorId={user.id} />
           </CardContent>
         </Card>
 

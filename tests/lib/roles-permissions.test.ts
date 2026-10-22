@@ -209,12 +209,12 @@ describe("canSetApprovalFieldsDirectly", () => {
 });
 
 describe("canDeleteTransaction", () => {
-  it("lets admins delete anything and owners only pending rows", () => {
+  it("lets admins and 会計 delete anything and owners only pending rows", () => {
     const approved = { created_by: ACTOR_ID, approval_status: "approved" };
     expect(canDeleteTransaction(access(ROLES.admin), approved, ACTOR_ID)).toBe(true);
     expect(canDeleteTransaction(access(ROLES.memberG1), approved, ACTOR_ID)).toBe(false);
     expect(canDeleteTransaction(access(ROLES.memberG1), pendingOf(ACTOR_ID), ACTOR_ID)).toBe(true);
-    expect(canDeleteTransaction(access(ROLES.accounting), pendingOf(OTHER_ID), ACTOR_ID)).toBe(false);
+    expect(canDeleteTransaction(access(ROLES.accounting), pendingOf(OTHER_ID), ACTOR_ID)).toBe(true);
   });
 });
 
@@ -246,7 +246,7 @@ describe("budget permissions (D4)", () => {
       expect(canViewBudgetPage(access(r))).toBe(expected);
       expect(canCreateFiscalYear(access(r))).toBe(expected);
     }
-    expect(canManageGroups(access(ROLES.accounting))).toBe(false);
+    expect(canManageGroups(access(ROLES.accounting))).toBe(true);
     expect(canManageGroups(access(ROLES.admin))).toBe(true);
   });
 });
@@ -330,13 +330,13 @@ describe("getTransactionRowPermissions", () => {
   it("lets 会計 edit and approve another member's pending row", () => {
     expect(
       permissions.getTransactionRowPermissions(access(ROLES.accounting), pendingOf(OTHER_ID), current),
-    ).toEqual({ canEdit: true, canDelete: false, canApprove: true, canChangeApprovalStatus: true });
+    ).toEqual({ canEdit: true, canDelete: true, canApprove: true, canChangeApprovalStatus: true });
   });
 
   it("hides approval controls from 会計 on their own row", () => {
     expect(
       permissions.getTransactionRowPermissions(access(ROLES.accounting), pendingOf(ACTOR_ID), current),
-    ).toEqual({ canEdit: true, canDelete: false, canApprove: false, canChangeApprovalStatus: false });
+    ).toEqual({ canEdit: true, canDelete: true, canApprove: false, canChangeApprovalStatus: false });
   });
 
   it("shows leaders no approval or edit controls on other rows", () => {
