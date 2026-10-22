@@ -42,7 +42,7 @@ yarn-error.log*
 next-env.d.ts
 
 # Antigravity
-# Ignore every docs/ directory (incl. .claude/docs/), except the root docs/manual/.
+# Ignore docs/ directories except the root docs/manual/ (.claude/docs/ is re-included below).
 docs/
 !/docs/
 /docs/*
@@ -53,3 +53,16 @@ supabase/.temp/
 
 # AI Agents
 .claude/logs/*
+
+# Claude Code Orchestra local state
+!.claude/docs/
+.claude/docs/research/*
+!.claude/docs/research/.gitkeep
+.claude/settings.local.json
+.claude/settings.orchestra.json
+.codex/config.orchestra.toml
+CLAUDE.local.md
+.claude/logs/
+.claude/checkpoints/
+.orchestra-backup-*/
+__pycache__/
