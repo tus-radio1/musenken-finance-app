@@ -4,9 +4,23 @@
 
 1. production と同じ Supabase Organization に staging プロジェクトを作成します。
 2. Region は **Southeast Asia (Singapore)** を選択します。
-3. 初回はローカルから `supabase link` と `supabase db push` を実行するか、`develop` への最初の対象変更でデプロイワークフローに任せます。
-4. staging にだけ初期ダミーデータが必要な場合は、staging に link した状態で手動で `supabase db push --include-seed` を実行できます（seed にはログイン不可の会計システムユーザーが含まれます）。本番では絶対に実行しません。
-5. `receipts` バケットはマイグレーション `20261008120000_ensure_receipts_bucket.sql` で作成されるため、Dashboard での手動作成は不要です。
+3. マイグレーションは、`develop` への merge 時にデプロイワークフローが適用します。
+4. `receipts` バケットはマイグレーション `20261008120000_ensure_receipts_bucket.sql` で作成されるため、Dashboard での手動作成は不要です。
+
+## staging の初期データ（初回のみ・必須）
+
+デプロイワークフローの `supabase db push` は `seed.sql` を適用しません。seed には、アプリが `transactions.created_by` / `approved_by` に書き込む会計システムユーザー（`9701edd2-bd9d-4d57-9dd6-7235686103bf`、ログイン不可）が含まれます。これが無いと staging で取引の登録が外部キー違反で失敗するため、マイグレーション適用後に一度だけ seed を流します。
+
+```bash
+npx supabase link --project-ref gygyuqivcvwgvyuekqvy      # staging
+cat supabase/.temp/project-ref                             # gygyuqivcvwgvyuekqvy であることを必ず確認
+npx supabase db push --include-seed
+npx supabase link --project-ref csphhemmhzayyhlasirc      # production の link に戻す
+```
+
+**production（`csphhemmhzayyhlasirc`）に link した状態では絶対に実行しません。** seed は冪等なので、staging で再実行しても重複は作られません。
+
+続けて staging の Dashboard（Authentication > Users）で最初の管理者ユーザーを作成し、`local-setup.md` と同じ手順で admin ロールを付与します。
 
 ## GitHub Environments
 
@@ -30,6 +44,12 @@ Vercel では次を設定します。
 | Preview | staging Supabase |
 
 各環境へ `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY` を設定します。値は GitHub の secrets と共有・コミットせず、Vercel 側で個別に管理します。
+
+- 同じ変数名で Production 用と Preview 用を別々に作成します（All Environments にしません）。
+- Development にはチェックを入れません。`vercel env pull` で `.env.local` が本番の値に上書きされるのを防ぐためです。
+- `SUPABASE_SERVICE_ROLE_KEY` は RLS を無視できるため、必ず Sensitive にします。
+- `NEXT_PUBLIC_ACCOUNTING_SYSTEM_USER_ID` / `ACCOUNTING_SYSTEM_USER_ID` は Preview に設定しません（staging の会計ユーザーは seed の `9701edd2-…` を使います）。
+- 環境変数の変更は既存のデプロイに反映されないため、変更後に Redeploy します。
 
 staging Supabase の Auth 設定で Vercel preview 用の Site URL と Redirect URLs を登録します。チーム名に合わせて `https://*-<team>.vercel.app/**` のようなワイルドカードを使用します。
 
