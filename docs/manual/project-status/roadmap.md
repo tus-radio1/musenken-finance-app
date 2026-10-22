@@ -24,7 +24,7 @@
 | S1 | 部員管理権限を持つ人が、任意のロール（全体管理者を含む）を付与できる | `app/(authenticated)/members/manage/actions.ts` `updateMember` | S |
 | S2 | 補助金の自分の申請を更新するときに生の `values` を展開しているため、`status`・`approved_amount`・`applicant_id` を書き換えられる | `app/(authenticated)/subsidies/actions.ts:186-187` | S |
 | S3 | ログインしていれば、他人の領収書ファイルを削除・上書きできる（`existingPath` とファイル名をクライアントが指定できる） | `app/actions.ts:131-151` | M |
-| S4 | `receipts` バケットが public 設定で、URL を知っていれば誰でも閲覧できる | `supabase/migrations/20261008120000_ensure_receipts_bucket.sql` | M（署名付き URL への移行が必要） |
+| S4 | ~~`receipts` バケットが public 設定で、URL を知っていれば誰でも閲覧できる~~ **対応済み**：バケットを private にし、閲覧はログイン確認後に発行する 5 分間の署名付き URL のみにした（`GET /api/receipts`）。デプロイはアプリを先、マイグレーションを後にすること | `supabase/migrations/20261022130000_make_receipts_bucket_private.sql`、`app/api/receipts/route.ts` | M |
 | B1 | Server Actions の受信上限が `"5mb"` なのに、画面とサーバーのチェックは 10MB を約束している | `next.config.ts:8`、`app/actions.ts:118` | S |
 | B2 | Safari・iOS では WebP に変換できず、中身が PNG のファイルを `.webp` として保存している | `lib/image.ts:52-77` | S |
 | B3 | 領収書を差し替えるとき、古いファイルを先に削除しているため、アップロードが失敗すると参照先が消える | `app/actions.ts:129-151` | S |
@@ -46,7 +46,7 @@ S1〜S3 では service-role クライアントを使っているため、RLS で
 
 ### 3. 領収書の D&D エリア（ユーザー要望）
 - R1: ドロップゾーンの共通コンポーネント（`<FileDropzone>` と `useReceiptUpload`）を作り、6 箇所のファイル入力をすべて置き換える。
-- R2: 領収書 URL の生成処理（6 箇所）を 1 つの関数にまとめる。S4 で署名付き URL に移行するときの差し替え口になる。
+- ~~R2: 領収書 URL の生成処理（6 箇所）を 1 つの関数にまとめる。~~ S4 とあわせて対応済み（`lib/receipt-url.ts` の `getReceiptViewUrl`）。
 - ブラウザ側でもファイルの種類とサイズをチェックし、許可リストをサーバーと共有する。
 - 1 ファイルのみ受け付け、キーボード操作に対応し、スマホではタップで選択できるようにする。
 - B1〜B3 と S3 は同じ処理経路にあるため、この作業とまとめて直すのが効率的です。
@@ -84,6 +84,6 @@ S1〜S3 では service-role クライアントを使っているため、RLS で
 
 1. 一般部員が他の部員の申請をどこまで見られるべきか（E2E と RLS テストの前提）。
 2. 仕様書（`docs/specification.md`、Git 管理外）とコードで食い違う 3 点（Tier 7 のアクセス制限、支出申請の削除権限、補助金申請時に必要な書類）について、どちらを正とするか。
-3. `receipts` バケットを private にして、署名付き URL に移行するか。
+3. ~~`receipts` バケットを private にして、署名付き URL に移行するか。~~ 決定・対応済み（S4）。閲覧範囲はログイン済みの部員全員で、所有者・班単位の制限はデータの RLS と合わせて後で検討する。
 4. 補助金の `approved` の表示名（「審査通過」か「承認済」か）。
 5. Vercel の関数リージョンの確認（ダッシュボードで確認できます）。

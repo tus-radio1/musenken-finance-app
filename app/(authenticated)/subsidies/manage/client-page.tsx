@@ -86,10 +86,6 @@ export function SubsidiesManageClientPage({
   const [file, setFile] = useState<File | null>(null);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
-  const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-    : null;
-
   // --- トグル・ソートハンドラ ---
   const toggleCard = (id: string) => {
     setOpenCards((prev) => {
@@ -387,7 +383,6 @@ export function SubsidiesManageClientPage({
           onStatusChange={handleStatusChange}
           onEditClick={handleEditClick}
           isReadOnly={isReadOnly}
-          publicReceiptBase={publicReceiptBase}
         />
       </div>
 
@@ -402,7 +397,6 @@ export function SubsidiesManageClientPage({
         sortKey={sortKey}
         sortOrder={sortOrder}
         isReadOnly={isReadOnly}
-        publicReceiptBase={publicReceiptBase}
       />
 
       {/* 編集ダイアログ */}

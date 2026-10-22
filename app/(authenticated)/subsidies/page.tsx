@@ -6,6 +6,7 @@ import { SubsidyItemsTable } from "@/components/subsidy-items-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUserTeams } from "@/lib/teams";
 import { Button } from "@/components/ui/button";
+import { getReceiptViewUrl } from "@/lib/receipt-url";
 
 const PAGE_SIZE = 50;
 
@@ -74,15 +75,6 @@ export default async function SubsidiesPage({
   const hasPrev = page > 0;
   const hasNext = page < totalPages - 1;
 
-  // Construct receipt public URL base from Supabase URL
-  const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-    : null;
-
-  const publicEvidenceBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-    : null;
-
   // テーブル用にデータを整形
   const tableData = (subsidyItems || []).map((item) => ({
     id: item.id,
@@ -102,17 +94,9 @@ export default async function SubsidiesPage({
     justification: item.justification || null,
     remarks: item.remarks || null,
     receipt_url: item.receipt_url || null,
-    receipt_public_url: item.receipt_url?.startsWith("http")
-      ? item.receipt_url
-      : publicReceiptBase && item.receipt_url
-        ? `${publicReceiptBase}${item.receipt_url}`
-        : null,
+    receipt_public_url: getReceiptViewUrl(item.receipt_url),
     evidence_url: item.evidence_url || null,
-    evidence_public_url: item.evidence_url?.startsWith("http")
-      ? item.evidence_url
-      : publicEvidenceBase && item.evidence_url
-        ? `${publicEvidenceBase}${item.evidence_url}`
-        : null,
+    evidence_public_url: getReceiptViewUrl(item.evidence_url),
   }));
 
   // 集計: 種別ごとの件数

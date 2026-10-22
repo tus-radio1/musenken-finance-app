@@ -28,6 +28,7 @@ import {
   STATUS_VARIANT_MAP as STATUS_MAP,
 } from "@/lib/constants/subsidy";
 import { StatusBadge } from "@/components/status-badge";
+import { getReceiptViewUrl } from "@/lib/receipt-url";
 import type { SubsidyItem } from "./types";
 
 type ManageMobileCardListProps = {
@@ -37,7 +38,6 @@ type ManageMobileCardListProps = {
   onStatusChange: (id: string, newStatus: string) => void;
   onEditClick: (item: SubsidyItem) => void;
   isReadOnly: boolean;
-  publicReceiptBase: string | null;
 };
 
 export function ManageMobileCardList({
@@ -47,7 +47,6 @@ export function ManageMobileCardList({
   onStatusChange,
   onEditClick,
   isReadOnly,
-  publicReceiptBase,
 }: ManageMobileCardListProps) {
   if (filteredItems.length === 0) {
     return (
@@ -59,7 +58,10 @@ export function ManageMobileCardList({
 
   return (
     <>
-      {filteredItems.map((item) => (
+      {filteredItems.map((item) => {
+        const receiptViewUrl = getReceiptViewUrl(item.receipt_url);
+        const evidenceViewUrl = getReceiptViewUrl(item.evidence_url);
+        return (
         <Collapsible
           key={item.id}
           open={openCards.has(item.id)}
@@ -174,19 +176,13 @@ export function ManageMobileCardList({
                 </span>
               </div>
 
-              {(item.receipt_url || item.evidence_url) && (
+              {(receiptViewUrl || evidenceViewUrl) && (
                 <div className="text-sm">
                   <span className="text-muted-foreground font-medium block mb-1">添付書類:</span>
                   <div className="flex flex-col gap-1">
-                    {item.receipt_url && (
+                    {receiptViewUrl && (
                       <a
-                        href={
-                          item.receipt_url.startsWith("http")
-                            ? item.receipt_url
-                            : publicReceiptBase
-                              ? `${publicReceiptBase}${item.receipt_url}`
-                              : "#"
-                        }
+                        href={receiptViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center text-blue-600 hover:underline text-xs"
@@ -195,15 +191,9 @@ export function ManageMobileCardList({
                         領収書
                       </a>
                     )}
-                    {item.evidence_url && (
+                    {evidenceViewUrl && (
                       <a
-                        href={
-                          item.evidence_url.startsWith("http")
-                            ? item.evidence_url
-                            : publicReceiptBase
-                              ? `${publicReceiptBase}${item.evidence_url}`
-                              : "#"
-                        }
+                        href={evidenceViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center text-blue-600 hover:underline text-xs"
@@ -241,7 +231,8 @@ export function ManageMobileCardList({
             </CollapsibleContent>
           </div>
         </Collapsible>
-      ))}
+        );
+      })}
     </>
   );
 }
