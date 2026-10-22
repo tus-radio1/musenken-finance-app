@@ -1,6 +1,7 @@
 import type { User, SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
 
-export type SupabaseServerClient = SupabaseClient;
+export type SupabaseServerClient = SupabaseClient<Database>;
 
 export type AuthContext = {
   supabase: SupabaseServerClient;

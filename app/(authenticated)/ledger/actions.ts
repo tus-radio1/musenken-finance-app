@@ -262,8 +262,9 @@ export async function createTransfer(params: {
       p_from_account_id: params.fromAccountId,
       p_to_account_id: params.toAccountId,
       p_description: params.description,
-      p_receipt_url: params.receiptUrl ?? null,
-      p_remarks: params.remarks ?? null,
+      // Omitted optional RPC arguments fall back to the SQL default (NULL).
+      p_receipt_url: params.receiptUrl ?? undefined,
+      p_remarks: params.remarks ?? undefined,
       p_created_by: auth.profileId,
     },
   );

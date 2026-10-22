@@ -140,6 +140,7 @@ export async function updateSubsidyStatus(id: string, status: string) {
   if (!inputValidation.success) {
     return { error: "入力データが不正です" };
   }
+  const validatedStatus = inputValidation.data.status;
 
   const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
@@ -155,7 +156,7 @@ export async function updateSubsidyStatus(id: string, status: string) {
   // Uses createClient() with RLS - authorization is enforced by RLS policies
   const { error } = await auth.supabase
     .from("subsidy_items")
-    .update({ status })
+    .update({ status: validatedStatus })
     .eq("id", id)
     .is("deleted_at", null);
 

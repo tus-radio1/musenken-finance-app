@@ -68,7 +68,7 @@ export async function createSubsidyItem(
     category: validatedValues.category,
     term: validatedValues.term,
     expense_type: validatedValues.expense_type,
-    income_type: validatedValues.income_type as string | undefined,
+    income_type: validatedValues.income_type,
     date: formatDateForDatabase(validatedValues.date),
     accounting_group_id: validatedValues.accounting_group_id,
     applicant_id: auth.profileId,

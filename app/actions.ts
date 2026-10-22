@@ -21,6 +21,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/utils/supabase/server";
 import { z } from "zod";
 import { formSchema } from "@/lib/schema";
+import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
 import { logAuditEvent } from "@/lib/audit-log";
 import { uploadRateLimiter } from "@/lib/rate-limit";
 import { formatDateForDatabase } from "@/lib/date";
@@ -230,7 +231,7 @@ export async function createTransaction(
     // All transactions start as pending; leader/admin approval required.
     // Even admins start as pending to prevent self-approval.
     approval_status: "pending",
-  };
+  } satisfies TablesInsert<"transactions">;
 
   const { error: insertError } = await auth.supabase
     .from("transactions")
@@ -428,7 +429,7 @@ export async function updateTransaction(
       ? -Math.abs(values.amount)
       : Math.abs(values.amount);
 
-  const updates: Record<string, unknown> = {
+  const updates: TablesUpdate<"transactions"> = {
     amount: finalAmount,
     description: values.description,
     fiscal_year_id: fy?.year ?? null,
