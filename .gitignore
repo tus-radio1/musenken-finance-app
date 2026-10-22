@@ -42,7 +42,11 @@ yarn-error.log*
 next-env.d.ts
 
 # Antigravity
+# Ignore docs/ directories except the root docs/manual/ (.claude/docs/ is re-included below).
 docs/
+!/docs/
+/docs/*
+!/docs/manual/
 
 # Supabase CLI cache
 supabase/.temp/
