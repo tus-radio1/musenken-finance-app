@@ -34,15 +34,18 @@ export async function resolveAuthContext(options?: {
   };
 }
 
+export const ROLE_LOOKUP_ERROR = "権限情報の取得に失敗しました";
+
 export type AuthWithRolesResult =
   | { ok: true; context: AuthContext; access: RoleAccessContext }
-  | { ok: false; error: "認証が必要です" };
+  | { ok: false; error: "認証が必要です" | typeof ROLE_LOOKUP_ERROR };
 
 export async function resolveAuthWithRoles(options?: {
   supabase?: SupabaseServerClient;
 }): Promise<AuthWithRolesResult> {
   const authResult = await resolveAuthContext(options);
   if (!authResult.ok) return authResult;
-  const access = await getUserRoleAccess(authResult.context);
-  return { ok: true, context: authResult.context, access };
+  const roleResult = await getUserRoleAccess(authResult.context);
+  if (!roleResult.ok) return { ok: false, error: ROLE_LOOKUP_ERROR };
+  return { ok: true, context: authResult.context, access: roleResult.access };
 }

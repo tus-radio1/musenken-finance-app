@@ -25,3 +25,10 @@ export const MANAGE_MEMBER_ROLE_NAMES = [
   ROLE_NAMES_JA.CHAIR,
   ROLE_NAMES_JA.VICE_CHAIR,
 ] as const;
+
+/** accounting_groups.type values used by the permission rules. */
+export const GROUP_TYPES = {
+  GENERAL: "general",
+  LEADER: "leader",
+  CLUB: "club",
+} as const;

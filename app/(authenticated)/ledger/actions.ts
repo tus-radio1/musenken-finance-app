@@ -21,7 +21,7 @@ import {
 import { resolveAuthWithRoles } from "@/lib/auth/context";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { revalidatePath } from "next/cache";
-import { canViewClubLedger } from "@/lib/auth/permissions";
+import { canViewClubLedger } from "@/lib/roles/permissions";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
 
 import {

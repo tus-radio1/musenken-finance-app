@@ -120,6 +120,7 @@ let adminDb: ReturnType<typeof createSupabaseMock>;
 // Module mocks
 // ---------------------------------------------------------------------------
 
+vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn() }));
