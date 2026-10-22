@@ -32,6 +32,7 @@ import { ItemsDesktopTable } from "@/components/subsidy/items-desktop-table";
 import { ItemsMobileCardList } from "@/components/subsidy/items-mobile-card-list";
 import { ItemsEditDialog } from "@/components/subsidy/items-edit-dialog";
 import type { SubsidyItem, SortKey, SortOrder, EditFormState } from "@/components/subsidy/types";
+import { getReceiptViewUrl } from "@/lib/receipt-url";
 
 export function SubsidyItemsTable({
   items: initialItems,
@@ -245,18 +246,6 @@ export function SubsidyItemsTable({
     } else {
       toast.success("申請情報を更新しました");
 
-      const publicBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-        ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-        : null;
-      const buildPublicUrl = (path: string | null | undefined) =>
-        path
-          ? path.startsWith("http")
-            ? path
-            : publicBase
-              ? `${publicBase}${path}`
-              : null
-          : null;
-
       const updatedGroup = accountingGroups.find(
         (g) => g.id === editForm.accounting_group_id,
       );
@@ -268,7 +257,7 @@ export function SubsidyItemsTable({
             return {
               ...i,
               receipt_url: uploadedFileUrl,
-              receipt_public_url: buildPublicUrl(uploadedFileUrl),
+              receipt_public_url: getReceiptViewUrl(uploadedFileUrl),
             };
           }
           return {
@@ -282,7 +271,7 @@ export function SubsidyItemsTable({
               ? updatedGroup.name
               : i.accounting_group_name,
             evidence_url: uploadedFileUrl,
-            evidence_public_url: buildPublicUrl(uploadedFileUrl),
+            evidence_public_url: getReceiptViewUrl(uploadedFileUrl),
           };
         }),
       );

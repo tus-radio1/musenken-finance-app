@@ -6,6 +6,7 @@ import { ApplicationsTable } from "@/components/applications-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUserTeams } from "@/lib/teams";
 import { Button } from "@/components/ui/button";
+import { getReceiptViewUrl } from "@/lib/receipt-url";
 
 const PAGE_SIZE = 50;
 
@@ -50,11 +51,6 @@ export default async function ApplicationsPage({
   const hasPrev = page > 0;
   const hasNext = page < totalPages - 1;
 
-  // Construct receipt public URL base from Supabase URL
-  const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-    : null;
-
   // テーブル用にデータを整形
   const tableData = (transactions || []).map((tx) => ({
     id: tx.id,
@@ -66,11 +62,7 @@ export default async function ApplicationsPage({
     financial_account_id: tx.financial_account_id,
     accounting_group_name: tx.accounting_groups?.name || "-",
     receipt_url: tx.receipt_url || null,
-    receipt_public_url: tx.receipt_url?.startsWith("http")
-      ? tx.receipt_url
-      : publicReceiptBase && tx.receipt_url
-        ? `${publicReceiptBase}${tx.receipt_url}`
-        : null,
+    receipt_public_url: getReceiptViewUrl(tx.receipt_url),
     remarks: tx.remarks || null,
     created_by: tx.created_by,
   }));
