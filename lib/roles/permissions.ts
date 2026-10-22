@@ -244,3 +244,54 @@ export function canCreateClubTransaction(access: RoleAccessContext): boolean {
 export function canManageFinancialAccounts(access: RoleAccessContext): boolean {
   return access.isAdmin;
 }
+
+// ---------------------------------------------------------------------------
+// Ledger rows (UI)
+// ---------------------------------------------------------------------------
+
+export type TransactionRowPermissions = {
+  canEdit: boolean;
+  canDelete: boolean;
+  canApprove: boolean;
+  canChangeApprovalStatus: boolean;
+};
+
+const NO_ROW_PERMISSIONS: TransactionRowPermissions = {
+  canEdit: false,
+  canDelete: false,
+  canApprove: false,
+  canChangeApprovalStatus: false,
+};
+
+/**
+ * Per-row flags for the ledger tables, from the same predicates the Server
+ * Actions use. A read-only view (past fiscal year for non-admins) allows
+ * nothing. Deleting from the ledger stays admin-only; owners delete their
+ * pending rows from 経費申請.
+ */
+export function getTransactionRowPermissions(
+  access: RoleAccessContext,
+  tx: TransactionRef,
+  context: {
+    actorId: string | undefined;
+    isCurrentFiscalYear: boolean;
+    isReadOnly: boolean;
+  },
+): TransactionRowPermissions {
+  if (context.isReadOnly || !context.actorId) return NO_ROW_PERMISSIONS;
+  const actorId = context.actorId;
+  return {
+    canEdit: canEditTransaction(access, tx, actorId),
+    canDelete: access.isAdmin,
+    canApprove: canApproveTransaction(
+      access,
+      tx,
+      actorId,
+      context.isCurrentFiscalYear,
+    ),
+    canChangeApprovalStatus: canSetApprovalFieldsDirectly(access, {
+      isOwnRow: tx.created_by === actorId,
+      isCurrentFiscalYear: context.isCurrentFiscalYear,
+    }),
+  };
+}

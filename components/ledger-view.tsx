@@ -21,6 +21,12 @@ import {
   fetchFinancialAccounts,
 } from "@/app/(authenticated)/ledger/actions";
 import { ROLE_TYPES } from "@/lib/roles/constants";
+import {
+  isAccounting,
+  isAdmin,
+  isClubGroup,
+} from "@/lib/roles/permissions";
+import type { RoleAccessContext } from "@/lib/roles/types";
 import { createClient } from "@/utils/supabase/client";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
 import {
@@ -49,8 +55,8 @@ import type { SortKey, SortDir, Team } from "@/components/ledger";
 type Props = {
   teams: Team[];
   fyYear?: number;
-  isGlobalAdmin: boolean;
-  isAccountingUser: boolean;
+  /** Role context of the viewer; row permissions come from lib/roles/permissions. */
+  access: RoleAccessContext;
   currentProfileId?: string;
   users?: { id: string; name: string }[];
   accountingUserId?: string;
@@ -68,8 +74,7 @@ type Props = {
 export default function LedgerView({
   teams,
   fyYear,
-  isGlobalAdmin,
-  isAccountingUser,
+  access,
   currentProfileId,
   users,
   accountingUserId,
@@ -120,11 +125,14 @@ export default function LedgerView({
     FinancialAccountInfo[]
   >([]);
 
-  const isAdminOrAccounting = isAccountingUser || isGlobalAdmin;
+  const isGlobalAdmin = isAdmin(access);
+  const isAccountingUser = isAccounting(access);
+  const isCurrentFiscalYear =
+    fiscalYears?.find((fy) => fy.year === fyYear)?.is_current ?? false;
 
-  // Detect if selected group is 部全体 (club-wide) by checking team name
+  // 部全体会計（club-wide）はグループの type で判定する
   const selectedTeam = teams.find((t) => t.id === selectedGroup);
-  const isClubWideGroup = selectedTeam?.name === "部全体";
+  const isClubWideGroup = selectedTeam ? isClubGroup(selectedTeam) : false;
 
   const userRoleStr = isGlobalAdmin
     ? ROLE_TYPES.ADMIN
@@ -398,8 +406,8 @@ export default function LedgerView({
           <LedgerMobileCards
             rows={processedRows}
             currentProfileId={currentProfileId}
-            isAdminOrAccounting={isAdminOrAccounting}
-            isGlobalAdmin={isGlobalAdmin}
+            access={access}
+            isCurrentFiscalYear={isCurrentFiscalYear}
             isReadOnly={isReadOnly ?? false}
             categoriesForSelected={categoriesForSelected}
             userRoleStr={userRoleStr}
@@ -415,8 +423,8 @@ export default function LedgerView({
             sortDir={sortDir}
             onSort={handleSort}
             currentProfileId={currentProfileId}
-            isAdminOrAccounting={isAdminOrAccounting}
-            isGlobalAdmin={isGlobalAdmin}
+            access={access}
+            isCurrentFiscalYear={isCurrentFiscalYear}
             isReadOnly={isReadOnly ?? false}
             categoriesForSelected={categoriesForSelected}
             userRoleStr={userRoleStr}

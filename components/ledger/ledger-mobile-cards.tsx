@@ -24,13 +24,19 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { LedgerTransaction } from "./types";
+import type { RoleAccessContext } from "@/lib/roles/types";
+import {
+  getTransactionRowPermissions,
+  isAdminOrAccounting,
+} from "@/lib/roles/permissions";
 import { TRANSACTION_KIND_LABELS } from "./types";
 
 type Props = {
   rows: LedgerTransaction[];
   currentProfileId?: string;
-  isAdminOrAccounting: boolean;
-  isGlobalAdmin: boolean;
+  access: RoleAccessContext;
+  /** Whether the displayed fiscal year is the current one (approval rule D7). */
+  isCurrentFiscalYear: boolean;
   isReadOnly: boolean;
   categoriesForSelected: Array<{ id: string; name: string }>;
   userRoleStr: "admin" | "accounting" | "general";
@@ -42,8 +48,8 @@ type Props = {
 export function LedgerMobileCards({
   rows,
   currentProfileId,
-  isAdminOrAccounting,
-  isGlobalAdmin,
+  access,
+  isCurrentFiscalYear,
   isReadOnly,
   categoriesForSelected,
   userRoleStr,
@@ -75,14 +81,12 @@ export function LedgerMobileCards({
         rows.map((r) => {
           const isOwner =
             !!currentProfileId && r.created_by === currentProfileId;
-          const canEdit =
-            !isReadOnly &&
-            (isAdminOrAccounting ||
-              (isOwner && r.approval_status === "pending"));
-          const canDelete = !isReadOnly && isGlobalAdmin;
-          // 会計は自分の取引の承認ステータスを変更できない（管理者は可）
-          const canChangeApprovalStatus =
-            isGlobalAdmin || (isAdminOrAccounting && !isOwner);
+          const { canEdit, canDelete, canApprove, canChangeApprovalStatus } =
+            getTransactionRowPermissions(access, r, {
+              actorId: currentProfileId,
+              isCurrentFiscalYear,
+              isReadOnly,
+            });
 
           return (
             <Collapsible
@@ -135,7 +139,7 @@ export function LedgerMobileCards({
                       <ApprovalActions
                         transactionId={r.id}
                         status={r.approval_status || "pending"}
-                        canApprove={isAdminOrAccounting}
+                        canApprove={canApprove}
                         isMyTransaction={isOwner}
                         amount={Number(r.amount)}
                       />
@@ -200,7 +204,7 @@ export function LedgerMobileCards({
                   <div className="flex items-center gap-1 flex-wrap">
                     {(() => {
                       if (r.is_subsidy) {
-                        if (isAdminOrAccounting) {
+                        if (isAdminOrAccounting(access)) {
                           return (
                             <Button variant="outline" size="sm" asChild>
                               <Link href="/subsidies/manage">

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { MembersTable, type MemberRow } from "@/components/members-table";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
+import { normalizeJoined } from "@/lib/roles/parse";
 import { fetchMemberProfiles, type MemberProfileRow } from "@/lib/profiles";
 
 type MemberRole = {
@@ -49,8 +50,7 @@ export default async function MembersManagementPage() {
       roleNamesByUser[userId] = list;
     };
 
-    if (Array.isArray(roles)) roles.forEach(addRoleName);
-    else if (roles) addRoleName(roles);
+    normalizeJoined(roles).forEach(addRoleName);
   });
 
   const members: MemberRow[] = profiles

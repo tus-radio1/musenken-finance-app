@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import LedgerView from "@/components/ledger-view";
 import { selectVisibleTeams, type TeamInfo } from "@/lib/teams";
 import { requireRoleAccess } from "@/lib/roles/access";
-import { isAccounting, isAdmin } from "@/lib/roles/permissions";
+import { isAdmin } from "@/lib/roles/permissions";
 import { getAccountingUserId } from "@/lib/system-config";
 import { getFiscalYears, getAccountingGroups } from "@/lib/cache";
 import { fetchLedgerTransactions } from "./actions";
@@ -39,7 +39,6 @@ export default async function LedgerPage({
     ]);
 
   const isGlobalAdmin = isAdmin(access);
-  const isAccountingUser = isAccounting(access);
   const myTeams: TeamInfo[] = selectVisibleTeams(access, allGroups);
 
   const selectedYearParam = params.year;
@@ -111,8 +110,7 @@ export default async function LedgerPage({
         <LedgerView
           teams={displayTeams}
           fyYear={fyYear}
-          isGlobalAdmin={isGlobalAdmin}
-          isAccountingUser={isAccountingUser}
+          access={access}
           currentProfileId={profileId}
           users={profiles || []}
           accountingUserId={accountingUserId}

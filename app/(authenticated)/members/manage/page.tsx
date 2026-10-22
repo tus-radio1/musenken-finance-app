@@ -12,20 +12,13 @@ import {
   type MemberManageRow,
 } from "./_components/manage-members-client";
 import type { RoleOption } from "./_components/edit-member-dialog";
-import { ROLE_TYPES, MANAGE_MEMBER_ROLE_NAMES } from "@/lib/roles/constants";
+import { requireRoleAccess } from "@/lib/roles/access";
+import { normalizeJoined } from "@/lib/roles/parse";
+import { canManageMembers, isAdmin } from "@/lib/roles/permissions";
 import {
   fetchMemberProfiles,
   type MemberProfileRow,
 } from "@/lib/profiles";
-
-type RoleInfo = {
-  name?: string | null;
-  type?: string | null;
-};
-
-type RoleInfoRow = {
-  roles: RoleInfo | RoleInfo[] | null;
-};
 
 type RoleAssignment = {
   name?: string | null;
@@ -37,23 +30,6 @@ type UserRoleAssignmentRow = {
   user_id: string;
 };
 
-function extractRoleInfo(rows: RoleInfoRow[] | null | undefined) {
-  const names: string[] = [];
-  const types: string[] = [];
-  const pushRole = (role: RoleInfo) => {
-    const name = role?.name;
-    const type = role?.type;
-    if (name && !names.includes(name)) names.push(name);
-    if (type && !types.includes(type)) types.push(type);
-  };
-  (rows || []).forEach((row) => {
-    const roles = row?.roles;
-    if (Array.isArray(roles)) roles.forEach(pushRole);
-    else if (roles) pushRole(roles);
-  });
-  return { names, types };
-}
-
 export default async function MembersManagePage() {
   const supabase = await createClient();
 
@@ -62,22 +38,8 @@ export default async function MembersManagePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const profileId = user.id;
-
-  let myRoleRows: RoleInfoRow[] | null | undefined;
-  if (profileId) {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("roles(name, type)")
-      .eq("user_id", profileId);
-    myRoleRows = data as RoleInfoRow[] | null;
-  }
-
-  const roleInfo = extractRoleInfo(myRoleRows);
-  const hasAccess =
-    roleInfo.names.some((name) =>
-      (MANAGE_MEMBER_ROLE_NAMES as readonly string[]).includes(name),
-    ) || roleInfo.types.includes(ROLE_TYPES.ADMIN);
+  const access = await requireRoleAccess({ supabase, profileId: user.id });
+  const hasAccess = canManageMembers(access);
 
   if (!hasAccess) {
     return (
@@ -120,8 +82,7 @@ export default async function MembersManagePage() {
   ((allUserRoles as UserRoleAssignmentRow[] | null) || []).forEach((ur) => {
     const userId: string = ur.user_id;
     const entry = rolesByUser[userId] || { names: [], ids: [] };
-    const roles = Array.isArray(ur.roles) ? ur.roles : ur.roles ? [ur.roles] : [];
-    roles.forEach((role) => {
+    normalizeJoined(ur.roles).forEach((role) => {
       if (role.name && !entry.names.includes(role.name)) {
         entry.names.push(role.name);
       }
@@ -144,7 +105,7 @@ export default async function MembersManagePage() {
     };
   });
 
-  const isAdmin = roleInfo.types.includes(ROLE_TYPES.ADMIN);
+  const actorIsAdmin = isAdmin(access);
 
   return (
     <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
@@ -157,7 +118,7 @@ export default async function MembersManagePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ManageMembersClient members={members} allRoles={allRoles} isAdmin={isAdmin} />
+            <ManageMembersClient members={members} allRoles={allRoles} isAdmin={actorIsAdmin} />
           </CardContent>
         </Card>
       </div>

@@ -300,3 +300,57 @@ describe("delegable roles (S1) add no capability", () => {
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// Ledger row flags (UI)
+// ---------------------------------------------------------------------------
+
+describe("getTransactionRowPermissions", () => {
+  const current = { actorId: ACTOR_ID, isCurrentFiscalYear: true, isReadOnly: false };
+
+  it("lets 会計 edit and approve another member's pending row", () => {
+    expect(
+      permissions.getTransactionRowPermissions(access(ROLES.accounting), pendingOf(OTHER_ID), current),
+    ).toEqual({ canEdit: true, canDelete: false, canApprove: true, canChangeApprovalStatus: true });
+  });
+
+  it("hides approval controls from 会計 on their own row", () => {
+    expect(
+      permissions.getTransactionRowPermissions(access(ROLES.accounting), pendingOf(ACTOR_ID), current),
+    ).toEqual({ canEdit: true, canDelete: false, canApprove: false, canChangeApprovalStatus: false });
+  });
+
+  it("shows leaders no approval or edit controls on other rows", () => {
+    expect(
+      permissions.getTransactionRowPermissions(access(ROLES.leaderG1), pendingOf(OTHER_ID), current),
+    ).toEqual({ canEdit: false, canDelete: false, canApprove: false, canChangeApprovalStatus: false });
+  });
+
+  it("keeps past fiscal years approvable by admins only (D7)", () => {
+    const past = { ...current, isCurrentFiscalYear: false };
+    expect(
+      permissions.getTransactionRowPermissions(access(ROLES.admin), pendingOf(OTHER_ID), past)
+        .canApprove,
+    ).toBe(true);
+    expect(
+      permissions.getTransactionRowPermissions(access(ROLES.accounting), pendingOf(OTHER_ID), past)
+        .canApprove,
+    ).toBe(false);
+  });
+
+  it("allows nothing in a read-only view or without a signed-in actor", () => {
+    const none = { canEdit: false, canDelete: false, canApprove: false, canChangeApprovalStatus: false };
+    expect(
+      permissions.getTransactionRowPermissions(access(ROLES.admin), pendingOf(OTHER_ID), {
+        ...current,
+        isReadOnly: true,
+      }),
+    ).toEqual(none);
+    expect(
+      permissions.getTransactionRowPermissions(access(ROLES.admin), pendingOf(OTHER_ID), {
+        ...current,
+        actorId: undefined,
+      }),
+    ).toEqual(none);
+  });
+});

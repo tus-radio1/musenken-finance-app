@@ -15,29 +15,18 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import type { UserProfile } from "@/components/user-nav";
 import type { LucideIcon } from "lucide-react";
+import { buildRoleAccess, parseRoleAssignments } from "@/lib/roles/parse";
 import {
-  ROLE_TYPES,
-  ROLE_NAMES_JA,
-  MANAGE_MEMBER_ROLE_NAMES,
-} from "@/lib/roles/constants";
+  canManageMembers,
+  canManageSubsidies,
+  canViewBudgetPage,
+} from "@/lib/roles/permissions";
+import type { RoleAccessContext } from "@/lib/roles/types";
 
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-};
-
-type RoleInfoRow = {
-  roles:
-    | {
-        name?: string | null;
-        type?: string | null;
-      }
-    | Array<{
-        name?: string | null;
-        type?: string | null;
-      }>
-    | null;
 };
 
 type PendingSubsidy = {
@@ -51,6 +40,7 @@ type PendingSubsidy = {
 type SidebarData = {
   roleNames: string[];
   roleTypes: string[];
+  access: RoleAccessContext;
   userProfile: UserProfile | null;
   pendingSubsidies: PendingSubsidy[];
 };
@@ -58,27 +48,14 @@ type SidebarData = {
 const EMPTY_SIDEBAR_DATA: SidebarData = {
   roleNames: [],
   roleTypes: [],
+  access: buildRoleAccess([]),
   userProfile: null,
   pendingSubsidies: [],
 };
 
-function extractRoleInfo(rows: RoleInfoRow[] | null | undefined) {
-  const names: string[] = [];
-  const types: string[] = [];
-  const pushRole = (
-    role: { name?: string | null; type?: string | null } | null,
-  ) => {
-    const name = role?.name;
-    const type = role?.type;
-    if (name && !names.includes(name)) names.push(name);
-    if (type && !types.includes(type)) types.push(type);
-  };
-  (rows || []).forEach((row) => {
-    const roles = row?.roles;
-    if (Array.isArray(roles)) roles.forEach(pushRole);
-    else pushRole(roles);
-  });
-  return { names, types };
+/** Distinct non-empty values, in first-seen order (for display). */
+function distinct(values: readonly string[]): string[] {
+  return [...new Set(values.filter((v) => v !== ""))];
 }
 
 async function fetchSidebarData(): Promise<SidebarData> {
@@ -120,13 +97,12 @@ async function fetchSidebarData(): Promise<SidebarData> {
     throw pendingResult.error;
   }
 
-  const info = extractRoleInfo(
-    rolesResult.data as RoleInfoRow[] | null | undefined,
-  );
+  const roles = parseRoleAssignments(rolesResult.data);
 
   return {
-    roleNames: info.names,
-    roleTypes: info.types,
+    roleNames: distinct(roles.map((r) => r.name)),
+    roleTypes: distinct(roles.map((r) => r.type)),
+    access: buildRoleAccess(roles),
     pendingSubsidies: pendingResult.data ?? [],
     userProfile: {
       full_name: profileResult.data?.name || user.user_metadata?.name || "",
@@ -146,17 +122,11 @@ export function useSidebarData() {
 
   const roleNames = data?.roleNames ?? EMPTY_SIDEBAR_DATA.roleNames;
   const roleTypes = data?.roleTypes ?? EMPTY_SIDEBAR_DATA.roleTypes;
+  const access = data?.access ?? EMPTY_SIDEBAR_DATA.access;
   const userProfile = data?.userProfile ?? EMPTY_SIDEBAR_DATA.userProfile;
   const pendingSubsidies =
     data?.pendingSubsidies ?? EMPTY_SIDEBAR_DATA.pendingSubsidies;
 
-  // 会計ロールを持つユーザーのみが見られるナビゲーション項目
-  const hasAccountingRole = roleNames.includes(ROLE_NAMES_JA.ACCOUNTING);
-  // 部長・副部長・会計・Admin ロールを持つユーザーのみ部員管理を表示
-  const hasManageRole =
-    roleNames.some((n: string) =>
-      (MANAGE_MEMBER_ROLE_NAMES as readonly string[]).includes(n),
-    ) || roleTypes.includes(ROLE_TYPES.ADMIN);
 
   const navItems: NavItem[] = [
     { href: "/", label: "ホーム", icon: Home },
@@ -164,13 +134,14 @@ export function useSidebarData() {
     { href: "/subsidies", label: "支援金申請", icon: HandCoins },
     { href: "/ledger", label: "出納帳", icon: List },
     { href: "/members", label: "部員情報", icon: Users },
-    ...(hasAccountingRole || roleTypes.includes(ROLE_TYPES.ADMIN)
-      ? [
-          { href: "/budget", label: "予算管理", icon: PieChart },
-          { href: "/subsidies/manage", label: "支援金管理", icon: HandCoins },
-        ]
+    // 表示判定はページ・Server Action と同じ lib/roles/permissions の関数
+    ...(canViewBudgetPage(access)
+      ? [{ href: "/budget", label: "予算管理", icon: PieChart }]
       : []),
-    ...(hasManageRole
+    ...(canManageSubsidies(access)
+      ? [{ href: "/subsidies/manage", label: "支援金管理", icon: HandCoins }]
+      : []),
+    ...(canManageMembers(access)
       ? [{ href: "/members/manage", label: "部員管理", icon: UserCog }]
       : []),
     { href: "/settings", label: "設定", icon: Settings },
