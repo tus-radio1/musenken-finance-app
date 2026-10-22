@@ -7,7 +7,7 @@
  * ルール:
  *   - グローバル管理者は全ロールを付与・解除できる。
  *   - それ以外の部員管理権限保持者が付与・解除できるのは「委任可能ロール」のみ。
- *     委任可能ロール = getUserRoleAccess() の権限判定に一切影響しないロール
+ *     委任可能ロール = lib/roles/permissions.ts の権限判定に一切影響しないロール
  *     （type = general、グループに属さない、部員管理ロール名でない）。
  *     管理者・会計・部長・副部長・グループロール・未知の type は管理者専用（fail closed）。
  *   - 存在しないロール ID の指定は拒否する。
@@ -22,7 +22,8 @@ export type RoleSyncPlan =
 
 /**
  * 部員管理権限（非管理者）でも付与・解除してよいロールか。
- * lib/roles/access.ts で権限に結びつく属性を一つでも持つロールは対象外。
+ * lib/roles/permissions.ts で権限に結びつく属性を一つでも持つロールは対象外
+ * （tests/lib/roles-permissions.test.ts で検証）。
  */
 export function isDelegableRole(role: RoleAssignment | undefined): boolean {
   if (!role) return false;

@@ -37,6 +37,7 @@ import { TransactionRowActions } from "@/components/transaction-row-actions";
 import { formatStoredDate, getSortableDateValue } from "@/lib/date";
 
 type Transaction = {
+  isReadOnly?: boolean;
   id: string;
   date: string | null;
   amount: number;
@@ -245,7 +246,7 @@ export function ApplicationsTable({
                 <TableBody>
                   {filtered.map((tx) => {
                     const canEditOrDelete =
-                      isGlobalAdmin || tx.approval_status === "pending";
+                      !tx.isReadOnly && (isGlobalAdmin || tx.approval_status === "pending");
                     return (
                       <TableRow key={tx.id}>
                         <TableCell className="font-medium">
@@ -332,7 +333,7 @@ export function ApplicationsTable({
           <div className="xl:hidden space-y-3">
             {filtered.map((tx) => {
               const canEditOrDelete =
-                isGlobalAdmin || tx.approval_status === "pending";
+                !tx.isReadOnly && (isGlobalAdmin || tx.approval_status === "pending");
               return (
                 <Collapsible
                   key={tx.id}

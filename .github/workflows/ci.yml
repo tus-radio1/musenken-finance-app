@@ -50,11 +50,10 @@ jobs:
         run: supabase db reset --local
       - name: Lint database schema
         run: supabase db lint --local --fail-on error --level error
-      # Informational drift check. The committed types were generated from the
-      # remote project in a different format (CLI 2.120 emits unformatted TS)
-      # and currently differ semantically from the migrations (e.g.
-      # transactions.transaction_kind). Remove continue-on-error once
-      # lib/database.types.ts is regenerated with `npm run db:types`.
+      - name: Run pgTAP tests
+        run: supabase test db --local
+      # lib/database.types.ts must be the raw output of the pinned CLI for the
+      # migrations in this commit. Regenerate with `npm run db:types` after
+      # `supabase db reset --local` whenever a migration changes.
       - name: Check generated types drift
         run: supabase gen types typescript --local > lib/database.types.ts && git diff --stat --exit-code lib/database.types.ts
-        continue-on-error: true

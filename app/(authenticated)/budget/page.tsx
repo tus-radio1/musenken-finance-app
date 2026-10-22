@@ -17,7 +17,12 @@ import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
 import { ToggleGroupActiveDialog } from "./_components/toggle-group-active-dialog";
 import { AddGroupDialog } from "./_components/add-group-dialog";
 import { DeleteGroupYearButton } from "./_components/delete-group-year-button";
-import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
+import { requireRoleAccess } from "@/lib/roles/access";
+import {
+  canEditBudget,
+  canViewBudgetPage,
+  isAdmin,
+} from "@/lib/roles/permissions";
 import { getAccountingGroups, getFiscalYears } from "@/lib/cache";
 import { formatCurrency } from "@/lib/format";
 
@@ -68,7 +73,7 @@ export default async function BudgetPage({
     }
   }
 
-  // Step 2: userRoles + categories + budgets + RPC — all depend on user.id or fyYear, run in parallel
+  // Step 2: roles + categories + budgets + RPC — all depend on user.id or fyYear, run in parallel
   let budgetQuery = supabase
     .from("budgets")
     .select("id, accounting_group_id, amount, carryover_amount, fiscal_year_id");
@@ -79,15 +84,12 @@ export default async function BudgetPage({
   type BudgetUsageRow = { accounting_group_id: string; expenses: number; pending: number; income: number };
 
   const [
-    { data: userRoles },
+    access,
     categories,
     { data: budgets, error: budgetsError },
     { data: usageRows, error: usageError },
   ] = await Promise.all([
-    supabase
-      .from("user_roles")
-      .select("roles(name, type, accounting_group_id)")
-      .eq("user_id", user.id),
+    requireRoleAccess({ supabase, profileId: user.id }),
     getAccountingGroups(),
     budgetQuery,
     fyYear
@@ -95,28 +97,10 @@ export default async function BudgetPage({
       : Promise.resolve({ data: [] as BudgetUsageRow[], error: null }),
   ]);
 
-  // ロール情報取得
-  type RoleInfo = { name: string | null; type: string | null; accounting_group_id: string | null };
-  let isGlobalAdmin = false;
-  let hasAccountingRole = false;
-  const myGroupRoles: Record<string, string> = {};
-  const roles = (userRoles || []).flatMap((ur) => {
-    const rr = (ur as unknown as { roles?: RoleInfo | RoleInfo[] | null }).roles;
-    if (Array.isArray(rr)) return rr;
-    return rr ? [rr] : [];
-  });
-  isGlobalAdmin = roles.some((r) => r.type === ROLE_TYPES.ADMIN);
-  hasAccountingRole = roles.some(
-    (r) => r.name === ROLE_NAMES_JA.ACCOUNTING,
-  );
-  roles.forEach((r) => {
-    if (r?.accounting_group_id && r?.type) {
-      myGroupRoles[r.accounting_group_id] = r.type;
-    }
-  });
+  const isGlobalAdmin = isAdmin(access);
 
   // 会計ロールを持たないユーザーはアクセス不可
-  if (!hasAccountingRole && !isGlobalAdmin) {
+  if (!canViewBudgetPage(access)) {
     return (
       <main className="flex-1 flex items-center justify-center p-6">
         <Card className="max-w-md">
@@ -202,11 +186,8 @@ export default async function BudgetPage({
   const existingYears = (fiscalYears || []).map((fy) => fy.year);
   const isCurrentFY =
     fiscalYears?.find((fy) => fy.year === fyYear)?.is_current ?? false;
-  const canEdit =
-    isGlobalAdmin ||
-    ((hasAccountingRole ||
-      Object.values(myGroupRoles).includes(ROLE_TYPES.LEADER)) &&
-      isCurrentFY);
+  // サーバー側（upsertBudget）と同じ判定: 管理者は常に、会計は現在の年度のみ
+  const canEdit = canEditBudget(access, { isCurrent: isCurrentFY });
 
   return (
     <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">

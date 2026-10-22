@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { Constants } from "@/lib/database.types";
 
 // --- Common field schemas ---
 
@@ -120,13 +121,19 @@ export const updateSubsidyStatusSchema = z.object({
   ]),
 });
 
+// DB enum values, taken from the generated types so validated input keeps its
+// literal type for the typed Supabase client.
+const SUBSIDY_CATEGORIES = Constants.public.Enums.subsidy_category;
+const SUBSIDY_EXPENSE_TYPES = Constants.public.Enums.subsidy_expense_type;
+const INCOME_TYPES = Constants.public.Enums.income_type;
+
 /** updateSubsidyItem */
 export const updateSubsidyItemSchema = z.object({
   id: uuidSchema,
   updates: z.object({
-    category: z.string().optional(),
+    category: z.enum(SUBSIDY_CATEGORIES).optional(),
     term: z.number().int().min(1).max(3).optional(),
-    expense_type: z.string().optional(),
+    expense_type: z.enum(SUBSIDY_EXPENSE_TYPES).optional(),
     accounting_group_id: uuidSchema.optional(),
     name: z.string().min(1).optional(),
     applicant_id: uuidSchema.optional(),
@@ -152,10 +159,10 @@ export const deleteSubsidyItemSchema = z.object({
 export const updateMySubsidyItemSchema = z.object({
   id: uuidSchema,
   values: z.object({
-    category: z.string().optional(),
+    category: z.enum(SUBSIDY_CATEGORIES).optional(),
     term: z.number().int().min(1).max(3).optional(),
-    expense_type: z.string().optional(),
-    income_type: z.string().optional(),
+    expense_type: z.enum(SUBSIDY_EXPENSE_TYPES).optional(),
+    income_type: z.enum(INCOME_TYPES).optional(),
     date: z.date().optional(),
     accounting_group_id: uuidSchema.optional(),
     name: z.string().min(1).optional(),

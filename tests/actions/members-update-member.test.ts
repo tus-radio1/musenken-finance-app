@@ -89,6 +89,8 @@ function accessFor(actor: Actor) {
 // Simulated DB state: role assignments per user.
 let assignments: Record<string, string[]>;
 let actor: Actor;
+// Rows a profiles UPDATE reports back (RLS can filter to []).
+let profileUpdateRows: Array<{ id: string }>;
 
 function resolveQuery(call: QueryCall): QueryResult {
   if (call.table === "user_roles" && call.op === "select") {
@@ -96,7 +98,14 @@ function resolveQuery(call: QueryCall): QueryResult {
     return { data: roleRowsFor(assignments[userId] ?? []) };
   }
   if (call.table === "roles" && call.op === "select") {
+    const name = eqValue(call, "name");
+    if (typeof name === "string") {
+      return { data: ROLES.find((r) => r.name === name) ?? null };
+    }
     return { data: ROLES };
+  }
+  if (call.table === "profiles" && call.op === "update") {
+    return { data: profileUpdateRows };
   }
   if (call.table === "profiles" && call.op === "select") {
     return { data: { id: TARGET_ID, name: "Target" } };
@@ -111,6 +120,7 @@ let adminDb: ReturnType<typeof createSupabaseMock>;
 // Module mocks
 // ---------------------------------------------------------------------------
 
+vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn() }));
@@ -149,7 +159,11 @@ const BASE_DATA = { name: "Target", student_number: "4623045", grade: 2 };
 function insertedRoleIds(): string[] {
   return writesTo(adminDb.calls, "user_roles")
     .filter((c) => c.op === "insert")
-    .flatMap((c) => (c.payload as Array<{ role_id: string }>).map((r) => r.role_id));
+    .flatMap((c) =>
+      [c.payload as { role_id: string } | Array<{ role_id: string }>]
+        .flat()
+        .map((r) => r.role_id),
+    );
 }
 
 function deleteCalls(): QueryCall[] {
@@ -165,6 +179,7 @@ beforeEach(() => {
     [ACTOR_ID]: [...ACTOR_ROLE_IDS.manager],
     [TARGET_ID]: [PROVISIONAL_ROLE_ID],
   };
+  profileUpdateRows = [{ id: TARGET_ID }];
   userDb = createSupabaseMock(resolveQuery);
   adminDb = createSupabaseMock(resolveQuery);
 });
@@ -390,5 +405,96 @@ describe("deleteMember / retireMember on admin targets", () => {
 
     expect(result).toEqual({ success: true });
     expect(adminDb.authAdmin.deleteUser).toHaveBeenCalledWith(TARGET_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Profile / role writes by non-admin managers (step 13)
+// ---------------------------------------------------------------------------
+
+describe("member writes by a non-admin manager", () => {
+  // Bug (item 6): profiles RLS only allows own row or admin, so the profile
+  // update by 部長/副部長/会計 touched 0 rows while Auth and roles changed.
+  it("updateMember writes the profile with the service-role client", async () => {
+    const result = await updateMember(TARGET_ID, {
+      ...BASE_DATA,
+      role_ids: [PROVISIONAL_ROLE_ID],
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(writesTo(userDb.calls, "profiles")).toHaveLength(0);
+    expect(writesTo(adminDb.calls, "profiles")).toHaveLength(1);
+  });
+
+  it("updateMember stops before Auth and roles when no profile row was updated", async () => {
+    profileUpdateRows = [];
+
+    const result = await updateMember(TARGET_ID, {
+      ...BASE_DATA,
+      role_ids: [ALUMNI_ROLE_ID],
+    });
+
+    expect(result).toHaveProperty("error");
+    expect(adminDb.authAdmin.updateUserById).not.toHaveBeenCalled();
+    expect(writesTo(adminDb.calls, "user_roles")).toHaveLength(0);
+  });
+
+  // Bug (item 6): user_roles RLS is admin-only, so the role delete touched 0 rows.
+  it("retireMember replaces roles with the service-role client", async () => {
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toEqual({ success: true });
+    expect(writesTo(userDb.calls, "user_roles")).toHaveLength(0);
+    expect(writesTo(userDb.calls, "profiles")).toHaveLength(0);
+    expect(insertedRoleIds()).toEqual([ALUMNI_ROLE_ID]);
+  });
+
+  it("retireMember does not re-grant OB・OG and removes only the other roles", async () => {
+    assignments[TARGET_ID] = [PROVISIONAL_ROLE_ID, ALUMNI_ROLE_ID];
+
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toEqual({ success: true });
+    expect(insertedRoleIds()).toEqual([]);
+    const [del] = deleteCalls();
+    expect(del.filters).toContainEqual({ method: "in", args: ["role_id", [PROVISIONAL_ROLE_ID]] });
+  });
+
+  // Review finding: roles were re-read after the S1 check, so a protected role
+  // granted in between was deleted with the service-role client.
+  it("retireMember never removes a role granted after the permission check", async () => {
+    let targetRoleReads = 0;
+    const grantAdminAfterFirstRead = (call: QueryCall): QueryResult => {
+      const result = resolveQuery(call);
+      const isTargetRoleRead =
+        call.table === "user_roles" &&
+        call.op === "select" &&
+        eqValue(call, "user_id") === TARGET_ID;
+      if (isTargetRoleRead && ++targetRoleReads === 1) {
+        assignments[TARGET_ID] = [...assignments[TARGET_ID], ADMIN_ROLE_ID];
+      }
+      return result;
+    };
+    userDb = createSupabaseMock(grantAdminAfterFirstRead);
+    adminDb = createSupabaseMock(grantAdminAfterFirstRead);
+
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toEqual({ success: true });
+    const removed = deleteCalls().flatMap(
+      (c) => c.filters.find((f) => f.method === "in")?.args[1] as string[],
+    );
+    expect(removed).toEqual([PROVISIONAL_ROLE_ID]);
+    expect(removed).not.toContain(ADMIN_ROLE_ID);
+  });
+
+  it("retireMember stops before any write when no profile row was updated", async () => {
+    profileUpdateRows = [];
+
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toHaveProperty("error");
+    expect(writesTo(adminDb.calls, "user_roles")).toHaveLength(0);
+    expect(adminDb.authAdmin.updateUserById).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,7 @@ export type {
   FinancialAccountInfo,
 } from "@/lib/ledger";
 
-export type Team = { id: string; name: string; type: "general" | "leader" };
+export type Team = { id: string; name: string; type: string | null };
 
 export type SortKey =
   | "date"

@@ -185,16 +185,26 @@ function defaultUserHandler(overrides: { updateError?: unknown } = {}) {
           accounting_group_id: GROUP_ID,
           created_by: USER_ID,
           approval_status: "pending",
+          approved_by: null,
+          approved_at: null,
+          rejected_reason: null,
+          fiscal_year_id: 2026,
           amount: -1000,
           receipt_url: OLD_PATH,
         },
       };
     }
     if (call.table === "transactions" && call.op === "update") {
-      return { error: overrides.updateError ?? null };
+      // The action requires the conditional UPDATE to report exactly one row.
+      return overrides.updateError
+        ? { error: overrides.updateError }
+        : { data: [{ id: TX_ID }] };
     }
     if (call.table === "fiscal_years") return { data: { year: 2026 } };
-    if (call.table === "accounting_groups") return { data: { type: "team" } };
+    // An open group, so the group rule (item 4) never blocks these receipt tests.
+    if (call.table === "accounting_groups") {
+      return { data: { id: GROUP_ID, type: "general" } };
+    }
     return {};
   };
 }
@@ -357,6 +367,10 @@ describe("updateTransaction receipt replacement", () => {
               accounting_group_id: GROUP_ID,
               created_by: USER_ID,
               approval_status: "pending",
+              approved_by: null,
+              approved_at: null,
+              rejected_reason: null,
+              fiscal_year_id: 2026,
               amount: -1000,
               receipt_url: stored,
             },
@@ -381,6 +395,10 @@ describe("updateTransaction receipt replacement", () => {
               accounting_group_id: GROUP_ID,
               created_by: USER_ID,
               approval_status: "pending",
+              approved_by: null,
+              approved_at: null,
+              rejected_reason: null,
+              fiscal_year_id: 2026,
               amount: -1000,
               receipt_url: "legacy_receipt.webp",
             },
@@ -421,7 +439,7 @@ describe("createTransaction receipt ownership", () => {
       call.table === "fiscal_years"
         ? { data: { year: 2026 } }
         : call.table === "accounting_groups"
-          ? { data: { type: "team" } }
+          ? { data: { id: GROUP_ID, type: "general" } }
           : {},
     );
 

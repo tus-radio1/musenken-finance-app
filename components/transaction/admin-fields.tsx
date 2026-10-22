@@ -3,6 +3,8 @@
 /**
  * 管理者/会計担当者向けの追加フォームフィールド。
  * 申請者変更・承認ステータス変更・承認者変更を担当する。
+ * 承認ステータスは canChangeApprovalStatus が true のときだけ表示する
+ * （会計は自分の取引を変更できない。判定は lib/roles/permissions.ts）。
  * form.watch を useWatch に置き換えて incompatible-library 警告を解消。
  */
 
@@ -33,6 +35,8 @@ type Props = {
   users?: { id: string; name: string }[];
   accountingUserId: string;
   isEditing: boolean;
+  /** Row-level result of canSetApprovalFieldsDirectly, computed by the caller. */
+  canChangeApprovalStatus?: boolean;
 };
 
 export function AdminFields({
@@ -41,6 +45,7 @@ export function AdminFields({
   users,
   accountingUserId,
   isEditing,
+  canChangeApprovalStatus = false,
 }: Props) {
   // useWatch で type フィールドを監視し incompatible-library 警告を回避
   const currentType = useWatch({ control: form.control, name: "type" });
@@ -91,8 +96,8 @@ export function AdminFields({
         />
       )}
 
-      {/* Admin/Accounting用: 承認ステータス変更 */}
-      {(userRole === ROLE_TYPES.ADMIN || userRole === ROLE_TYPES.ACCOUNTING) && (
+      {/* Admin/Accounting用: 承認ステータス変更（会計は自分の取引を除く） */}
+      {canChangeApprovalStatus && (
         <FormField
           control={form.control}
           name="approval_status"

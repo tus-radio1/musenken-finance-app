@@ -1,108 +1,59 @@
 /**
- * サイドバー用のチーム(会計グループ)一覧取得。
+ * 画面で選択できる会計グループ（チーム）一覧。
  *
- * ユーザーのロールに応じて閲覧可能な会計グループを返す。
- * 管理者・会計・部長・副部長は全グループ、一般部員は general タイプ+所属班のみ。
+ * 表示できるグループの判定は lib/roles/permissions.ts の canViewGroup に
+ * 任せる（管理者・会計: 全グループ、部長・副部長: 全グループを閲覧、
+ * それ以外: type が general / 未設定のグループと所属グループ）。
  */
 
-import { SupabaseClient } from "@supabase/supabase-js";
-import { ROLE_TYPES, ROLE_NAMES_JA } from "@/lib/roles/constants";
+import "server-only";
+
 import { getAccountingGroups } from "@/lib/cache";
-import type { Database } from "@/lib/database.types";
+import {
+  canViewGroup,
+  hasAllNonClubGroupAccess,
+  isOpenGroup,
+} from "@/lib/roles/permissions";
+import type { RoleAccessContext } from "@/lib/roles/types";
 
 export type TeamInfo = {
   id: string;
   name: string;
-  type: "general" | "leader";
+  /** accounting_groups.type as stored ("general" / "leader" / "club" / null). */
+  type: string | null;
 };
 
+export type AccountingGroupRow = {
+  id: string;
+  name: string;
+  is_active: boolean | null;
+  type: string | null;
+};
+
+/**
+ * Visible groups in their given order. With scoped access (regular members),
+ * open groups come first, then the member's own groups (previous behaviour).
+ */
+export function selectVisibleTeams(
+  access: RoleAccessContext,
+  groups: readonly AccountingGroupRow[],
+  options: { includeInactive?: boolean } = {},
+): TeamInfo[] {
+  const visible = groups
+    .filter((g) => options.includeInactive || g.is_active !== false)
+    .filter((g) => canViewGroup(access, g))
+    .map((g) => ({ id: g.id, name: g.name, type: g.type }));
+
+  if (hasAllNonClubGroupAccess(access)) return visible;
+  return [
+    ...visible.filter((t) => isOpenGroup(t)),
+    ...visible.filter((t) => !isOpenGroup(t)),
+  ];
+}
+
 export async function getUserTeams(
-  supabase: SupabaseClient<Database>,
-  admin: SupabaseClient<Database>,
-  userId: string,
-): Promise<{
-  teams: TeamInfo[];
-  isGlobalAdmin: boolean;
-  isAccountingUser: boolean;
-  isFullAccess: boolean;
-  roleGroupIds: string[];
-}> {
-  let isGlobalAdmin = false;
-  let isAccountingUser = false;
-  const myTeams: TeamInfo[] = [];
-
-  // NOTE: profiles.role カラムは migration 20260322130000 で削除済み。
-  // 会計ロール判定は user_roles 経由で行う。
-  const [{ data: userRoles }, categories] =
-    await Promise.all([
-      supabase
-        .from("user_roles")
-        .select("roles(name, type, accounting_group_id)")
-        .eq("user_id", userId),
-      getAccountingGroups(),
-    ]);
-
-  type Role = {
-    name: string | null;
-    type: string | null;
-    accounting_group_id: string | null;
-  };
-
-  const roles: Role[] = (userRoles || []).flatMap((ur) => {
-    const rr = (ur as unknown as { roles?: Role | Role[] | null }).roles;
-    if (Array.isArray(rr)) return rr;
-    return rr ? [rr] : [];
-  });
-
-  isGlobalAdmin = roles.some((r) => r.type === ROLE_TYPES.ADMIN);
-  if (!isAccountingUser) {
-    isAccountingUser = roles.some((r) => r?.name === ROLE_NAMES_JA.ACCOUNTING);
-  }
-
-  type AccountingGroup = { id: string; name: string; is_active: boolean; type: string | null };
-  const safeCategories = ((categories || []) as AccountingGroup[]).filter(
-    (c) => c.is_active !== false,
-  );
-
-  const isFullAccess =
-    isAccountingUser ||
-    isGlobalAdmin ||
-    roles.some((r) => r?.name === ROLE_NAMES_JA.CHAIR || r?.name === ROLE_NAMES_JA.VICE_CHAIR);
-
-  if (isFullAccess) {
-    safeCategories.forEach((c) => {
-      // Include club-type groups for full-access users (accounting/admin)
-      myTeams.push({ id: c.id, name: c.name, type: (c.type === "leader" ? "leader" : c.type === "club" ? "general" : "general") as "general" | "leader" });
-    });
-  } else {
-    // 全ユーザーに general タイプのグループを表示
-    // Use already-cached categories filtered by type and active status
-    const generalGroups = safeCategories.filter(
-      (c) => c.type === ROLE_TYPES.GENERAL || !c.type,
-    );
-
-    generalGroups.forEach((g) => {
-      if (!myTeams.some((t) => t.id === g.id)) {
-        myTeams.push({ id: g.id, name: g.name, type: ROLE_TYPES.GENERAL as "general" });
-      }
-    });
-
-    // さらに所属班のグループを追加
-    roles.forEach((r) => {
-      const gid = r?.accounting_group_id ?? undefined;
-      if (!gid) return;
-      const cat = safeCategories.find((c) => c.id === gid);
-      if (!cat) return;
-      if (myTeams.some((t) => t.id === gid)) return;
-      const type: "general" | "leader" =
-        r.type === ROLE_TYPES.LEADER ? (ROLE_TYPES.LEADER as "leader") : (ROLE_TYPES.GENERAL as "general");
-      myTeams.push({ id: gid, name: cat.name, type });
-    });
-  }
-
-  const roleGroupIds = roles
-    .filter((r) => r.accounting_group_id)
-    .map((r) => r.accounting_group_id as string);
-
-  return { teams: myTeams, isGlobalAdmin, isAccountingUser, isFullAccess, roleGroupIds };
+  access: RoleAccessContext,
+): Promise<TeamInfo[]> {
+  const groups = await getAccountingGroups();
+  return selectVisibleTeams(access, groups);
 }

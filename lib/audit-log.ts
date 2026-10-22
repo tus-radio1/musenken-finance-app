@@ -10,7 +10,13 @@ interface AuditEventParams {
   changedBy: string;
 }
 
-export async function logAuditEvent(params: AuditEventParams): Promise<void> {
+/**
+ * Insert an audit row and report whether it was stored. Use this when the
+ * caller must not proceed without an audit record (fail closed).
+ */
+export async function recordAuditEvent(
+  params: AuditEventParams,
+): Promise<{ ok: boolean }> {
   try {
     const supabase = await createClient();
     const { error } = await supabase.from("audit_logs").insert({
@@ -22,10 +28,17 @@ export async function logAuditEvent(params: AuditEventParams): Promise<void> {
       changed_by: params.changedBy,
     });
     if (error) {
-      // Don't throw on audit failure - log to console but don't break the main operation
       console.error("Audit log insert failed:", error);
+      return { ok: false };
     }
+    return { ok: true };
   } catch (error) {
     console.error("Audit log failed:", error);
+    return { ok: false };
   }
+}
+
+/** Best-effort audit: failures are logged but never break the main operation. */
+export async function logAuditEvent(params: AuditEventParams): Promise<void> {
+  await recordAuditEvent(params);
 }
