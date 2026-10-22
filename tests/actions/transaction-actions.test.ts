@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSupabaseMock,
   eqValue,
+  hasFilter,
   writesTo,
   type QueryCall,
   type QueryResult,
@@ -172,7 +173,7 @@ const {
   updateTransaction,
   deleteTransaction,
 } = await import("@/app/actions");
-const { logAuditEvent } = await import("@/lib/audit-log");
+const { logAuditEvent, recordAuditEvent } = await import("@/lib/audit-log");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -202,6 +203,8 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.mocked(logAuditEvent).mockClear();
+  vi.mocked(recordAuditEvent).mockClear();
+  vi.mocked(recordAuditEvent).mockResolvedValue({ ok: true });
   actor = "admin";
   tx = {
     accounting_group_id: G1,
@@ -226,7 +229,7 @@ beforeEach(() => {
 
 describe("updateTransactionStatus", () => {
   // Bug (item 5): the UI shows approval buttons to 会計, the server rejected them.
-  it.fails("lets 会計 approve another member's pending transaction", async () => {
+  it("lets 会計 approve another member's pending transaction", async () => {
     actor = "accounting";
 
     const result = await updateTransactionStatus(TX_ID, "approved");
@@ -242,7 +245,7 @@ describe("updateTransactionStatus", () => {
 
   // Bug (item 5, D1): leaders passed the server check and got a false success
   // (RLS filters the UPDATE to 0 rows).
-  it.fails("rejects a group leader without writing anything", async () => {
+  it("rejects a group leader without writing anything", async () => {
     actor = "leader";
     writtenRows = [];
 
@@ -255,7 +258,7 @@ describe("updateTransactionStatus", () => {
 
   // Bug (item 5/6): an UPDATE that touched 0 rows was reported as success and
   // audited.
-  it.fails("returns an error and skips the audit when no row was updated", async () => {
+  it("returns an error and skips the audit when no row was updated", async () => {
     writtenRows = [];
 
     const result = await updateTransactionStatus(TX_ID, "approved");
@@ -265,8 +268,61 @@ describe("updateTransactionStatus", () => {
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
+  it("rejects self-approval by an admin", async () => {
+    tx = { ...tx, created_by: ACTOR_ID };
+
+    const result = await updateTransactionStatus(TX_ID, "approved");
+
+    expect(result).toEqual({ error: "自分の申請を承認することはできません" });
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("rejects self-approval by 会計", async () => {
+    actor = "accounting";
+    tx = { ...tx, created_by: ACTOR_ID };
+
+    const result = await updateTransactionStatus(TX_ID, "approved");
+
+    expect(result).toEqual({ error: "自分の申請を承認することはできません" });
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("limits past fiscal years to admins (D7)", async () => {
+    tx = { ...tx, fiscal_year_id: PAST_FY };
+    actor = "accounting";
+
+    const denied = await updateTransactionStatus(TX_ID, "approved");
+    expect(denied).toEqual({ error: "過年度の申請は管理者のみ承認できます" });
+    expect(txWrites("update")).toHaveLength(0);
+
+    actor = "admin";
+    const allowed = await updateTransactionStatus(TX_ID, "approved");
+    expect(allowed).toEqual({ success: true });
+  });
+
+  it("writes only a still-pending row and clears the rejection reason", async () => {
+    const result = await updateTransactionStatus(TX_ID, "approved", "ignored");
+
+    expect(result).toEqual({ success: true });
+    const [update] = txWrites("update");
+    expect(eqValue(update, "approval_status")).toBe("pending");
+    expect(eqValue(update, "created_by")).toBe(OTHER_USER_ID);
+    expect(hasFilter(update, "is", "deleted_at")).toBe(true);
+    expect(update.payload).toMatchObject({ rejected_reason: null });
+  });
+
+  it("stores the reason of a rejection", async () => {
+    const result = await updateTransactionStatus(TX_ID, "rejected", "領収書なし");
+
+    expect(result).toEqual({ success: true });
+    expect(txWrites("update")[0].payload).toMatchObject({
+      approval_status: "rejected",
+      rejected_reason: "領収書なし",
+    });
+  });
+
   // Bug (item 5): the current status was not required to be pending.
-  it.fails("does not decide a transaction that is no longer pending", async () => {
+  it("does not decide a transaction that is no longer pending", async () => {
     tx = { ...tx, approval_status: "approved", approved_by: OTHER_USER_ID };
 
     const result = await updateTransactionStatus(TX_ID, "rejected");
@@ -283,7 +339,7 @@ describe("updateTransactionStatus", () => {
 describe("updateTransaction", () => {
   // Bug (item 6, D6): leaders were allowed to edit other members' rows, which
   // RLS silently filtered to 0 rows.
-  it.fails("rejects a leader editing another member's transaction", async () => {
+  it("rejects a leader editing another member's transaction", async () => {
     actor = "leader";
     writtenRows = [];
 
@@ -294,7 +350,7 @@ describe("updateTransaction", () => {
   });
 
   // Bug (item 5, D3): 会計 could approve their own transaction via the edit form.
-  it.fails("rejects 会計 changing the approval status of their own row", async () => {
+  it("rejects 会計 changing the approval status of their own row", async () => {
     actor = "accounting";
     tx = { ...tx, created_by: ACTOR_ID };
 
@@ -305,6 +361,139 @@ describe("updateTransaction", () => {
 
     expect(result).toHaveProperty("error");
     expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("lets 会計 save a content edit of their own row with the unchanged status", async () => {
+    actor = "accounting";
+    tx = { ...tx, created_by: ACTOR_ID, approval_status: "approved", approved_by: OTHER_USER_ID };
+
+    const result = await updateTransaction(TX_ID, formValues({ description: "Edited" }));
+
+    expect(result).toEqual({ success: true });
+    const [update] = txWrites("update");
+    expect(update.payload).toMatchObject({ description: "Edited" });
+    expect(update.payload).not.toHaveProperty("approval_status");
+    expect(update.payload).not.toHaveProperty("approved_by");
+  });
+
+  it("makes 会計 the approver when they approve another member's row", async () => {
+    actor = "accounting";
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ approval_status: "approved" }),
+    );
+
+    expect(result).toEqual({ success: true });
+    expect(txWrites("update")[0].payload).toMatchObject({
+      approval_status: "approved",
+      approved_by: ACTOR_ID,
+      rejected_reason: null,
+    });
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects 会計 changing the status of a past fiscal year's row", async () => {
+    actor = "accounting";
+    tx = { ...tx, fiscal_year_id: PAST_FY };
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ approval_status: "approved" }),
+    );
+
+    expect(result).toEqual({ error: "過年度の承認ステータスは管理者のみ変更できます" });
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("lets an admin correct the status of their own row and audits it (break-glass)", async () => {
+    tx = { ...tx, created_by: ACTOR_ID };
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ approval_status: "approved" }),
+    );
+
+    expect(result).toEqual({ success: true });
+    expect(recordAuditEvent).toHaveBeenCalledTimes(1);
+    const intent = vi.mocked(recordAuditEvent).mock.calls[0][0];
+    expect(intent).toMatchObject({
+      tableName: "transactions",
+      recordId: TX_ID,
+      changedBy: ACTOR_ID,
+      oldData: { approval_status: "pending", approved_by: null },
+      newData: {
+        approval_status: "approved",
+        approved_by: ACTOR_ID,
+        break_glass: "admin_self_row_correction",
+        phase: "intent",
+      },
+    });
+    expect(txWrites("update")).toHaveLength(1);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].newData).toMatchObject({
+      break_glass: "admin_self_row_correction",
+    });
+  });
+
+  it("aborts the admin self-row correction when the audit row cannot be written", async () => {
+    tx = { ...tx, created_by: ACTOR_ID };
+    vi.mocked(recordAuditEvent).mockResolvedValueOnce({ ok: false });
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ approval_status: "approved" }),
+    );
+
+    expect(result).toEqual({
+      error: "監査ログを記録できなかったため、変更を中止しました",
+    });
+    expect(txWrites("update")).toHaveLength(0);
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not require the break-glass audit for an admin editing another member's row", async () => {
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ approval_status: "rejected" }),
+    );
+
+    expect(result).toEqual({ success: true });
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an error and skips the audit when no row was updated", async () => {
+    writtenRows = [];
+
+    const result = await updateTransaction(TX_ID, formValues({ description: "x" }));
+
+    expect(result).toHaveProperty("error");
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("keeps a member's own non-pending transaction read-only", async () => {
+    actor = "member";
+    tx = { ...tx, created_by: ACTOR_ID, approval_status: "approved" };
+
+    const result = await updateTransaction(TX_ID, formValues({ description: "x" }));
+
+    expect(result).toEqual({ error: "受付中以外のデータは編集できません" });
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("lets a member edit their own pending transaction in their group", async () => {
+    actor = "member";
+    tx = { ...tx, created_by: ACTOR_ID };
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ description: "Edited", approval_status: "approved" }),
+    );
+
+    expect(result).toEqual({ success: true });
+    const [update] = txWrites("update");
+    expect(update.payload).not.toHaveProperty("approval_status");
+    expect(eqValue(update, "approval_status")).toBe("pending");
   });
 
   // Bug (item 4): the destination group was never authorized.

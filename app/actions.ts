@@ -3,15 +3,18 @@
 /**
  * 取引関連の Server Actions。
  *
- * 権限モデル:
+ * 権限モデル（判定は lib/roles/permissions.ts）:
  *   - createTransaction: ログイン済みユーザー（approval_status は常に "pending" で開始）
- *   - updateTransactionStatus: グローバル管理者 or 対象グループの leader。自身の申請は承認不可
- *   - updateTransaction: 作成者本人 / 管理者 / 会計 / leader。一般ユーザーは pending 以外を編集不可
+ *   - updateTransactionStatus: 管理者・会計。自分の申請は誰も承認できない
+ *     （管理者を含む）。過年度の取引は管理者のみ
+ *   - updateTransaction: 管理者・会計、または pending の自分の取引（班長は不可）
  *   - deleteTransaction: 管理者は無条件、作成者は pending のみ削除可
  *
  * 承認フロー (approval_status) の許可遷移:
- *   pending → approved | rejected   (updateTransactionStatus — leader/admin)
- *   管理者/会計は updateTransaction で任意のステータスへ直接変更可能
+ *   pending → approved | rejected   (updateTransactionStatus — 管理者・会計)
+ *   管理者・会計は updateTransaction で承認ステータスを直接変更できる。
+ *   会計は自分の取引と過年度の取引を変更できない。管理者が自分の取引を
+ *   変更するのは break-glass の修正で、監査ログを先に記録できた場合のみ行う。
  *   ※ 将来仕様で transaction_kind = "transfer" が追加された場合、
  *     ペアとなる2行を同時に承認する追加ロジックが必要になる
  */
@@ -22,7 +25,7 @@ import { createAdminClient } from "@/utils/supabase/server";
 import { z } from "zod";
 import { formSchema } from "@/lib/schema";
 import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
-import { logAuditEvent } from "@/lib/audit-log";
+import { logAuditEvent, recordAuditEvent } from "@/lib/audit-log";
 import { uploadRateLimiter } from "@/lib/rate-limit";
 import { formatDateForDatabase } from "@/lib/date";
 import {
@@ -35,12 +38,25 @@ import {
   deleteTransactionSchema,
 } from "@/lib/validations";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
-import { ROLE_TYPES } from "@/lib/roles/constants";
+import type { SupabaseServerClient } from "@/lib/auth/types";
 import {
   canCreateClubTransaction,
   canDeleteTransaction,
+  canEditTransaction,
+  canReassignTransactionPeople,
+  canSetApprovalFieldsDirectly,
+  checkTransactionApproval,
+  isAdmin,
+  isAdminOrAccounting,
   isClubGroup,
+  type ApprovalDenialReason,
 } from "@/lib/roles/permissions";
+import {
+  ADMIN_SELF_ROW_CORRECTION,
+  approvalFieldsForDecision,
+  approvalFieldsForStatusChange,
+  type ApprovalFields,
+} from "@/lib/transaction-approval";
 import {
   RECEIPT_MIME_EXTENSIONS,
   isAllowedReceiptMimeType,
@@ -259,6 +275,37 @@ export async function createTransaction(
   return { success: true };
 }
 
+const APPROVAL_DENIED_ERRORS: Record<ApprovalDenialReason, string> = {
+  forbidden: "承認権限がありません",
+  own_transaction: "自分の申請を承認することはできません",
+  not_pending: "受付中の申請のみ承認・却下できます",
+  past_fiscal_year: "過年度の申請は管理者のみ承認できます",
+};
+
+const STALE_TRANSACTION_ERROR =
+  "他の操作で内容が変更されたため更新できませんでした。再読み込みしてください";
+
+/**
+ * Whether the fiscal year is the current one. null fiscal years count as past;
+ * a lookup error returns null so callers can fail closed.
+ */
+async function isCurrentFiscalYear(
+  supabase: SupabaseServerClient,
+  fiscalYearId: number | null,
+): Promise<boolean | null> {
+  if (fiscalYearId === null) return false;
+  const { data, error } = await supabase
+    .from("fiscal_years")
+    .select("is_current")
+    .eq("year", fiscalYearId)
+    .maybeSingle();
+  if (error) {
+    console.error("[isCurrentFiscalYear] Fetch error:", error);
+    return null;
+  }
+  return data?.is_current === true;
+}
+
 export async function updateTransactionStatus(
   transactionId: string,
   status: "approved" | "rejected",
@@ -282,9 +329,10 @@ export async function updateTransactionStatus(
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
     .select(
-      "accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason",
+      "accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason, fiscal_year_id",
     )
     .eq("id", transactionId)
+    .is("deleted_at", null)
     .single();
 
   if (txFetchError || !transaction) {
@@ -292,38 +340,57 @@ export async function updateTransactionStatus(
     return { error: "対象のデータが見つかりません" };
   }
 
-  // 承認権限: グローバル管理者 または 対象取引の会計グループの leader のみ
-  const isGlobalAdmin = access.isAdmin;
-  const isGroupLeader = access.roles.some(
-    (r) =>
-      r.type === ROLE_TYPES.LEADER &&
-      r.accountingGroupId === transaction.accounting_group_id,
+  // 承認者は管理者と会計のみ。自分の申請は誰も承認できない（管理者を含む）。
+  // 過年度の取引は管理者のみ。
+  const isCurrentYear = isAdmin(access)
+    ? true
+    : await isCurrentFiscalYear(auth.supabase, transaction.fiscal_year_id);
+  if (isCurrentYear === null) {
+    return { error: "会計年度の取得に失敗しました" };
+  }
+  const approval = checkTransactionApproval(
+    access,
+    transaction,
+    auth.profileId,
+    isCurrentYear,
+  );
+  if (!approval.ok) {
+    return { error: APPROVAL_DENIED_ERRORS[approval.reason] };
+  }
+
+  const newStatusData = approvalFieldsForDecision(
+    validation.data.status,
+    auth.profileId,
+    new Date().toISOString(),
+    validation.data.reason,
   );
 
-  if (!isGlobalAdmin && !isGroupLeader) {
-    return { error: "承認権限がありません" };
-  }
-
-  // 自己承認の禁止 — 利益相反を防ぐため、申請者自身は承認操作できない
-  if (transaction.created_by === auth.profileId) {
-    return { error: "自分の申請を承認することはできません" };
-  }
-
-  const newStatusData = {
-    approval_status: status,
-    approved_by: auth.profileId,
-    approved_at: new Date().toISOString(),
-    rejected_reason: reason || null,
-  };
-
-  const { error: updateError } = await auth.supabase
+  // Conditional write: only a still-pending row with the creator and fiscal
+  // year read above is decided. A concurrent decision (or RLS) leaves 0 rows.
+  let updateQuery = auth.supabase
     .from("transactions")
     .update(newStatusData)
-    .eq("id", transactionId);
+    .eq("id", transactionId)
+    .eq("approval_status", "pending")
+    .is("deleted_at", null);
+  updateQuery =
+    transaction.created_by === null
+      ? updateQuery.is("created_by", null)
+      : updateQuery.eq("created_by", transaction.created_by);
+  updateQuery =
+    transaction.fiscal_year_id === null
+      ? updateQuery.is("fiscal_year_id", null)
+      : updateQuery.eq("fiscal_year_id", transaction.fiscal_year_id);
+
+  const { data: updatedRows, error: updateError } =
+    await updateQuery.select("id");
 
   if (updateError) {
     console.error("[updateTransactionStatus] Update error:", updateError);
     return { error: "ステータス更新に失敗しました" };
+  }
+  if (!updatedRows || updatedRows.length !== 1) {
+    return { error: STALE_TRANSACTION_ERROR };
   }
 
   await logAuditEvent({
@@ -372,8 +439,11 @@ export async function updateTransaction(
 
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
-    .select("accounting_group_id, created_by, approval_status, amount, receipt_url")
+    .select(
+      "accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason, amount, receipt_url, fiscal_year_id",
+    )
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (txFetchError || !transaction) {
@@ -381,28 +451,14 @@ export async function updateTransaction(
     return { error: "対象のデータが見つかりません" };
   }
 
-  const isGlobalAdmin = access.isAdmin;
-  const isAccountingUser = access.hasAccountingRole;
-  const isGroupLeader = access.roles.some(
-    (r) =>
-      r.type === ROLE_TYPES.LEADER &&
-      r.accountingGroupId === transaction.accounting_group_id,
-  );
-
-  const canEdit =
-    transaction.created_by === auth.profileId ||
-    isGlobalAdmin ||
-    isAccountingUser ||
-    isGroupLeader;
-
-  if (!canEdit) {
-    return { error: "更新できませんでした（権限がない可能性があります）" };
-  }
-
-  const isGeneralUserOnly =
-    !isGlobalAdmin && !isAccountingUser && !isGroupLeader;
-  if (isGeneralUserOnly && transaction.approval_status !== "pending") {
-    return { error: "受付中以外のデータは編集できません" };
+  // 編集できるのは管理者・会計、または pending の自分の取引のみ（班長は不可）。
+  if (!canEditTransaction(access, transaction, auth.profileId)) {
+    const isOwner = transaction.created_by === auth.profileId;
+    return {
+      error: isOwner
+        ? "受付中以外のデータは編集できません"
+        : "更新できませんでした（権限がない可能性があります）",
+    };
   }
 
   // receipt_url: undefined = keep, null = clear, same value = keep (legacy
@@ -433,7 +489,7 @@ export async function updateTransaction(
       ? -Math.abs(values.amount)
       : Math.abs(values.amount);
 
-  const updates: TablesUpdate<"transactions"> = {
+  const contentUpdates: TablesUpdate<"transactions"> = {
     amount: finalAmount,
     description: values.description,
     fiscal_year_id: fy?.year ?? null,
@@ -441,47 +497,136 @@ export async function updateTransaction(
     accounting_group_id: values.accounting_group_id,
     financial_account_id: values.financial_account_id,
     transaction_kind: effectiveType === "expense" ? "expense" : "income",
+    ...(values.receipt_url !== undefined && { receipt_url: values.receipt_url }),
+    ...(values.remarks !== undefined && { remarks: values.remarks }),
   };
 
-  if (values.receipt_url !== undefined) {
-    updates.receipt_url = values.receipt_url;
+  // 申請者・承認者の付け替えは管理者のみ（それ以外の値は無視する）。
+  const canReassign = canReassignTransactionPeople(access);
+  const newCreatedBy =
+    canReassign && values.created_by !== undefined
+      ? (normalizeAccountingUserId(values.created_by, accountingUserId) ??
+        values.created_by)
+      : transaction.created_by;
+  const requestedApprovedBy =
+    canReassign && values.approved_by !== undefined
+      ? normalizeAccountingUserId(
+          values.approved_by === "clear" ? null : values.approved_by,
+          accountingUserId,
+        )
+      : undefined;
+
+  // 承認項目は実際に変わる場合だけ書き込む（フォームは現在値を毎回送るため）。
+  // 承認ステータスの直接変更は管理者・会計のみ。通常の承認フローは
+  // updateTransactionStatus を使う。
+  const requestedStatus = isAdminOrAccounting(access)
+    ? values.approval_status
+    : undefined;
+  const isStatusChanged =
+    requestedStatus !== undefined &&
+    requestedStatus !== transaction.approval_status;
+  const isApprovedByChanged =
+    requestedApprovedBy !== undefined &&
+    requestedApprovedBy !== transaction.approved_by;
+
+  const now = new Date().toISOString();
+  let approvalUpdates: ApprovalFields = {};
+  let isAdminSelfRowCorrection = false;
+
+  if (isStatusChanged || isApprovedByChanged) {
+    const isOwnRow =
+      transaction.created_by === auth.profileId ||
+      newCreatedBy === auth.profileId;
+    const isCurrentYear = isAdmin(access)
+      ? true
+      : await isCurrentFiscalYearPair(
+          auth.supabase,
+          transaction.fiscal_year_id,
+          fy?.year ?? null,
+        );
+    if (isCurrentYear === null) {
+      return { error: "会計年度の取得に失敗しました" };
+    }
+    if (
+      !canSetApprovalFieldsDirectly(access, {
+        isOwnRow,
+        isCurrentFiscalYear: isCurrentYear,
+      })
+    ) {
+      if (isOwnRow) {
+        return { error: "自分の申請の承認ステータスは変更できません" };
+      }
+      return { error: "過年度の承認ステータスは管理者のみ変更できます" };
+    }
+
+    approvalUpdates = {
+      ...(isStatusChanged &&
+        approvalFieldsForStatusChange(requestedStatus, auth.profileId, now)),
+      ...(isApprovedByChanged && { approved_by: requestedApprovedBy }),
+    };
+    isAdminSelfRowCorrection = isAdmin(access) && isOwnRow;
   }
 
-  if (values.remarks !== undefined) {
-    updates.remarks = values.remarks;
+  const updates: TablesUpdate<"transactions"> = {
+    ...contentUpdates,
+    ...(canReassign &&
+      newCreatedBy !== transaction.created_by && { created_by: newCreatedBy }),
+    ...approvalUpdates,
+  };
+
+  const auditOldData = {
+    amount: transaction.amount,
+    created_by: transaction.created_by,
+    approval_status: transaction.approval_status,
+    approved_by: transaction.approved_by,
+    approved_at: transaction.approved_at,
+    rejected_reason: transaction.rejected_reason,
+  };
+  const breakGlassMarker = isAdminSelfRowCorrection
+    ? { break_glass: ADMIN_SELF_ROW_CORRECTION }
+    : {};
+
+  // Break-glass: an admin changing approval fields on their own row is only
+  // allowed with an audit record. The record is written first and the change
+  // is aborted when it cannot be stored (fail closed). If the update then
+  // fails, the record stays as an attempt (phase "intent").
+  if (isAdminSelfRowCorrection) {
+    const audit = await recordAuditEvent({
+      tableName: "transactions",
+      recordId: id,
+      action: "UPDATE",
+      oldData: auditOldData,
+      newData: { ...updates, ...breakGlassMarker, phase: "intent" },
+      changedBy: auth.profileId,
+    });
+    if (!audit.ok) {
+      return { error: "監査ログを記録できなかったため、変更を中止しました" };
+    }
   }
 
-  if (values.created_by !== undefined && isGlobalAdmin) {
-    updates.created_by =
-      normalizeAccountingUserId(values.created_by, accountingUserId) ??
-      values.created_by;
-  }
-
-  if (values.approved_by !== undefined && isGlobalAdmin) {
-    updates.approved_by = normalizeAccountingUserId(
-      values.approved_by === "clear" ? null : values.approved_by,
-      accountingUserId,
-    );
-  }
-
-  // 承認ステータスの直接変更は管理者・会計のみ許可。
-  // 通常の承認フロー (pending → approved/rejected) は updateTransactionStatus を使う。
-  // ここでの直接変更は過去データの修正や運用上の例外対応に限定される想定。
-  if (
-    values.approval_status !== undefined &&
-    (isGlobalAdmin || isAccountingUser)
-  ) {
-    updates.approval_status = values.approval_status;
-  }
-
-  const { error: updateError } = await auth.supabase
+  // Conditional write: the approval state and creator read above must be
+  // unchanged, so a concurrent decision is never overwritten. RLS or a
+  // concurrent change leaves 0 rows, which is reported as an error.
+  let updateQuery = auth.supabase
     .from("transactions")
     .update(updates)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("approval_status", transaction.approval_status)
+    .is("deleted_at", null);
+  updateQuery =
+    transaction.created_by === null
+      ? updateQuery.is("created_by", null)
+      : updateQuery.eq("created_by", transaction.created_by);
+
+  const { data: updatedRows, error: updateError } =
+    await updateQuery.select("id");
 
   if (updateError) {
     console.error("[updateTransaction] Update error:", updateError);
     return { error: "更新に失敗しました。しばらくしてから再試行してください。" };
+  }
+  if (!updatedRows || updatedRows.length !== 1) {
+    return { error: STALE_TRANSACTION_ERROR };
   }
 
   // Remove the replaced file only after the record points to the new one.
@@ -498,17 +643,25 @@ export async function updateTransaction(
     tableName: "transactions",
     recordId: id,
     action: "UPDATE",
-    oldData: {
-      amount: transaction.amount,
-      approval_status: transaction.approval_status,
-    },
-    newData: updates,
+    oldData: auditOldData,
+    newData: { ...updates, ...breakGlassMarker },
     changedBy: auth.profileId,
   });
 
   revalidatePath("/ledger");
   revalidatePath("/applications");
   return { success: true };
+}
+
+/** Both the stored and the new fiscal year must be current (null → past). */
+async function isCurrentFiscalYearPair(
+  supabase: SupabaseServerClient,
+  storedFiscalYearId: number | null,
+  newFiscalYearId: number | null,
+): Promise<boolean | null> {
+  const stored = await isCurrentFiscalYear(supabase, storedFiscalYearId);
+  if (stored !== true || newFiscalYearId === storedFiscalYearId) return stored;
+  return isCurrentFiscalYear(supabase, newFiscalYearId);
 }
 
 export async function deleteTransaction(id: string) {

@@ -191,7 +191,10 @@ function defaultUserHandler(overrides: { updateError?: unknown } = {}) {
       };
     }
     if (call.table === "transactions" && call.op === "update") {
-      return { error: overrides.updateError ?? null };
+      // The action requires the conditional UPDATE to report exactly one row.
+      return overrides.updateError
+        ? { error: overrides.updateError }
+        : { data: [{ id: TX_ID }] };
     }
     if (call.table === "fiscal_years") return { data: { year: 2026 } };
     if (call.table === "accounting_groups") return { data: { type: "team" } };

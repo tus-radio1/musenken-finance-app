@@ -80,6 +80,9 @@ export function LedgerMobileCards({
             (isAdminOrAccounting ||
               (isOwner && r.approval_status === "pending"));
           const canDelete = !isReadOnly && isGlobalAdmin;
+          // 会計は自分の取引の承認ステータスを変更できない（管理者は可）
+          const canChangeApprovalStatus =
+            isGlobalAdmin || (isAdminOrAccounting && !isOwner);
 
           return (
             <Collapsible
@@ -238,6 +241,7 @@ export function LedgerMobileCards({
                         categories={categoriesForSelected}
                         canEdit={canEdit}
                         canDelete={canDelete}
+                        canChangeApprovalStatus={canChangeApprovalStatus}
                         userRole={userRoleStr}
                         users={users}
                         accountingUserId={accountingUserId}
