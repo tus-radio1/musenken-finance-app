@@ -25,10 +25,10 @@ Paths below are relative to `supabase/migrations/`.
 | `20260320100100_add_rls_policies.sql`: `is_admin()` | A | Global admin remains any assigned role with type admin. Migration B fixes only the global accounting role. |
 | Same: `has_role(text)` | C | Name-based accounting detection does not depend on type. |
 | Same: `profiles_admin_all` | A | Arbitrary profile insert/update/delete remains admin-only; own-profile policy and authorized member-management service actions remain. |
-| Same: `transactions_update_admin_accounting` | C | Existing non-deleted row updates already name accounting. The implicit WITH CHECK prevents soft delete. |
+| Same: `transactions_update_admin_accounting` | C | Existing non-deleted row updates already name accounting. The implicit WITH CHECK and SELECT policy prevent direct soft delete. |
 | Same: `transactions_admin_all` | A/B | Keep broad ALL admin-only (including deleted-row access and restoration). Add a separate DELETE grant for accounting, including other owners and approved rows (B). |
-| Same: `subsidy_items_update_admin_accounting` | C/B | Existing ordinary updates name accounting (C); allow the updated row's deleted_at to be non-null (B). Keep old-row restriction and avoid a broad ALL grant. |
-| Same: `subsidy_items_admin_all` | A | Arbitrary insert, hard-delete, deleted-row visibility/restoration remain admin-only. Accounting soft delete uses the UPDATE policy above. |
+| Same: `subsidy_items_update_admin_accounting` | C/B | Existing ordinary updates name accounting (C); soft delete uses an authorized soft_delete_subsidy_item RPC (B). Keep this policy unchanged and avoid a broad ALL grant. |
+| Same: `subsidy_items_admin_all` | A | Arbitrary insert, hard-delete, deleted-row visibility/restoration remain admin-only. Accounting soft delete uses the dedicated RPC. |
 | Same: `user_roles_admin_all`, `roles_admin_all` | A | Direct assignment and role-definition writes stay admin-only; S1 still protects officer roles in service actions. |
 | Same: `accounting_groups_admin_all` | A/B | Keep ALL admin-only. Add accounting INSERT and UPDATE only (B): group creation and activation. No DELETE: cascading deletion would remove budgets and roles/assignments. |
 | `20260320100200_add_audit_log.sql`: `audit_logs_select_admin` | A | Other actors' audit history remains admin-only; own history/own insert remains available. |
@@ -37,7 +37,8 @@ Paths below are relative to `supabase/migrations/`.
 | Same: `is_accounting_or_admin()` | C | Existing helper explicitly combines is_admin() and has_role('会計'); reuse it for the new policies. |
 | Same: `create_transfer()` | C | Already uses is_accounting_or_admin(); authenticated identity remains authoritative. |
 | Same: historical `transactions_select_non_deleted` | C | Already names accounting through helper; superseded by 20261022150000 below. |
-| Same: `transactions_insert_member` club branch | C | Club creation already names accounting through helper. Non-club group bug remains PR-B. |
+| Same: `transactions_insert_member` club branch | C | Club creation already names accounting through helper. |
+| Same: non-club INSERT / `transactions_admin_all` bypass | A (pending decision / PR-B) | Non-admin accounting with only global roles fails the non-club INSERT EXISTS. Any group-specific role currently satisfies the buggy self-comparison. App PR-A allows filing by name, but DB does not; do not add INSERT rights outside decisions 1/2. |
 | `20261022120000_guard_protected_write_columns.sql`: `is_restricted_api_writer()` and both guard triggers | C | Accounting already exempt by name. Leave functions, triggers and create_transfer EXECUTE grants intact. |
 | `20261022150000_club_ledger_readonly_for_bucho.sql`: `can_view_club_ledger()` / replacement SELECT | C | Accounting already named alongside admin, 部長 and 副部長. |
 | Same: restrictive `transactions_update_club_writers_only`, `transactions_delete_club_writers_only` | C | Accounting already named on USING and UPDATE WITH CHECK; DELETE still needs a permissive policy (Migration A). |
@@ -80,7 +81,7 @@ name-based. No storage change is required.
 | `app/(authenticated)/admin/actions.ts`, `admin/create-user.ts`; member manage forceResetPassword via verifyAdmin | A | Global/group role administration, new user and credential administration remain admin-only. |
 | `app/(authenticated)/subsidies/page.tsx`, `components/subsidy-items-table.tsx`, `components/subsidy/items-desktop-table.tsx`, `items-mobile-card-list.tsx`: isGlobalAdmin | A | Applicant-facing edit/hard-delete overrides stay admin-only. Management soft-delete is a separate authorized path (B). |
 | `app/(authenticated)/subsidies/actions.ts`: deleteMySubsidyItem actorIsAdmin | A | Hard-delete someone else's or non-pending item remains admin-only; accounting uses management soft-delete (B). |
-| `app/(authenticated)/subsidies/manage/actions.ts`: isAdmin response, linked-transaction unexecuted guard | A | Past-year management and marking linked subsidies unexecuted remain admin-only pending decision. deleteSubsidyItem uses widened predicate (B), exact affected count without RETURNING to avoid granting deleted-row SELECT. |
+| `app/(authenticated)/subsidies/manage/actions.ts`: isAdmin response, linked-transaction unexecuted guard | A | Past-year management and marking linked subsidies unexecuted remain admin-only pending decision. deleteSubsidyItem uses widened predicate (B) and the narrow RPC returning an affected ID to avoid granting deleted-row SELECT. |
 | `app/(authenticated)/subsidies/manage/page.tsx`, `client-page.tsx`, `_components/manage-edit-dialog.tsx`: isAdmin | A | Past-year read-only / justification display behavior stays. Soft-delete button already appears to management users (B). |
 
 ## Non-Admin accounting user after deployment
@@ -88,7 +89,8 @@ name-based. No storage change is required.
 | Capability | Allowed? | Boundary |
 | --- | --- | --- |
 | View every ledger, club ledger and budgets, including past years | Yes | Name-based access; budget SELECT and page gate tested. |
-| Create/edit transactions; transfers; manage subsidy items | Yes | Existing PR-A rights, club included. |
+| Edit transactions; club creation/transfers; manage subsidy items | Yes | Existing name-based rights. |
+| Create non-club transactions with only global roles | No at DB layer | Existing PR-A app/DB mismatch: INSERT requires at least one group-specific role due to the PR-B self-comparison bug. Unchosen INSERT grant is not added here. |
 | Delete other members' transactions, including approved rows | Yes | Explicit DELETE policy; current-year ledger exposes controls; existing past-year read-only UI remains. |
 | Soft-delete subsidy items | Yes | Management action; no hard-delete or deleted-row read grant. |
 | Create/activate/deactivate accounting groups | Yes | No physical group DELETE / cascade rights. |
@@ -108,24 +110,30 @@ administration. Normal self-approval remains disallowed for everyone.
 ## Deployment and validation
 
 1. Apply Migration A (additive DELETE, group INSERT/UPDATE, fiscal-year INSERT;
-   adjust accounting subsidy UPDATE WITH CHECK), then deploy the app.
+   add narrow accounting subsidy soft-delete RPC), then deploy the app.
 2. Apply Migration B last: idempotent UPDATE scoped to global 会計/admin only.
    Existing local/staging accounting rows are unchanged; Admin rows and all
    user_roles links are unchanged. Re-running it is a no-op.
-3. App before A can temporarily encounter RLS errors for the new rights on
-   already-non-admin environments; no admin escalation. B before app/A removes
-   admin safely but temporarily denies the intended extra operations. Do not
+3. App before A temporarily lacks the soft-delete RPC (including for admins);
+   non-admin added operations may also encounter RLS denials. No admin
+   escalation. B before app/A removes admin safely but temporarily denies the intended extra operations. Do not
    claim that reversed order preserves availability. A and app before B avoids
    that gap. Reverting the app does not restore admin; prefer roll-forward.
 
-Tests cover the actual migration B through a psql include inside a rollback-only
-fixture transaction, retain the dual-role admin, exercise RLS writes and denied
+Tests cover the actual migration B from local migration history inside a
+rollback-only fixture transaction, retain the dual-role admin, exercise RLS writes and denied
 wallet writes, and verify past-year budget reads. Keep all six existing PR-B
 TODO assertions untouched. D4/D7, own-row status changes and reassignments are
 application boundaries; existing direct-API gaps (including accounting's guard
 exemption) are not fixed here. The 20261022120000 guards stay byte-for-byte intact.
 
 ## Open questions (no new permissions granted)
+
+- Non-club transaction creation: should accounting with only global roles get
+  an explicit INSERT grant before B, or should this deploy wait for PR-B?
+  PR-A permits it in the app, but the current DB policy needs a group-specific
+  role. This is a real availability gap after removing the admin bypass; the
+  production inventory does not establish whether the affected user has one.
 
 - Should accounting also mark a subsidy unexecuted when linked transactions
   exist? Deletion was chosen, but this coupled status workflow was not.
