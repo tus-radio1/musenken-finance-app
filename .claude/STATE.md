@@ -123,3 +123,41 @@ Keep this section thin — a brief identity line + pointer. Thick content belong
 ## Progress Tracker
 
 Rolling progress summary (latest 5 checkpoints): [PROGRESS.md](./PROGRESS.md)
+
+## Current Work: P1-1 typed client + centralized permissions (Codex handoff)
+
+<!-- Maintained by the Claude main agent as a rate-limit fallback. If Claude is unavailable, a Codex session can resume from here. Last updated: 2026-10-22 (after PR-A verification). -->
+
+**Status (2026-10-22, PR-A opened):** PR-A is PR #44 (`feature/p1-typed-permissions` → `develop`, HEAD `6fb1211`, includes the Codex-made commit for read-only 部全体 ledger access for 部長/副部長). Verified by the main agent: lint 0, typecheck 0, vitest 463/463, build 0, db reset/lint 0, `supabase test db` PASS (96 tests; exactly 6 TODO = PR-B), no type drift; test-expectation changes reviewed as intentional spec changes.
+Next: (1) wait for #44 CI + user merge → staging check → release develop→main (all migrations in PR-A are compatible with deployed code; production DB deploy needs Yuulis's approval). (2) After PR-A is live: read-only prod inventory (NULL-typed groups, roles per group, past false approvals), then PR-B = plan steps 11–12, flipping the 6 pgTAP TODOs (keep the admin self-row break-glass path working).
+Known residual issues: non-admin `deleteMember` still has the 0-row/auth-cascade problem; admin can self-approve in two logged steps (reassign created_by, then approve); break-glass intent audit row persists if the update fails.
+
+**Read first:**
+- Per-step progress log (appended by the implementer after each commit): `.claude/logs/p1-progress.md`.
+- Plan + binding user decisions: `.claude/docs/plans/p1-typed-permissions.md` (§4 steps, §10 decisions + amendment).
+- Project status / roadmap (Japanese): `docs/manual/project-status/roadmap.md`.
+
+**Binding decisions (summary):**
+- Approvers = admin + 会計, never own rows, and past fiscal years admin-only. Leaders cannot approve or edit others' transactions.
+- Edit-form status change: admin + 会計 on others' rows. An admin may also change their OWN rows (break-glass) and must write an audit_logs entry. 会計 may not change their own rows. The normal approval action blocks self-approval for everyone.
+- Budget edit: admin always, 会計 current fiscal year only, leaders never.
+- The approval RPC is deferred to R6. Use a conditional UPDATE that requires exactly 1 row.
+- PR-A = steps 1–10 + 13, with additive migrations only. PR-B = steps 11–12 (restrictive migrations). Release PR-B only after PR-A is live in production, and run a read-only production role/group inventory before step 12.
+
+**How to resume (Codex):**
+1. Run `git log --oneline develop..HEAD` and compare the commits against plan §4 to find the next step.
+2. Implement the remaining steps with the same rules: tests that prove each bug before its fix, no skipped or weakened tests, Japanese commit messages, no push.
+3. Acceptance:
+   - `npm run lint`
+   - `npm run typecheck`
+   - `npm test`
+   - `npm run build` (with the dummy env from `.github/workflows/ci.yml`)
+   - `supabase db reset --local`, `supabase db lint --local`, `supabase test db --local`
+   - a types drift check: `supabase gen types typescript --local` and `git diff --exit-code lib/database.types.ts`
+
+**Environment notes:**
+- Supabase CLI 2.121.0 with the Docker WSL integration. The project is linked, so always pass `--local`; never `db push` or `--linked`.
+- Production DB deploys (main) wait for manual approval by Yuulis.
+- Prod ref: `csphhemmhzayyhlasirc`. Staging ref: `gygyuqivcvwgvyuekqvy`.
+
+**Done so far (all in production):** P0 S1–S4 and B1–B3 (PRs #39–#43).
