@@ -497,7 +497,7 @@ describe("updateTransaction", () => {
   });
 
   // Bug (item 4): the destination group was never authorized.
-  it.fails("rejects a member moving their transaction to an unrelated group", async () => {
+  it("rejects a member moving their transaction to an unrelated group", async () => {
     actor = "member";
     tx = { ...tx, created_by: ACTOR_ID };
 
@@ -511,13 +511,65 @@ describe("updateTransaction", () => {
   });
 });
 
+describe("updateTransaction destination group (item 4)", () => {
+  it("keeps a legacy row editable when the group is unchanged", async () => {
+    actor = "accounting";
+    tx = { ...tx, accounting_group_id: "f6f6f6f6-f6f6-4f6f-8f6f-f6f6f6f6f6f6" };
+
+    const result = await updateTransaction(TX_ID, formValues({ description: "x" }));
+
+    expect(result).toEqual({ success: true });
+    expect(userDb.calls.some((c) => c.table === "accounting_groups")).toBe(false);
+  });
+
+  it("lets a member move their pending transaction to an open group", async () => {
+    actor = "member";
+    tx = { ...tx, created_by: ACTOR_ID };
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ accounting_group_id: OPEN }),
+    );
+
+    expect(result).toEqual({ success: true });
+    expect(txWrites("update")[0].payload).toMatchObject({ accounting_group_id: OPEN });
+  });
+
+  it("rejects moving into the club ledger without 会計 or admin rights", async () => {
+    actor = "member";
+    tx = { ...tx, created_by: ACTOR_ID };
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ accounting_group_id: CLUB }),
+    );
+
+    expect(result).toEqual({
+      error: "部全体取引の作成には会計担当または管理者権限が必要です",
+    });
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("denies the move when the destination group cannot be found", async () => {
+    actor = "accounting";
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ accounting_group_id: "f6f6f6f6-f6f6-4f6f-8f6f-f6f6f6f6f6f6" }),
+    );
+
+    expect(result).toEqual({ error: "会計グループが見つかりません" });
+    expect(txWrites("update")).toHaveLength(0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // createTransaction
 // ---------------------------------------------------------------------------
 
 describe("createTransaction", () => {
   // Bug (item 4): only the club case was checked, not group membership.
-  it.fails("rejects filing into a restricted group the user has no role in", async () => {
+  it("rejects filing into a restricted group the user has no role in", async () => {
     actor = "outsider";
 
     const result = await createTransaction(
@@ -527,6 +579,46 @@ describe("createTransaction", () => {
     );
 
     expect(result).toHaveProperty("error");
+    expect(txWrites("insert")).toHaveLength(0);
+  });
+
+  it("lets a member file into their own group and open groups", async () => {
+    actor = "member";
+
+    for (const group of [G1, OPEN]) {
+      const result = await createTransaction(
+        formValues({ accounting_group_id: group }),
+        null,
+        TX_ID,
+      );
+      expect(result).toEqual({ success: true });
+    }
+    expect(txWrites("insert")).toHaveLength(2);
+  });
+
+  it("lets 会計 file into the club ledger but not a leader", async () => {
+    actor = "accounting";
+    expect(
+      await createTransaction(formValues({ accounting_group_id: CLUB }), null, TX_ID),
+    ).toEqual({ success: true });
+
+    actor = "leader";
+    expect(
+      await createTransaction(formValues({ accounting_group_id: CLUB }), null, TX_ID),
+    ).toEqual({ error: "部全体取引の作成には会計担当または管理者権限が必要です" });
+  });
+
+  it("denies filing when the group lookup fails", async () => {
+    actor = "admin";
+    userDb = createSupabaseMock((call) =>
+      call.table === "accounting_groups"
+        ? { error: { message: "db down" } }
+        : resolveQuery(call),
+    );
+
+    const result = await createTransaction(formValues(), null, TX_ID);
+
+    expect(result).toEqual({ error: "会計グループの取得に失敗しました" });
     expect(txWrites("insert")).toHaveLength(0);
   });
 });

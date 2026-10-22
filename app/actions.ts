@@ -39,10 +39,11 @@ import {
 } from "@/lib/validations";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import type { SupabaseServerClient } from "@/lib/auth/types";
+import type { RoleAccessContext } from "@/lib/roles/types";
 import {
-  canCreateClubTransaction,
   canDeleteTransaction,
   canEditTransaction,
+  canFileTransactionInGroup,
   canReassignTransactionPeople,
   canSetApprovalFieldsDirectly,
   checkTransactionApproval,
@@ -87,6 +88,39 @@ function normalizeAccountingUserId(
   }
 
   return userId;
+}
+
+/**
+ * Whether the caller may file a transaction into the group. A missing group
+ * or a lookup error denies.
+ */
+async function checkFilingGroup(
+  supabase: SupabaseServerClient,
+  access: RoleAccessContext,
+  accountingGroupId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: group, error } = await supabase
+    .from("accounting_groups")
+    .select("id, type")
+    .eq("id", accountingGroupId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[checkFilingGroup] Group fetch error:", error);
+    return { ok: false, error: "会計グループの取得に失敗しました" };
+  }
+  if (!group) {
+    return { ok: false, error: "会計グループが見つかりません" };
+  }
+  if (canFileTransactionInGroup(access, group)) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    error: isClubGroup(group)
+      ? "部全体取引の作成には会計担当または管理者権限が必要です"
+      : "この会計グループに登録する権限がありません",
+  };
 }
 
 export async function signOut() {
@@ -222,19 +256,14 @@ export async function createTransaction(
   // Determine transaction_kind from type (income/expense)
   const transactionKind = parsedValues.type === "expense" ? "expense" : "income";
 
-  // Check if the accounting group is club-wide (type=club)
-  // If so, verify the user has accounting/admin permission
-  const { data: groupInfo } = await auth.supabase
-    .from("accounting_groups")
-    .select("type")
-    .eq("id", parsedValues.accounting_group_id)
-    .maybeSingle();
-
-  if (groupInfo && isClubGroup(groupInfo)) {
-    if (!canCreateClubTransaction(authResult.access)) {
-      return { error: "部全体取引の作成には会計担当または管理者権限が必要です" };
-    }
-  }
+  // The user must be allowed to file into the chosen group (club-wide groups:
+  // accounting/admin only; restricted groups: members of the group).
+  const groupCheck = await checkFilingGroup(
+    auth.supabase,
+    authResult.access,
+    parsedValues.accounting_group_id,
+  );
+  if (!groupCheck.ok) return { error: groupCheck.error };
 
   const insertData = {
     id: recordId,
@@ -459,6 +488,17 @@ export async function updateTransaction(
         ? "受付中以外のデータは編集できません"
         : "更新できませんでした（権限がない可能性があります）",
     };
+  }
+
+  // Moving to another group needs permission on the destination. Unchanged
+  // groups are not re-checked, so legacy rows stay editable.
+  if (values.accounting_group_id !== transaction.accounting_group_id) {
+    const groupCheck = await checkFilingGroup(
+      auth.supabase,
+      access,
+      values.accounting_group_id,
+    );
+    if (!groupCheck.ok) return { error: groupCheck.error };
   }
 
   // receipt_url: undefined = keep, null = clear, same value = keep (legacy

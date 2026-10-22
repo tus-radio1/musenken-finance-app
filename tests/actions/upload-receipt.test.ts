@@ -197,7 +197,10 @@ function defaultUserHandler(overrides: { updateError?: unknown } = {}) {
         : { data: [{ id: TX_ID }] };
     }
     if (call.table === "fiscal_years") return { data: { year: 2026 } };
-    if (call.table === "accounting_groups") return { data: { type: "team" } };
+    // An open group, so the group rule (item 4) never blocks these receipt tests.
+    if (call.table === "accounting_groups") {
+      return { data: { id: GROUP_ID, type: "general" } };
+    }
     return {};
   };
 }
@@ -424,7 +427,7 @@ describe("createTransaction receipt ownership", () => {
       call.table === "fiscal_years"
         ? { data: { year: 2026 } }
         : call.table === "accounting_groups"
-          ? { data: { type: "team" } }
+          ? { data: { id: GROUP_ID, type: "general" } }
           : {},
     );
 
