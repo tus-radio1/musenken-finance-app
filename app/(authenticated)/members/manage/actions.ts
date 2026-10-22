@@ -13,6 +13,8 @@ import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import { verifyAdmin, verifyManageMembersPermission } from "@/lib/auth/permissions";
 import { isDelegableRole, planRoleSync } from "@/lib/roles/assignment";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
+import { toRoleAssignment } from "@/lib/roles/parse";
+import { isAdmin } from "@/lib/roles/permissions";
 import type { RoleAssignment } from "@/lib/roles/types";
 import { logAuditEvent } from "@/lib/audit-log";
 import { passwordResetRateLimiter } from "@/lib/rate-limit";
@@ -40,6 +42,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 const PROTECTED_ROLE_ERROR = "このロールの変更には管理者権限が必要です";
 const PROTECTED_TARGET_ERROR = "この部員の操作には管理者権限が必要です";
 const ROLE_LOOKUP_ERROR = "操作に失敗しました。しばらくしてから再試行してください。";
+const MEMBER_NOT_FOUND_ERROR = "対象の部員が見つからないか、更新できませんでした";
 
 // Role ids currently assigned to the user, read with the service-role client so
 // the result does not depend on the caller's RLS visibility.
@@ -72,14 +75,7 @@ async function fetchRolesById(
     return null;
   }
   return Object.fromEntries(
-    (data ?? []).map((role) => [
-      role.id,
-      {
-        name: role.name,
-        type: role.type,
-        accountingGroupId: role.accounting_group_id,
-      },
-    ]),
+    (data ?? []).map((role) => [role.id, toRoleAssignment(role)]),
   );
 }
 
@@ -229,7 +225,7 @@ export async function updateMember(
     return { error: "ロールの更新に失敗しました" } as const;
   }
   const rolePlan = planRoleSync({
-    actorIsAdmin: access.isAdmin,
+    actorIsAdmin: isAdmin(access),
     currentRoleIds,
     requestedRoleIds: input.role_ids,
     roleById,
@@ -241,8 +237,10 @@ export async function updateMember(
     return { error: "入力データが不正です" } as const;
   }
 
-  // 1) profiles 更新 - uses RLS-respecting client
-  const { error: profileErr } = await auth.supabase
+  // 1) profiles 更新 - service role: profiles の RLS は本人と管理者しか更新できず、
+  //    部長・副部長・会計による更新は 0 行になっていた。権限は上で確認済み。
+  //    1 行更新できなければ Auth・ロールには進まない。
+  const { data: updatedProfiles, error: profileErr } = await admin
     .from("profiles")
     .update({
       name: input.name,
@@ -251,10 +249,14 @@ export async function updateMember(
       updated_at: new Date().toISOString(),
     })
     .eq("id", userId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id");
   if (profileErr) {
     console.error(profileErr);
     return { error: "プロフィール更新に失敗しました" } as const;
+  }
+  if (!updatedProfiles || updatedProfiles.length !== 1) {
+    return { error: MEMBER_NOT_FOUND_ERROR } as const;
   }
 
   // 2) auth user metadata update - requires admin client for auth.admin.*
@@ -320,7 +322,8 @@ export async function retireMember(userId: string) {
 
   // 非管理者は権限ロール保持者（管理者・会計・部長・副部長・グループロール等）を
   // 操作できない（ロール剥奪・アカウント削除による権限奪取の防止）
-  if (!access.isAdmin) {
+  const actorIsAdmin = isAdmin(access);
+  if (!actorIsAdmin) {
     const manageable = await isTargetManageableByNonAdmin(admin, userId);
     if (manageable === null) {
       return { error: ROLE_LOOKUP_ERROR } as const;
@@ -330,38 +333,66 @@ export async function retireMember(userId: string) {
     }
   }
 
-  // 1) grade を 0 に変更 - uses RLS-respecting client
-  const { error: profileErr } = await auth.supabase
+  // Writes use the service-role client: profiles / user_roles RLS only lets
+  // admins change other users, so a non-admin manager's writes touched 0 rows.
+  // Permission (and S1) is checked above. Everything is read and validated
+  // before the first write; atomicity of the steps is R6.
+
+  // 0) OB・OG ロールと現在のロールを書き込み前に確認する
+  const { data: obRole, error: obRoleFetchErr } = await admin
+    .from("roles")
+    .select("id, name, type, accounting_group_id")
+    .eq("name", ROLE_NAMES_JA.ALUMNI)
+    .maybeSingle();
+  if (obRoleFetchErr || !obRole) {
+    console.error("[retireMember] OB role fetch error:", obRoleFetchErr);
+    return { error: ROLE_LOOKUP_ERROR } as const;
+  }
+  if (!actorIsAdmin && !isDelegableRole(toRoleAssignment(obRole))) {
+    return { error: PROTECTED_ROLE_ERROR } as const;
+  }
+  const currentRoleIds = await fetchAssignedRoleIds(admin, userId);
+  if (currentRoleIds === null) {
+    return { error: ROLE_LOOKUP_ERROR } as const;
+  }
+
+  // 1) grade を 0 に変更（1 行更新できなければ中止）
+  const { data: updatedProfiles, error: profileErr } = await admin
     .from("profiles")
     .update({ grade: 0, updated_at: new Date().toISOString() })
     .eq("id", userId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id");
   if (profileErr) {
     console.error(profileErr);
     return { error: "プロフィール更新に失敗しました" } as const;
   }
-
-  // 2) 既存ロールを全削除 - uses RLS-respecting client
-  const { error: roleDelErr } = await auth.supabase.from("user_roles").delete().eq("user_id", userId);
-  if (roleDelErr) {
-    console.error("[retireMember] Role deletion error:", roleDelErr);
-    return { error: "ロールの削除に失敗しました" } as const;
+  if (!updatedProfiles || updatedProfiles.length !== 1) {
+    return { error: MEMBER_NOT_FOUND_ERROR } as const;
   }
 
-  // 3) OB・OG ロールを付与 - uses RLS-respecting client
-  const { data: obRole } = await auth.supabase
-    .from("roles")
-    .select("id")
-    .eq("name", ROLE_NAMES_JA.ALUMNI)
-    .single();
-
-  if (obRole) {
-    const { error: obRoleErr } = await auth.supabase
+  // 2) OB・OG ロールを付与（付与済みなら何もしない）
+  if (!currentRoleIds.includes(obRole.id)) {
+    const { error: obRoleErr } = await admin
       .from("user_roles")
       .insert({ user_id: userId, role_id: obRole.id });
     if (obRoleErr) {
       console.error("[retireMember] OB role assignment error:", obRoleErr);
       return { error: "OB・OGロールの付与に失敗しました" } as const;
+    }
+  }
+
+  // 3) 確認済みの旧ロールだけを削除する（確認後に付与されたロールは消さない）
+  const rolesToRemove = currentRoleIds.filter((id) => id !== obRole.id);
+  if (rolesToRemove.length > 0) {
+    const { error: roleDelErr } = await admin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId)
+      .in("role_id", rolesToRemove);
+    if (roleDelErr) {
+      console.error("[retireMember] Role deletion error:", roleDelErr);
+      return { error: "ロールの削除に失敗しました" } as const;
     }
   }
 
@@ -398,7 +429,7 @@ export async function deleteMember(userId: string) {
 
   // 非管理者は権限ロール保持者（管理者・会計・部長・副部長・グループロール等）を
   // 操作できない（ロール剥奪・アカウント削除による権限奪取の防止）
-  if (!access.isAdmin) {
+  if (!isAdmin(access)) {
     const manageable = await isTargetManageableByNonAdmin(admin, userId);
     if (manageable === null) {
       return { error: ROLE_LOOKUP_ERROR } as const;

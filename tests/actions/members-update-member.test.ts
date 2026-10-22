@@ -159,7 +159,11 @@ const BASE_DATA = { name: "Target", student_number: "4623045", grade: 2 };
 function insertedRoleIds(): string[] {
   return writesTo(adminDb.calls, "user_roles")
     .filter((c) => c.op === "insert")
-    .flatMap((c) => (c.payload as Array<{ role_id: string }>).map((r) => r.role_id));
+    .flatMap((c) =>
+      [c.payload as { role_id: string } | Array<{ role_id: string }>]
+        .flat()
+        .map((r) => r.role_id),
+    );
 }
 
 function deleteCalls(): QueryCall[] {
@@ -411,7 +415,7 @@ describe("deleteMember / retireMember on admin targets", () => {
 describe("member writes by a non-admin manager", () => {
   // Bug (item 6): profiles RLS only allows own row or admin, so the profile
   // update by 部長/副部長/会計 touched 0 rows while Auth and roles changed.
-  it.fails("updateMember writes the profile with the service-role client", async () => {
+  it("updateMember writes the profile with the service-role client", async () => {
     const result = await updateMember(TARGET_ID, {
       ...BASE_DATA,
       role_ids: [PROVISIONAL_ROLE_ID],
@@ -422,7 +426,7 @@ describe("member writes by a non-admin manager", () => {
     expect(writesTo(adminDb.calls, "profiles")).toHaveLength(1);
   });
 
-  it.fails("updateMember stops before Auth and roles when no profile row was updated", async () => {
+  it("updateMember stops before Auth and roles when no profile row was updated", async () => {
     profileUpdateRows = [];
 
     const result = await updateMember(TARGET_ID, {
@@ -436,12 +440,33 @@ describe("member writes by a non-admin manager", () => {
   });
 
   // Bug (item 6): user_roles RLS is admin-only, so the role delete touched 0 rows.
-  it.fails("retireMember replaces roles with the service-role client", async () => {
+  it("retireMember replaces roles with the service-role client", async () => {
     const result = await retireMember(TARGET_ID);
 
     expect(result).toEqual({ success: true });
     expect(writesTo(userDb.calls, "user_roles")).toHaveLength(0);
     expect(writesTo(userDb.calls, "profiles")).toHaveLength(0);
     expect(insertedRoleIds()).toEqual([ALUMNI_ROLE_ID]);
+  });
+
+  it("retireMember keeps a role granted after the check and is idempotent for OB・OG", async () => {
+    assignments[TARGET_ID] = [PROVISIONAL_ROLE_ID, ALUMNI_ROLE_ID];
+
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toEqual({ success: true });
+    expect(insertedRoleIds()).toEqual([]);
+    const [del] = deleteCalls();
+    expect(del.filters).toContainEqual({ method: "in", args: ["role_id", [PROVISIONAL_ROLE_ID]] });
+  });
+
+  it("retireMember stops before any write when no profile row was updated", async () => {
+    profileUpdateRows = [];
+
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toHaveProperty("error");
+    expect(writesTo(adminDb.calls, "user_roles")).toHaveLength(0);
+    expect(adminDb.authAdmin.updateUserById).not.toHaveBeenCalled();
   });
 });
