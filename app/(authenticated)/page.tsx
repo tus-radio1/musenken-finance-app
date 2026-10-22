@@ -4,6 +4,7 @@ import { RecentApplications } from "@/components/recent-applications";
 import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab";
 import { getSortableDateValue } from "@/lib/date";
 import { getUserTeams } from "@/lib/teams";
+import { requireRoleAccess } from "@/lib/roles/access";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -15,15 +16,15 @@ export default async function Home() {
   const profileId = user?.id ?? null;
 
   // 会計年度の決定 + チーム情報を並列取得
-  const [{ data: fyCurrent }, teamData] = await Promise.all([
+  const [{ data: fyCurrent }, teams] = await Promise.all([
     supabase
       .from("fiscal_years")
       .select("year")
       .eq("is_current", true)
       .single(),
     user
-      ? getUserTeams(supabase, supabase, user.id)
-      : Promise.resolve({ teams: [] as { id: string; name: string }[] }),
+      ? requireRoleAccess({ supabase, profileId: user.id }).then(getUserTeams)
+      : Promise.resolve([] as { id: string; name: string }[]),
   ]);
 
   let fyYear: number | undefined = fyCurrent?.year ?? undefined;
@@ -37,7 +38,7 @@ export default async function Home() {
     fyYear = fyLatest?.[0]?.year ?? undefined;
   }
 
-  const categories = teamData.teams;
+  const categories = teams;
 
   // 経費取引・支援金申請を並列取得
   let myTxQuery = supabase

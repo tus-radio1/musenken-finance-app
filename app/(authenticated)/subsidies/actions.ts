@@ -15,6 +15,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { subsidyFormSchema } from "@/lib/schema";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
+import { isAdmin } from "@/lib/roles/permissions";
 import { createAdminClient } from "@/utils/supabase/server";
 import { formatDateForDatabase } from "@/lib/date";
 import {
@@ -270,13 +271,15 @@ export async function deleteMySubsidyItem(id: string) {
     return { error: "支援金申請情報の取得に失敗しました" };
   }
 
+  const actorIsAdmin = isAdmin(access);
+
   // Only the owner or a global admin can delete
-  if (item.applicant_id !== auth.profileId && !access.isAdmin) {
+  if (item.applicant_id !== auth.profileId && !actorIsAdmin) {
     return { error: "他人の申請は削除できません" };
   }
 
   // Only pending items can be deleted (unless global admin)
-  if (item.status !== "pending" && !access.isAdmin) {
+  if (item.status !== "pending" && !actorIsAdmin) {
     return { error: "受付中以外の申請は削除できません" };
   }
 
@@ -284,7 +287,7 @@ export async function deleteMySubsidyItem(id: string) {
   // - Admins perform a soft delete by setting deleted_at (not restricted by RLS).
   // - Non-admin users perform a hard delete, avoiding the RLS check on deleted_at.
   let dbError;
-  if (access.isAdmin) {
+  if (actorIsAdmin) {
     const deletedAt = new Date().toISOString();
     const { error } = await auth.supabase
       .from("subsidy_items")

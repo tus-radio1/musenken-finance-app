@@ -12,6 +12,7 @@ import {
 } from "@/lib/validations";
 import { resolveAuthWithRoles } from "@/lib/auth/context";
 import { canManageBudget } from "@/lib/roles/access";
+import { canCreateFiscalYear, canManageGroups } from "@/lib/roles/permissions";
 
 export async function upsertBudget(
   accountingGroupId: string,
@@ -111,7 +112,7 @@ export async function createFiscalYearBudgets(
   const access = authResult.access;
 
   // 役割確認（グローバル管理者 or 会計ロールのみ）
-  if (!access.isAdmin && !access.hasAccountingRole) {
+  if (!canCreateFiscalYear(access)) {
     return { error: "新規年度を作成する権限がありません" };
   }
 
@@ -180,7 +181,7 @@ export async function toggleAccountingGroupActive(
   const access = authResult.access;
 
   // Only global admins can toggle group active status
-  if (!access.isAdmin) {
+  if (!canManageGroups(access)) {
     return { error: "グループの有効/無効を切り替える権限がありません" };
   }
 
@@ -217,7 +218,7 @@ export async function deleteGroupYearData(
   const access = authResult.access;
 
   // Only global admins can delete group year data
-  if (!access.isAdmin) {
+  if (!canManageGroups(access)) {
     return { error: "データを削除する権限がありません" };
   }
 
@@ -267,7 +268,7 @@ export async function createAccountingGroup(
   if (!authResult.ok) return { error: authResult.error };
   const access = authResult.access;
 
-  if (!access.isAdmin) {
+  if (!canManageGroups(access)) {
     return { error: "会計グループを作成する権限がありません" };
   }
 

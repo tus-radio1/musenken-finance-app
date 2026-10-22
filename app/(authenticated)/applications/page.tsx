@@ -5,6 +5,8 @@ import { TransactionForm } from "@/components/transaction-form";
 import { ApplicationsTable } from "@/components/applications-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUserTeams } from "@/lib/teams";
+import { requireRoleAccess } from "@/lib/roles/access";
+import { isAdmin } from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
 
@@ -30,10 +32,10 @@ export default async function ApplicationsPage({
   const offset = page * PAGE_SIZE;
 
   // 会計グループ一覧を取得
-  const teamData = await getUserTeams(supabase, supabase, user.id);
-  const accountingGroups = teamData.teams;
+  const access = await requireRoleAccess({ supabase, profileId: user.id });
+  const accountingGroups = await getUserTeams(access);
 
-  const isGlobalAdmin = teamData.isGlobalAdmin;
+  const isGlobalAdmin = isAdmin(access);
 
   // 当該ユーザの過去の申請を取得（会計グループ名付き）
   const { data: transactions, count } = await supabase

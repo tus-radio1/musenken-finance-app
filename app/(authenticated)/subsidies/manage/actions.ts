@@ -11,6 +11,11 @@ import {
 import { revalidatePath } from "next/cache";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import {
+  canManageSubsidies,
+  canSoftDeleteSubsidyItems,
+  isAdmin,
+} from "@/lib/roles/permissions";
+import {
   RECEIPT_PATH_ERROR_MESSAGE,
   checkReceiptPathUpdates,
 } from "@/lib/receipt-upload";
@@ -23,9 +28,7 @@ export async function fetchAllSubsidies(year?: number) {
   const access = authResult.access;
 
   // Role validation: Accounting or Admin only
-  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
-
-  if (!hasAccessRole) {
+  if (!canManageSubsidies(access)) {
     return {
       error: "このページにアクセスする権限がありません",
       data: [],
@@ -110,7 +113,7 @@ export async function fetchAllSubsidies(year?: number) {
     };
   });
 
-  return { success: true, data: processedData, isAdmin: access.isAdmin };
+  return { success: true, data: processedData, isAdmin: isAdmin(access) };
 }
 
 export async function fetchProfilesList() {
@@ -147,9 +150,7 @@ export async function updateSubsidyStatus(id: string, status: string) {
   const auth = authResult.context;
   const access = authResult.access;
 
-  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
-
-  if (!hasAccessRole) {
+  if (!canManageSubsidies(access)) {
     return { error: "権限がありません" };
   }
 
@@ -245,9 +246,7 @@ export async function updateSubsidyItem(
   const auth = authResult.context;
   const access = authResult.access;
 
-  const hasAccessRole = access.isAdmin || access.hasAccountingRole;
-
-  if (!hasAccessRole) {
+  if (!canManageSubsidies(access)) {
     return { error: "権限がありません" };
   }
 
@@ -322,9 +321,7 @@ export async function deleteSubsidyItem(id: string) {
   // Only admins can soft-delete subsidy items due to RLS policy constraints
   // The subsidy_items_update_admin_accounting policy has WITH CHECK (deleted_at IS NULL)
   // which prevents setting deleted_at to non-null, so soft deletes must be restricted to admins
-  const hasAccessRole = access.isAdmin;
-
-  if (!hasAccessRole) {
+  if (!canSoftDeleteSubsidyItems(access)) {
     return { error: "権限がありません" };
   }
 

@@ -20,7 +20,7 @@ export type GroupRef = { id: string; type: string | null };
 
 /** Minimal shape of a transaction needed for permission checks. */
 export type TransactionRef = {
-  created_by: string;
+  created_by: string | null;
   approval_status: string | null;
 };
 

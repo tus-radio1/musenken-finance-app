@@ -37,6 +37,11 @@ import {
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import {
+  canCreateClubTransaction,
+  canDeleteTransaction,
+  isClubGroup,
+} from "@/lib/roles/permissions";
+import {
   RECEIPT_MIME_EXTENSIONS,
   isAllowedReceiptMimeType,
   isReceiptPathOwnedBy,
@@ -209,9 +214,8 @@ export async function createTransaction(
     .eq("id", parsedValues.accounting_group_id)
     .maybeSingle();
 
-  if (groupInfo?.type === "club") {
-    const access = authResult.access;
-    if (!access.isAdmin && !access.hasAccountingRole) {
+  if (groupInfo && isClubGroup(groupInfo)) {
+    if (!canCreateClubTransaction(authResult.access)) {
       return { error: "部全体取引の作成には会計担当または管理者権限が必要です" };
     }
   }
@@ -532,10 +536,7 @@ export async function deleteTransaction(id: string) {
     return { error: "対象のデータが見つかりません" };
   }
 
-  const isAdmin = access.isAdmin;
-  const isOwner = transaction.created_by === auth.profileId;
-
-  if (!isAdmin && !(isOwner && transaction.approval_status === "pending")) {
+  if (!canDeleteTransaction(access, transaction, auth.profileId)) {
     return { error: "削除する権限がありません。" };
   }
 

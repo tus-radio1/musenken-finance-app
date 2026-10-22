@@ -21,7 +21,7 @@ export type RoleAccessResult =
  * （権限がないのか取得できなかったのかを区別するため）。
  */
 export async function getUserRoleAccess(
-  auth: AuthContext,
+  auth: Pick<AuthContext, "supabase" | "profileId">,
 ): Promise<RoleAccessResult> {
   const { data, error } = await auth.supabase
     .from("user_roles")
@@ -34,6 +34,21 @@ export async function getUserRoleAccess(
   }
 
   return { ok: true, access: buildRoleAccess(parseRoleAssignments(data)) };
+}
+
+/**
+ * Server Component 用。取得に失敗した場合は例外を投げてエラー画面
+ * （app/error.tsx）に任せる。空のロールで描画を続けると、権限がない
+ * ユーザーと区別できないため。
+ */
+export async function requireRoleAccess(
+  auth: Pick<AuthContext, "supabase" | "profileId">,
+): Promise<RoleAccessContext> {
+  const result = await getUserRoleAccess(auth);
+  if (!result.ok) {
+    throw new Error("Role lookup failed");
+  }
+  return result.access;
 }
 
 // ---------------------------------------------------------------------------
