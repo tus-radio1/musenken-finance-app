@@ -733,14 +733,19 @@ export async function deleteTransaction(id: string) {
     return { error: "削除する権限がありません。" };
   }
 
-  const { error: deleteError } = await auth.supabase
+  const { data: deletedRows, error: deleteError } = await auth.supabase
     .from("transactions")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
 
   if (deleteError) {
     console.error("[deleteTransaction] Delete error:", deleteError);
     return { error: "削除に失敗しました。しばらくしてから再試行してください。" };
+  }
+  // RLS (or a concurrent change) can filter the DELETE to 0 rows.
+  if (!deletedRows || deletedRows.length !== 1) {
+    return { error: STALE_TRANSACTION_ERROR };
   }
 
   await logAuditEvent({

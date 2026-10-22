@@ -629,12 +629,23 @@ describe("createTransaction", () => {
 
 describe("deleteTransaction", () => {
   // Bug (item 6): a DELETE that removed 0 rows was reported as success.
-  it.fails("returns an error and skips the audit when no row was deleted", async () => {
+  it("returns an error and skips the audit when no row was deleted", async () => {
     writtenRows = [];
 
     const result = await deleteTransaction(TX_ID);
 
     expect(result).toHaveProperty("error");
     expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("deletes an owner's pending transaction and audits it", async () => {
+    actor = "member";
+    tx = { ...tx, created_by: ACTOR_ID };
+
+    const result = await deleteTransaction(TX_ID);
+
+    expect(result).toEqual({ success: true });
+    expect(txWrites("delete")).toHaveLength(1);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
   });
 });

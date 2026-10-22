@@ -1,12 +1,12 @@
 -- pgTAP: who may write which transactions / subsidy items through the Data API.
 -- Plan: .claude/docs/plans/p1-typed-permissions.md (§2.4-§2.6, steps 3/10/11/12).
--- Assertions inside todo_start/todo_end document known bugs that later steps
--- fix; each fixing step moves its block out of the todo section.
+-- Assertions inside todo_start/todo_end document known bugs that PR-B
+-- (steps 11 and 12) fixes; each fixing step moves its block out of todo.
 -- Run with: supabase test db
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(14);
+SELECT plan(17);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures (as the migration owner, RLS not applied)
@@ -71,15 +71,17 @@ FROM (VALUES
   ('d5000000-0000-4000-8000-000000000005', 't5', 'b4000000-0000-4000-8000-000000000004')
 ) AS v(id, description, created_by);
 
--- Pending subsidy item owned by the member.
+-- Subsidy items owned by the member: c1 pending, c2 approved.
 INSERT INTO public.subsidy_items (
   id, category, term, expense_type, accounting_group_id, applicant_id,
   fiscal_year_id, name, requested_amount, justification, status
-) VALUES (
-  'c1000000-0000-4000-8000-000000000001', 'activity', 1, 'equipment',
-  'e1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
-  2098, 'Own pending item', 1000, 'reason', 'pending'
-);
+) VALUES
+  ('c1000000-0000-4000-8000-000000000001', 'activity', 1, 'equipment',
+   'e1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+   2098, 'Own pending item', 1000, 'reason', 'pending'),
+  ('c2000000-0000-4000-8000-000000000002', 'activity', 1, 'equipment',
+   'e1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+   2098, 'Own approved item', 1000, 'reason', 'approved');
 
 -- ---------------------------------------------------------------------------
 -- Approval (D1: admin + 会計 only; leaders have no UPDATE policy)
@@ -136,11 +138,32 @@ SELECT is(
 );
 
 -- ---------------------------------------------------------------------------
--- Known bugs fixed by later steps
+-- Owner delete of subsidy items (step 10, policy subsidy_items_delete_own_pending)
 -- ---------------------------------------------------------------------------
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims',
+  '{"sub":"b2000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+SELECT lives_ok(
+  $$DELETE FROM public.subsidy_items
+    WHERE id = 'c1000000-0000-4000-8000-000000000001'$$,
+  'another user''s delete statement runs (RLS filters it)'
+);
+SELECT set_config('request.jwt.claims',
+  '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+SELECT lives_ok(
+  $$DELETE FROM public.subsidy_items
+    WHERE id = 'c2000000-0000-4000-8000-000000000002'$$,
+  'owner delete of own approved subsidy item runs (RLS filters it)'
+);
+RESET ROLE;
+SELECT is(
+  (SELECT count(*) FROM public.subsidy_items
+    WHERE id IN ('c1000000-0000-4000-8000-000000000001',
+                 'c2000000-0000-4000-8000-000000000002')),
+  2::bigint,
+  'neither another user nor the owner of a non-pending item deleted anything'
+);
 
--- Step 10: owner hard-deletes own pending subsidy item (no DELETE policy yet).
-SELECT todo_start('step 10: subsidy_items has no owner DELETE policy');
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims',
   '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
@@ -156,7 +179,10 @@ SELECT is(
   0::bigint,
   'owner can delete own pending subsidy item'
 );
-SELECT todo_end();
+
+-- ---------------------------------------------------------------------------
+-- Known bugs fixed in PR-B (steps 11 and 12)
+-- ---------------------------------------------------------------------------
 
 -- Step 11 (PR-B): 会計 approves own transaction through the Data API.
 SELECT todo_start('step 11: no DB guard against 会計 self-approval');

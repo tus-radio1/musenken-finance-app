@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSupabaseMock,
+  eqValue,
+  writesTo,
   type QueryCall,
   type QueryResult,
 } from "../helpers/supabase-mock";
@@ -35,6 +37,9 @@ function accessFor(actor: Actor) {
 let actor: Actor;
 // Rows the subsidy_items write reports back (RLS can filter to []).
 let writtenRows: Array<{ id: string }>;
+// Transactions linked to the subsidy item, and how many a DELETE removes.
+let linkedCount: number;
+let deletedLinkedRows: Array<{ id: string }>;
 
 function resolveQuery(call: QueryCall): QueryResult {
   if (call.table === "subsidy_items" && call.op === "select") {
@@ -49,9 +54,9 @@ function resolveQuery(call: QueryCall): QueryResult {
   }
   if (call.table === "subsidy_items") return { data: writtenRows };
   if (call.table === "transactions" && call.op === "select") {
-    return { data: [], count: 0 };
+    return { data: null, count: linkedCount };
   }
-  if (call.table === "transactions") return { data: [] };
+  if (call.table === "transactions") return { data: deletedLinkedRows };
   return { error: null };
 }
 
@@ -111,13 +116,15 @@ beforeEach(() => {
   vi.mocked(logAuditEvent).mockClear();
   actor = "accounting";
   writtenRows = [];
+  linkedCount = 0;
+  deletedLinkedRows = [];
   userDb = createSupabaseMock(resolveQuery);
   adminDb = createSupabaseMock(resolveQuery);
 });
 
 describe("0-row subsidy writes", () => {
   // Bug (item 6): no owner DELETE policy, so the hard delete removed nothing.
-  it.fails("deleteMySubsidyItem reports an error when nothing was deleted", async () => {
+  it("deleteMySubsidyItem reports an error when nothing was deleted", async () => {
     actor = "member";
 
     const result = await deleteMySubsidyItem(ITEM_ID);
@@ -125,26 +132,101 @@ describe("0-row subsidy writes", () => {
     expect(result).toHaveProperty("error");
   });
 
-  it.fails("updateSubsidyStatus reports an error and skips the audit", async () => {
+  it("updateSubsidyStatus reports an error and skips the audit", async () => {
     const result = await updateSubsidyStatus(ITEM_ID, "approved");
 
     expect(result).toHaveProperty("error");
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
-  it.fails("updateSubsidyItem reports an error and skips the audit", async () => {
+  it("updateSubsidyItem reports an error and skips the audit", async () => {
     const result = await updateSubsidyItem(ITEM_ID, { name: "Renamed" });
 
     expect(result).toHaveProperty("error");
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
-  it.fails("deleteSubsidyItem reports an error and skips the audit", async () => {
+  it("deleteSubsidyItem reports an error and skips the audit", async () => {
     actor = "admin";
 
     const result = await deleteSubsidyItem(ITEM_ID);
 
     expect(result).toHaveProperty("error");
     expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("successful subsidy writes", () => {
+  it("lets an applicant hard-delete their own pending item", async () => {
+    actor = "member";
+    writtenRows = [{ id: ITEM_ID }];
+
+    const result = await deleteMySubsidyItem(ITEM_ID);
+
+    expect(result).toEqual({ success: true });
+    const [del] = writesTo(userDb.calls, "subsidy_items");
+    expect(del.op).toBe("delete");
+    expect(eqValue(del, "applicant_id")).toBe(ACTOR_ID);
+    expect(eqValue(del, "status")).toBe("pending");
+  });
+
+  it("audits a status update that changed one row", async () => {
+    writtenRows = [{ id: ITEM_ID }];
+
+    const result = await updateSubsidyStatus(ITEM_ID, "approved");
+
+    expect(result).toEqual({ success: true });
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("updateSubsidyStatus to unexecuted", () => {
+  it("stops 会計 before any write when linked transactions exist", async () => {
+    writtenRows = [{ id: ITEM_ID }];
+    linkedCount = 2;
+
+    const result = await updateSubsidyStatus(ITEM_ID, "unexecuted");
+
+    expect(result).toEqual({
+      error: "出納帳に関連データがあるため、管理者に操作を依頼してください",
+    });
+    expect(writesTo(userDb.calls, "subsidy_items")).toHaveLength(0);
+    expect(writesTo(userDb.calls, "transactions")).toHaveLength(0);
+  });
+
+  it("lets 会計 mark an item without linked transactions as unexecuted", async () => {
+    writtenRows = [{ id: ITEM_ID }];
+
+    const result = await updateSubsidyStatus(ITEM_ID, "unexecuted");
+
+    expect(result).toEqual({ success: true });
+    expect(writesTo(userDb.calls, "transactions")).toHaveLength(0);
+  });
+
+  it("reports a partial delete of linked transactions", async () => {
+    actor = "admin";
+    writtenRows = [{ id: ITEM_ID }];
+    linkedCount = 2;
+    deletedLinkedRows = [{ id: "tx-1" }];
+
+    const result = await updateSubsidyStatus(ITEM_ID, "unexecuted");
+
+    expect(result).toEqual({
+      error:
+        "ステータスは更新しましたが、関連する出納帳データの一部を削除できませんでした",
+    });
+  });
+
+  it("deletes all linked transactions for an admin", async () => {
+    actor = "admin";
+    writtenRows = [{ id: ITEM_ID }];
+    linkedCount = 2;
+    deletedLinkedRows = [{ id: "tx-1" }, { id: "tx-2" }];
+
+    const result = await updateSubsidyStatus(ITEM_ID, "unexecuted");
+
+    expect(result).toEqual({ success: true });
+    // One audit row for the status, one per deleted transaction.
+    expect(logAuditEvent).toHaveBeenCalledTimes(3);
   });
 });

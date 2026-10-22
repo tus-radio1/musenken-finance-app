@@ -135,6 +135,9 @@ export async function fetchProfilesList() {
   return { success: true, data };
 }
 
+const SUBSIDY_NOT_UPDATED_ERROR =
+  "対象の申請を更新できませんでした。再読み込みしてください";
+
 export async function updateSubsidyStatus(id: string, status: string) {
   const inputValidation = validateInput(updateSubsidyStatusSchema, {
     id,
@@ -154,27 +157,54 @@ export async function updateSubsidyStatus(id: string, status: string) {
     return { error: "権限がありません" };
   }
 
+  // "unexecuted" also deletes the linked transactions. Count them first: only
+  // admins (and owners of pending rows) may delete transactions under RLS, so
+  // a non-admin with linked rows is stopped before anything is written.
+  // Making the two writes atomic is R6.
+  const isUnexecuted = validatedStatus === "unexecuted";
+  let linkedCount = 0;
+  if (isUnexecuted) {
+    const { count, error: countError } = await auth.supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("subsidy_item_id", id);
+    if (countError || count === null) {
+      console.error("updateSubsidyStatus linked count error:", countError);
+      return { error: "関連する出納帳データの確認に失敗しました" };
+    }
+    linkedCount = count;
+    if (linkedCount > 0 && !isAdmin(access)) {
+      return {
+        error: "出納帳に関連データがあるため、管理者に操作を依頼してください",
+      };
+    }
+  }
+
   // Uses createClient() with RLS - authorization is enforced by RLS policies
-  const { error } = await auth.supabase
+  const { data: updatedRows, error } = await auth.supabase
     .from("subsidy_items")
     .update({ status: validatedStatus })
     .eq("id", id)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id");
 
   if (error) {
     console.error("updateSubsidyStatus error:", JSON.stringify(error, null, 2));
     return { error: "ステータスの更新に失敗しました" };
+  }
+  if (!updatedRows || updatedRows.length !== 1) {
+    return { error: SUBSIDY_NOT_UPDATED_ERROR };
   }
 
   await logAuditEvent({
     tableName: "subsidy_items",
     recordId: id,
     action: "UPDATE",
-    newData: { status },
+    newData: { status: validatedStatus },
     changedBy: auth.profileId,
   });
 
-  if (status === "unexecuted") {
+  if (isUnexecuted && linkedCount > 0) {
     // Physical delete related transactions
     const { data: relatedTx, error: txError } = await auth.supabase
       .from("transactions")
@@ -183,23 +213,32 @@ export async function updateSubsidyStatus(id: string, status: string) {
       .select("id");
 
     if (txError) {
-      console.error("Failed to soft-delete related transactions:", txError);
+      console.error("Failed to delete related transactions:", txError);
       return { error: "関連する出納帳データの削除に失敗しました" };
     }
 
     // Log audit events for all deleted transactions in parallel
-    if (relatedTx) {
-      await Promise.all(
-        relatedTx.map((tx) =>
-          logAuditEvent({
-            tableName: "transactions",
-            recordId: tx.id,
-            action: "DELETE",
-            oldData: { subsidy_item_id: id },
-            changedBy: auth.profileId,
-          }),
-        ),
+    await Promise.all(
+      (relatedTx ?? []).map((tx) =>
+        logAuditEvent({
+          tableName: "transactions",
+          recordId: tx.id,
+          action: "DELETE",
+          oldData: { subsidy_item_id: id },
+          changedBy: auth.profileId,
+        }),
+      ),
+    );
+
+    if ((relatedTx?.length ?? 0) < linkedCount) {
+      console.error(
+        "updateSubsidyStatus: linked transactions only partly deleted",
+        { expected: linkedCount, deleted: relatedTx?.length ?? 0 },
       );
+      return {
+        error:
+          "ステータスは更新しましたが、関連する出納帳データの一部を削除できませんでした",
+      };
     }
   }
 
@@ -271,15 +310,19 @@ export async function updateSubsidyItem(
   const updatesToWrite = { ...validatedUpdates, ...receiptCheck.normalized };
 
   // Uses createClient() with RLS - authorization is enforced by RLS policies
-  const { error } = await auth.supabase
+  const { data: updatedRows, error } = await auth.supabase
     .from("subsidy_items")
     .update(updatesToWrite)
     .eq("id", id)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id");
 
   if (error) {
     console.error("updateSubsidyItem error:", JSON.stringify(error, null, 2));
     return { error: "申請情報の更新に失敗しました" };
+  }
+  if (!updatedRows || updatedRows.length !== 1) {
+    return { error: SUBSIDY_NOT_UPDATED_ERROR };
   }
 
   // Remove replaced files only after the update succeeded. The helper only
@@ -328,14 +371,19 @@ export async function deleteSubsidyItem(id: string) {
   // Soft delete instead of physical delete
   // Uses createClient() with RLS - authorization is enforced by RLS policies
   const deletedAt = new Date().toISOString();
-  const { error } = await auth.supabase
+  const { data: deletedRows, error } = await auth.supabase
     .from("subsidy_items")
     .update({ deleted_at: deletedAt })
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("id");
 
   if (error) {
     console.error("deleteSubsidyItem error:", JSON.stringify(error, null, 2));
     return { error: "申請の削除に失敗しました" };
+  }
+  if (!deletedRows || deletedRows.length !== 1) {
+    return { error: SUBSIDY_NOT_UPDATED_ERROR };
   }
 
   await logAuditEvent({

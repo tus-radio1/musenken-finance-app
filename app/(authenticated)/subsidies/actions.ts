@@ -7,7 +7,8 @@
  *   - createSubsidyItem: ログイン済みユーザー（status は常に "pending" で開始）
  *   - updateMySubsidyItem: 申請者本人のみ。pending → 全フィールド編集可、
  *     approved → receipt_url のみ変更可（領収書提出用）
- *   - deleteMySubsidyItem: 申請者本人は pending のみ削除可。管理者は全ステータス削除可
+ *   - deleteMySubsidyItem: 申請者本人は pending のみ削除可（RLS:
+ *     subsidy_items_delete_own_pending）。管理者は全ステータスを論理削除可
  *   - fetchMySubsidyItems / fetchPendingSubsidyItems: 自分の申請のみ取得
  */
 
@@ -29,6 +30,9 @@ import {
   deleteSubsidyItemSchema,
   validateInput,
 } from "@/lib/validations";
+
+const SUBSIDY_STALE_ERROR =
+  "申請の状態が変更されたため削除できませんでした。再読み込みしてください";
 
 const createSubsidyItemServerSchema = subsidyFormSchema.extend({
   evidence_url: z
@@ -285,22 +289,25 @@ export async function deleteMySubsidyItem(id: string) {
 
   // Delete behavior:
   // - Admins perform a soft delete by setting deleted_at (not restricted by RLS).
-  // - Non-admin users perform a hard delete, avoiding the RLS check on deleted_at.
-  let dbError;
-  if (actorIsAdmin) {
-    const deletedAt = new Date().toISOString();
-    const { error } = await auth.supabase
-      .from("subsidy_items")
-      .update({ deleted_at: deletedAt })
-      .eq("id", id);
-    dbError = error;
-  } else {
-    const { error } = await auth.supabase
-      .from("subsidy_items")
-      .delete()
-      .eq("id", id);
-    dbError = error;
-  }
+  // - Non-admin users hard-delete their own pending item
+  //   (policy subsidy_items_delete_own_pending).
+  // Either way exactly one row must be affected; RLS or a concurrent status
+  // change leaves 0 rows, which is reported as an error.
+  const { data: affectedRows, error: dbError } = actorIsAdmin
+    ? await auth.supabase
+        .from("subsidy_items")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("deleted_at", null)
+        .select("id")
+    : await auth.supabase
+        .from("subsidy_items")
+        .delete()
+        .eq("id", id)
+        .eq("applicant_id", auth.profileId)
+        .eq("status", "pending")
+        .is("deleted_at", null)
+        .select("id");
 
   if (dbError) {
     console.error(
@@ -308,6 +315,9 @@ export async function deleteMySubsidyItem(id: string) {
       JSON.stringify(dbError, null, 2),
     );
     return { error: "申請の削除に失敗しました" };
+  }
+  if (!affectedRows || affectedRows.length !== 1) {
+    return { error: SUBSIDY_STALE_ERROR };
   }
 
   revalidatePath("/subsidies");
