@@ -52,6 +52,7 @@ function resolveQuery(call: QueryCall): QueryResult {
       },
     };
   }
+  if (call.table === "soft_delete_subsidy_item") return { data: writtenRows[0]?.id ?? null };
   if (call.table === "subsidy_items") return { data: writtenRows };
   if (call.table === "transactions" && call.op === "select") {
     return { data: null, count: linkedCount };
@@ -228,5 +229,32 @@ describe("updateSubsidyStatus to unexecuted", () => {
     expect(result).toEqual({ success: true });
     // One audit row for the status, one per deleted transaction.
     expect(logAuditEvent).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("accounting soft delete", () => {
+  it("reports RPC failures without auditing", async () => {
+    userDb = createSupabaseMock(() => ({ error: { message: "db down" } }));
+    expect(await deleteSubsidyItem(ITEM_ID)).toEqual({ error: "申請の削除に失敗しました" });
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each(["accounting", "admin"] as const)("soft-deletes and audits as %s", async (role) => {
+    actor = role;
+    writtenRows = [{ id: ITEM_ID }];
+    expect(await deleteSubsidyItem(ITEM_ID)).toEqual({ success: true });
+    expect(userDb.client.rpc).toHaveBeenCalledWith("soft_delete_subsidy_item", { p_id: ITEM_ID });
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("denies a member before writing", async () => {
+    actor = "member";
+    expect(await deleteSubsidyItem(ITEM_ID)).toEqual({ error: "権限がありません" });
+    expect(userDb.calls).toHaveLength(0);
+  });
+
+  it("reports a zero-row accounting soft delete without auditing", async () => {
+    expect(await deleteSubsidyItem(ITEM_ID)).toHaveProperty("error");
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });

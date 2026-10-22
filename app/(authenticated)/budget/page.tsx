@@ -20,6 +20,8 @@ import { DeleteGroupYearButton } from "./_components/delete-group-year-button";
 import { requireRoleAccess } from "@/lib/roles/access";
 import {
   canEditBudget,
+  canCreateFiscalYear,
+  canManageGroups,
   canViewBudgetPage,
   isAdmin,
 } from "@/lib/roles/permissions";
@@ -282,7 +284,7 @@ export default async function BudgetPage({
                         </span>
                       </TableCell>
                       <TableCell>
-                        {isGlobalAdmin && !item.is_active && fyYear && (
+                        {canManageGroups(access) && canEdit && !item.is_active && fyYear && (
                           <DeleteGroupYearButton
                             groupId={item.group_id}
                             groupName={item.group_name}
@@ -298,22 +300,26 @@ export default async function BudgetPage({
           </CardContent>
         </Card>
 
-        {canEdit && fyYear && (
+        {fyYear && (
           <div className="flex flex-wrap gap-3">
-            <BudgetUpdateDialog
-              groups={groupsForDialog}
-              fiscalYear={fyYear}
-            />
-            <NewFiscalYearDialog
-              groups={groupsForDialog.map((g) => ({
-                id: g.id,
-                name: g.name,
-              }))}
-              existingYears={existingYears}
-            />
-            {isGlobalAdmin && (
+            {canEdit && (
+              <BudgetUpdateDialog
+                groups={groupsForDialog}
+                fiscalYear={fyYear}
+              />
+            )}
+            {canCreateFiscalYear(access) && (
+              <NewFiscalYearDialog
+                groups={groupsForDialog.map((g) => ({
+                  id: g.id,
+                  name: g.name,
+                }))}
+                existingYears={existingYears}
+              />
+            )}
+            {canManageGroups(access) && (
               <>
-                <AddGroupDialog fiscalYear={fyYear} />
+                {canEdit && <AddGroupDialog fiscalYear={fyYear} />}
                 <ToggleGroupActiveDialog
                   groups={groupsForDialog.map((g) => ({
                     id: g.id,

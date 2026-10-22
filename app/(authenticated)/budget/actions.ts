@@ -11,11 +11,34 @@ import {
   validateInput,
 } from "@/lib/validations";
 import { resolveAuthWithRoles } from "@/lib/auth/context";
+import type { AuthContext } from "@/lib/auth/types";
+import type { RoleAccessContext } from "@/lib/roles/types";
 import {
   canCreateFiscalYear,
   canEditBudget,
   canManageGroups,
 } from "@/lib/roles/permissions";
+
+// Group management must not bypass D4 through service-role budget writes.
+async function checkGroupBudgetYear(
+  auth: AuthContext,
+  access: RoleAccessContext,
+  fiscalYear: number,
+): Promise<string | null> {
+  const { data: fy, error } = await auth.supabase
+    .from("fiscal_years")
+    .select("is_current")
+    .eq("year", fiscalYear)
+    .maybeSingle();
+  if (error) {
+    console.error("[checkGroupBudgetYear] Fiscal year fetch error:", error);
+    return "会計年度の取得に失敗しました";
+  }
+  if (!fy) return "会計年度が未設定です";
+  return canEditBudget(access, { isCurrent: fy.is_current === true })
+    ? null
+    : "予算の編集権限がありません";
+}
 
 export async function upsertBudget(
   accountingGroupId: string,
@@ -191,7 +214,7 @@ export async function toggleAccountingGroupActive(
   if (!authResult.ok) return { error: authResult.error };
   const access = authResult.access;
 
-  // Only global admins can toggle group active status
+  // Admins and accounting can toggle group active status
   if (!canManageGroups(access)) {
     return { error: "グループの有効/無効を切り替える権限がありません" };
   }
@@ -232,10 +255,13 @@ export async function deleteGroupYearData(
   if (!authResult.ok) return { error: authResult.error };
   const access = authResult.access;
 
-  // Only global admins can delete group year data
+  // Admins and accounting can delete group year data within D4
   if (!canManageGroups(access)) {
     return { error: "データを削除する権限がありません" };
   }
+
+  const yearError = await checkGroupBudgetYear(authResult.context, access, fiscalYear);
+  if (yearError) return { error: yearError };
 
   const adminDb = createAdminClient();
 
@@ -285,6 +311,11 @@ export async function createAccountingGroup(
 
   if (!canManageGroups(access)) {
     return { error: "会計グループを作成する権限がありません" };
+  }
+
+  if (fiscalYear !== undefined) {
+    const yearError = await checkGroupBudgetYear(authResult.context, access, fiscalYear);
+    if (yearError) return { error: yearError };
   }
 
   const adminDb = createAdminClient();

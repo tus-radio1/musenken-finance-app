@@ -1,5 +1,8 @@
 "use client";
 
+import { canEditTransaction, canDeleteTransaction } from "@/lib/roles/permissions";
+import type { RoleAccessContext } from "@/lib/roles/types";
+
 import { useState, useMemo } from "react";
 import {
   ArrowUpDown,
@@ -58,11 +61,13 @@ type SortOrder = "asc" | "desc";
 export function ApplicationsTable({
   transactions,
   accountingGroups = [],
-  isGlobalAdmin = false,
+  access,
+  actorId,
 }: {
   transactions: Transaction[];
   accountingGroups?: { id: string; name: string }[];
-  isGlobalAdmin?: boolean;
+  access: RoleAccessContext;
+  actorId: string;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -245,8 +250,8 @@ export function ApplicationsTable({
                 </TableHeader>
                 <TableBody>
                   {filtered.map((tx) => {
-                    const canEditOrDelete =
-                      !tx.isReadOnly && (isGlobalAdmin || tx.approval_status === "pending");
+                    const canEdit = !tx.isReadOnly && canEditTransaction(access, tx, actorId);
+                    const canDelete = !tx.isReadOnly && canDeleteTransaction(access, tx, actorId);
                     return (
                       <TableRow key={tx.id}>
                         <TableCell className="font-medium">
@@ -312,12 +317,12 @@ export function ApplicationsTable({
                           )}
                         </TableCell>
                         <TableCell>
-                          {canEditOrDelete && (
+                          {(canEdit || canDelete) && (
                             <TransactionRowActions
                               transaction={tx}
                               categories={accountingGroups}
-                              canEdit={canEditOrDelete}
-                              canDelete={canEditOrDelete}
+                              canEdit={canEdit}
+                              canDelete={canDelete}
                             />
                           )}
                         </TableCell>
@@ -332,8 +337,8 @@ export function ApplicationsTable({
           {/* Mobile / Tablet card layout (below xl) */}
           <div className="xl:hidden space-y-3">
             {filtered.map((tx) => {
-              const canEditOrDelete =
-                !tx.isReadOnly && (isGlobalAdmin || tx.approval_status === "pending");
+              const canEdit = !tx.isReadOnly && canEditTransaction(access, tx, actorId);
+              const canDelete = !tx.isReadOnly && canDeleteTransaction(access, tx, actorId);
               return (
                 <Collapsible
                   key={tx.id}
@@ -441,13 +446,13 @@ export function ApplicationsTable({
                       </div>
 
                       {/* Action buttons (edit/delete) */}
-                      {canEditOrDelete && (
+                      {(canEdit || canDelete) && (
                         <div className="flex items-center gap-1 pt-1">
                           <TransactionRowActions
                             transaction={tx}
                             categories={accountingGroups}
-                            canEdit={canEditOrDelete}
-                            canDelete={canEditOrDelete}
+                            canEdit={canEdit}
+                            canDelete={canDelete}
                           />
                         </div>
                       )}

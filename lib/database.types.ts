@@ -339,6 +339,9 @@ isOneToOne: false
                            },
 "is_restricted_api_writer":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"soft_delete_subsidy_item":
+{ Args: { "p_id": string }; Returns: string
                            }
           }
           Enums: {

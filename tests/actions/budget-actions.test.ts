@@ -69,7 +69,7 @@ function resolveQuery(call: QueryCall): QueryResult {
     return { data: budgetWriteRows };
   }
   if (call.table === "accounting_groups") {
-    return { data: groupWriteRows };
+    return { data: call.op === "insert" ? groupWriteRows[0] : groupWriteRows };
   }
   return { error: null };
 }
@@ -105,7 +105,8 @@ vi.mock("@/lib/auth/context", () => {
   };
 });
 
-const { upsertBudget, toggleAccountingGroupActive } = await import(
+const { upsertBudget, toggleAccountingGroupActive, createAccountingGroup,
+  deleteGroupYearData, createFiscalYearBudgets } = await import(
   "@/app/(authenticated)/budget/actions"
 );
 
@@ -207,12 +208,74 @@ describe("toggleAccountingGroupActive", () => {
     expect(result).toEqual({ error: "対象の会計グループが見つかりません" });
   });
 
-  it("rejects 会計", async () => {
+  it("lets non-admin 会計 toggle a group", async () => {
     actor = "accounting";
 
     const result = await toggleAccountingGroupActive(GROUP_ID, false);
 
-    expect(result).toHaveProperty("error");
-    expect(writesTo(adminDb.calls, "accounting_groups")).toHaveLength(0);
+    expect(result).toEqual({ success: true });
+    expect(writesTo(adminDb.calls, "accounting_groups")).toHaveLength(1);
+  });
+});
+
+describe("accounting group management preserves D4", () => {
+  beforeEach(() => { actor = "accounting"; });
+
+  it("creates a group with a current-year budget", async () => {
+    expect(await createAccountingGroup("New group", "general", CURRENT_FY, 1000))
+      .toEqual({ success: true, groupId: GROUP_ID });
+    expect(budgetWrites()[0].payload).toMatchObject({ fiscal_year_id: CURRENT_FY });
+  });
+
+  it("creates a group without a budget", async () => {
+    expect(await createAccountingGroup("New group", "general"))
+      .toEqual({ success: true, groupId: GROUP_ID });
+    expect(budgetWrites()).toHaveLength(0);
+  });
+
+  it("deletes current group/year transactions and budget", async () => {
+    expect(await deleteGroupYearData(GROUP_ID, CURRENT_FY)).toEqual({ success: true });
+    expect(writesTo(adminDb.calls, "transactions")[0].op).toBe("delete");
+    expect(budgetWrites()[0].op).toBe("delete");
+  });
+
+  it.each(["create", "delete"] as const)("rejects past-year budget %s before any service write", async (operation) => {
+    const result = operation === "create"
+      ? await createAccountingGroup("Past group", "general", PAST_FY, 1000)
+      : await deleteGroupYearData(GROUP_ID, PAST_FY);
+    expect(result).toEqual({ error: "予算の編集権限がありません" });
+    expect(adminDb.calls).toHaveLength(0);
+  });
+
+  it.each([null, { message: "db down" }])("fails closed for an unknown or unreadable fiscal year (%s)", async (error) => {
+    userDb = createSupabaseMock(() => ({ data: null, error }));
+    expect(await deleteGroupYearData(GROUP_ID, CURRENT_FY)).toHaveProperty("error");
+    expect(await createAccountingGroup("New group", "general", CURRENT_FY, 1000))
+      .toHaveProperty("error");
+    expect(adminDb.calls).toHaveLength(0);
+  });
+
+  it("keeps admin past-year group management", async () => {
+    actor = "admin";
+    expect(await deleteGroupYearData(GROUP_ID, PAST_FY)).toEqual({ success: true });
+  });
+
+  it("creates a fiscal year and its initial budgets as non-admin 会計", async () => {
+    userDb = createSupabaseMock((call) => call.table === "fiscal_years"
+      ? { data: null } : resolveQuery(call));
+    expect(await createFiscalYearBudgets(2027, [{ groupId: GROUP_ID, amount: 1000 }]))
+      .toEqual({ success: true });
+    expect(writesTo(adminDb.calls, "fiscal_years")[0].payload).toMatchObject({ year: 2027 });
+    expect(budgetWrites()[0].payload).toEqual([
+      { accounting_group_id: GROUP_ID, amount: 1000, carryover_amount: 0, fiscal_year_id: 2027 },
+    ]);
+  });
+
+  it("denies group management to a leader", async () => {
+    actor = "leader";
+    expect(await createAccountingGroup("Forbidden", "general")).toHaveProperty("error");
+    expect(await deleteGroupYearData(GROUP_ID, CURRENT_FY)).toHaveProperty("error");
+    expect(await toggleAccountingGroupActive(GROUP_ID, false)).toHaveProperty("error");
+    expect(adminDb.calls).toHaveLength(0);
   });
 });
