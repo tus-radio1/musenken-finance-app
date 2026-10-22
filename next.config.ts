@@ -1,11 +1,14 @@
 import type { NextConfig } from "next";
+import { RECEIPT_SERVER_ACTION_BODY_LIMIT } from "./lib/receipt-upload";
 
 const isVercelDeployment = process.env.VERCEL === "1";
 
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      bodySizeLimit: "5mb",
+      // Receipt uploads go through Server Actions; keep headroom above the
+      // file size limit for multipart encoding overhead.
+      bodySizeLimit: RECEIPT_SERVER_ACTION_BODY_LIMIT,
     },
   },
   async headers() {

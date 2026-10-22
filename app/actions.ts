@@ -35,10 +35,15 @@ import {
 } from "@/lib/validations";
 import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import { ROLE_TYPES } from "@/lib/roles/constants";
+import {
+  RECEIPT_MIME_EXTENSIONS,
+  isAllowedReceiptMimeType,
+  isReceiptPathOwnedBy,
+  validateReceiptFile,
+} from "@/lib/receipt-upload";
+import { removeReplacedReceipt } from "@/lib/receipt-storage";
 
-function isValidReceiptPath(path: string): boolean {
-  return /^[a-zA-Z0-9\-._/]+$/.test(path) && !path.includes("..");
-}
+const RECEIPT_PATH_ERROR = "領収書URLの形式が不正です";
 
 function normalizeAccountingUserId(
   userId: string | null | undefined,
@@ -87,75 +92,34 @@ export async function uploadReceiptAction(formData: FormData) {
     };
   }
 
-  const file = formData.get("file") as File;
-  const fileName = formData.get("fileName") as string;
-  const existingPath = formData.get("existingPath") as string | null;
-
-  if (!file || !fileName) {
-    return { error: "ファイルとファイル名は必須です" };
+  // Only the file is read. The object name is generated here and nothing is
+  // ever deleted or overwritten: replaced files are removed by the record
+  // update actions after the new path has been persisted.
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return { error: "ファイルは必須です" };
   }
 
-  // File type validation
-  const ALLOWED_FILE_TYPES = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "image/heic",
-    "image/heif",
-    "image/tiff",
-    "image/bmp",
-    "application/pdf",
-  ];
-  if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-    return {
-      error:
-        "許可されていないファイル形式です（JPEG, PNG, WebP, GIF, HEIC/HEIF, TIFF, BMP, PDFのみ）",
-    };
+  const validationError = validateReceiptFile(file);
+  if (validationError || !isAllowedReceiptMimeType(file.type)) {
+    return { error: validationError ?? "ファイル形式が不正です" };
   }
 
-  // File size validation (max 10MB)
-  const MAX_FILE_SIZE = 10 * 1024 * 1024;
-  if (file.size > MAX_FILE_SIZE) {
-    return { error: "ファイルサイズが大きすぎます（最大10MB）" };
-  }
-
-  // Sanitize filename to prevent directory traversal
-  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9\-._]/g, "_");
+  const extension = RECEIPT_MIME_EXTENSIONS[file.type];
+  const filePath = `${auth.userId}/${crypto.randomUUID()}.${extension}`;
 
   // createAdminClient is required here to bypass storage RLS for receipt uploads
   const supabaseAdmin = createAdminClient();
-
-  // Delete the existing file from storage if a different path is being uploaded.
-  // This prevents orphaned files when the file extension changes (e.g., .webp -> .pdf).
-  if (
-    existingPath &&
-    isValidReceiptPath(existingPath) &&
-    existingPath !== sanitizedFileName
-  ) {
-    const { error: removeError } = await supabaseAdmin.storage
-      .from("receipts")
-      .remove([existingPath]);
-    if (removeError) {
-      // Log but do not block the upload
-      console.error(
-        "[uploadReceiptAction] Failed to remove existing file:",
-        removeError,
-      );
-    }
-  }
-
-  // upsert configuration is used in case a user updates the receipt for the same transaction
   const { error } = await supabaseAdmin.storage
     .from("receipts")
-    .upload(sanitizedFileName, file, { upsert: true });
+    .upload(filePath, file, { upsert: false, contentType: file.type });
 
   if (error) {
     console.error("[uploadReceiptAction] Storage upload error:", error);
     return { error: "アップロードに失敗しました" };
   }
 
-  return { success: true, filePath: sanitizedFileName };
+  return { success: true, filePath };
 }
 
 export async function createTransaction(
@@ -172,10 +136,6 @@ export async function createTransaction(
     }
   }
 
-  if (receiptPath != null && !isValidReceiptPath(receiptPath)) {
-    return { error: "領収書URLの形式が不正です" };
-  }
-
   const valuesValidation = formSchema.safeParse({
     ...values,
     receipt_url: receiptPath ?? null,
@@ -187,6 +147,11 @@ export async function createTransaction(
   const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+
+  // A new receipt must be an object the caller uploaded via uploadReceiptAction.
+  if (receiptPath != null && !isReceiptPathOwnedBy(receiptPath, auth.userId)) {
+    return { error: RECEIPT_PATH_ERROR };
+  }
 
   const parsedValues = valuesValidation.data;
   const transactionDate = formatDateForDatabase(parsedValues.date);
@@ -394,13 +359,6 @@ export async function updateTransaction(
     return { error: "入力データが不正です" };
   }
 
-  // Validate receipt_url: must be a relative storage path (no external URLs, no path traversal)
-  if (values.receipt_url != null) {
-    if (!isValidReceiptPath(values.receipt_url)) {
-      return { error: "領収書URLの形式が不正です" };
-    }
-  }
-
   const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
@@ -409,7 +367,7 @@ export async function updateTransaction(
 
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
-    .select("accounting_group_id, created_by, approval_status, amount")
+    .select("accounting_group_id, created_by, approval_status, amount, receipt_url")
     .eq("id", id)
     .single();
 
@@ -440,6 +398,20 @@ export async function updateTransaction(
     !isGlobalAdmin && !isAccountingUser && !isGroupLeader;
   if (isGeneralUserOnly && transaction.approval_status !== "pending") {
     return { error: "受付中以外のデータは編集できません" };
+  }
+
+  // receipt_url: undefined = keep, null = clear, same value = keep (legacy
+  // paths included). A changed value must be an object the caller uploaded.
+  const previousReceiptPath = transaction.receipt_url;
+  const isReceiptChanged =
+    values.receipt_url !== undefined &&
+    values.receipt_url !== previousReceiptPath;
+  if (
+    isReceiptChanged &&
+    values.receipt_url != null &&
+    !isReceiptPathOwnedBy(values.receipt_url, auth.userId)
+  ) {
+    return { error: RECEIPT_PATH_ERROR };
   }
 
   const updateDate = formatDateForDatabase(values.date);
@@ -505,6 +477,16 @@ export async function updateTransaction(
   if (updateError) {
     console.error("[updateTransaction] Update error:", updateError);
     return { error: "更新に失敗しました。しばらくしてから再試行してください。" };
+  }
+
+  // Remove the replaced file only after the record points to the new one.
+  // The helper re-checks references, so a no-op update keeps the old file.
+  if (isReceiptChanged) {
+    await removeReplacedReceipt({
+      oldPath: previousReceiptPath,
+      newPath: values.receipt_url,
+      actorUserId: auth.userId,
+    });
   }
 
   await logAuditEvent({

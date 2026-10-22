@@ -39,6 +39,10 @@ import {
   EXPENSE_TYPE_LABELS,
 } from "@/lib/constants/subsidy";
 import type { SubsidyItem, EditFormState } from "./types";
+import {
+  MAX_RECEIPT_FILE_SIZE_MB,
+  RECEIPT_FORMAT_LABEL,
+} from "@/lib/receipt-upload";
 
 type AccountingGroup = { id: string; name: string };
 
@@ -86,7 +90,7 @@ export function ItemsEditDialog({
             <div className="space-y-2 px-1">
               <Label>領収書画像</Label>
               <p className="text-xs text-muted-foreground">
-                対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF | 最大サイズ: 10MB
+                対応形式: {RECEIPT_FORMAT_LABEL} | 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
               </p>
               <div className="flex items-center gap-4">
                 <Button

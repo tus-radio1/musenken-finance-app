@@ -22,6 +22,7 @@ import { resolveAuthWithRoles } from "@/lib/auth/context";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { revalidatePath } from "next/cache";
 import { canViewClubLedger } from "@/lib/auth/permissions";
+import { getReceiptViewUrl } from "@/lib/receipt-url";
 
 import {
   TransactionRow,
@@ -187,10 +188,6 @@ export async function fetchLedgerTransactions(params: {
   const budgetAmount = Number(budgetResult.data?.amount) || 0;
   const carryoverAmount = Number(budgetResult.data?.carryover_amount) || 0;
 
-  const publicReceiptBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/`
-    : null;
-
   const enriched = combinedRows.map((t) => ({
     ...t,
     created_by_name: t.created_by
@@ -199,11 +196,7 @@ export async function fetchLedgerTransactions(params: {
     approved_by_name: t.approved_by
       ? profileNameMap[t.approved_by] || "未登録"
       : null,
-    receipt_public_url: t.receipt_url?.startsWith("http")
-      ? t.receipt_url
-      : publicReceiptBase && t.receipt_url
-        ? `${publicReceiptBase}${t.receipt_url}`
-        : null,
+    receipt_public_url: getReceiptViewUrl(t.receipt_url),
     remarks: t.remarks || null,
   }));
 

@@ -22,6 +22,7 @@ import {
   EXPENSE_TYPE_LABELS as EXPENSE_TYPE_MAP,
   STATUS_VARIANT_MAP as STATUS_MAP,
 } from "@/lib/constants/subsidy";
+import { getReceiptViewUrl } from "@/lib/receipt-url";
 import type { SubsidyItem, SortKey, SortOrder } from "./types";
 
 type ManageDesktopTableProps = {
@@ -34,7 +35,6 @@ type ManageDesktopTableProps = {
   sortKey: SortKey;
   sortOrder: SortOrder;
   isReadOnly: boolean;
-  publicReceiptBase: string | null;
 };
 
 export function ManageDesktopTable({
@@ -47,7 +47,6 @@ export function ManageDesktopTable({
   sortKey,
   sortOrder,
   isReadOnly,
-  publicReceiptBase,
 }: ManageDesktopTableProps) {
   return (
     <div className="border rounded-lg overflow-x-auto bg-card hidden xl:block">
@@ -106,7 +105,10 @@ export function ManageDesktopTable({
               </td>
             </tr>
           ) : (
-            filteredItems.map((item) => (
+            filteredItems.map((item) => {
+              const receiptViewUrl = getReceiptViewUrl(item.receipt_url);
+              const evidenceViewUrl = getReceiptViewUrl(item.evidence_url);
+              return (
               <Fragment key={item.id}>
               <tr
                 className="hover:bg-muted/50 transition-colors"
@@ -187,15 +189,9 @@ export function ManageDesktopTable({
 
                 <td className="p-3 text-sm">
                   <div className="flex flex-col gap-1">
-                    {item.receipt_url ? (
+                    {receiptViewUrl ? (
                       <a
-                        href={
-                          item.receipt_url.startsWith("http")
-                            ? item.receipt_url
-                            : publicReceiptBase
-                              ? `${publicReceiptBase}${item.receipt_url}`
-                              : "#"
-                        }
+                        href={receiptViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center text-blue-600 hover:underline text-xs"
@@ -204,15 +200,9 @@ export function ManageDesktopTable({
                         領収書
                       </a>
                     ) : null}
-                    {item.evidence_url ? (
+                    {evidenceViewUrl ? (
                       <a
-                        href={
-                          item.evidence_url.startsWith("http")
-                            ? item.evidence_url
-                            : publicReceiptBase
-                              ? `${publicReceiptBase}${item.evidence_url}`
-                              : "#"
-                        }
+                        href={evidenceViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center text-blue-600 hover:underline text-xs"
@@ -221,7 +211,7 @@ export function ManageDesktopTable({
                         根拠書類
                       </a>
                     ) : null}
-                    {!item.receipt_url && !item.evidence_url && "-"}
+                    {!receiptViewUrl && !evidenceViewUrl && "-"}
                   </div>
                 </td>
 
@@ -291,7 +281,8 @@ export function ManageDesktopTable({
                 </tr>
               )}
               </Fragment>
-            ))
+              );
+            })
           )}
         </tbody>
       </table>
