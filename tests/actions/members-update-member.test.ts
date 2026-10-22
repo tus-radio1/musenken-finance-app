@@ -89,6 +89,8 @@ function accessFor(actor: Actor) {
 // Simulated DB state: role assignments per user.
 let assignments: Record<string, string[]>;
 let actor: Actor;
+// Rows a profiles UPDATE reports back (RLS can filter to []).
+let profileUpdateRows: Array<{ id: string }>;
 
 function resolveQuery(call: QueryCall): QueryResult {
   if (call.table === "user_roles" && call.op === "select") {
@@ -96,7 +98,14 @@ function resolveQuery(call: QueryCall): QueryResult {
     return { data: roleRowsFor(assignments[userId] ?? []) };
   }
   if (call.table === "roles" && call.op === "select") {
+    const name = eqValue(call, "name");
+    if (typeof name === "string") {
+      return { data: ROLES.find((r) => r.name === name) ?? null };
+    }
     return { data: ROLES };
+  }
+  if (call.table === "profiles" && call.op === "update") {
+    return { data: profileUpdateRows };
   }
   if (call.table === "profiles" && call.op === "select") {
     return { data: { id: TARGET_ID, name: "Target" } };
@@ -165,6 +174,7 @@ beforeEach(() => {
     [ACTOR_ID]: [...ACTOR_ROLE_IDS.manager],
     [TARGET_ID]: [PROVISIONAL_ROLE_ID],
   };
+  profileUpdateRows = [{ id: TARGET_ID }];
   userDb = createSupabaseMock(resolveQuery);
   adminDb = createSupabaseMock(resolveQuery);
 });
@@ -390,5 +400,47 @@ describe("deleteMember / retireMember on admin targets", () => {
 
     expect(result).toEqual({ success: true });
     expect(adminDb.authAdmin.deleteUser).toHaveBeenCalledWith(TARGET_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Profile / role writes by non-admin managers (step 13)
+// ---------------------------------------------------------------------------
+
+describe("member writes by a non-admin manager", () => {
+  // Bug (item 6): profiles RLS only allows own row or admin, so the profile
+  // update by 部長/副部長/会計 touched 0 rows while Auth and roles changed.
+  it.fails("updateMember writes the profile with the service-role client", async () => {
+    const result = await updateMember(TARGET_ID, {
+      ...BASE_DATA,
+      role_ids: [PROVISIONAL_ROLE_ID],
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(writesTo(userDb.calls, "profiles")).toHaveLength(0);
+    expect(writesTo(adminDb.calls, "profiles")).toHaveLength(1);
+  });
+
+  it.fails("updateMember stops before Auth and roles when no profile row was updated", async () => {
+    profileUpdateRows = [];
+
+    const result = await updateMember(TARGET_ID, {
+      ...BASE_DATA,
+      role_ids: [ALUMNI_ROLE_ID],
+    });
+
+    expect(result).toHaveProperty("error");
+    expect(adminDb.authAdmin.updateUserById).not.toHaveBeenCalled();
+    expect(writesTo(adminDb.calls, "user_roles")).toHaveLength(0);
+  });
+
+  // Bug (item 6): user_roles RLS is admin-only, so the role delete touched 0 rows.
+  it.fails("retireMember replaces roles with the service-role client", async () => {
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toEqual({ success: true });
+    expect(writesTo(userDb.calls, "user_roles")).toHaveLength(0);
+    expect(writesTo(userDb.calls, "profiles")).toHaveLength(0);
+    expect(insertedRoleIds()).toEqual([ALUMNI_ROLE_ID]);
   });
 });

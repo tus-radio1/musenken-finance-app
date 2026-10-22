@@ -16,7 +16,11 @@ export type QueryCall = {
   filters: Array<{ method: string; args: unknown[] }>;
 };
 
-export type QueryResult = { data?: unknown; error?: unknown };
+export type QueryResult = {
+  data?: unknown;
+  error?: unknown;
+  count?: number | null;
+};
 
 export type QueryResolver = (call: QueryCall) => QueryResult;
 
@@ -30,12 +34,16 @@ const OP_METHODS: readonly QueryOp[] = [
 
 const FILTER_METHODS = [
   "eq",
+  "neq",
   "is",
   "in",
+  "lte",
+  "gte",
   "match",
   "order",
   "limit",
   "single",
+  "maybeSingle",
 ] as const;
 
 export function createSupabaseMock(resolve: QueryResolver) {
@@ -89,6 +97,13 @@ export function createSupabaseMock(resolve: QueryResolver) {
   };
 
   return { client, calls, authAdmin };
+}
+
+/** Whether the chain applied a filter `method`, optionally on `column`. */
+export function hasFilter(call: QueryCall, method: string, column?: string) {
+  return call.filters.some(
+    (f) => f.method === method && (column === undefined || f.args[0] === column),
+  );
 }
 
 /** Value of the first `.eq(column, value)` filter, if any. */

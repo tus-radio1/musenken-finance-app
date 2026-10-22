@@ -1,0 +1,139 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createSupabaseMock,
+  eqValue,
+  writesTo,
+  type QueryCall,
+  type QueryResult,
+} from "../helpers/supabase-mock";
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const ACTOR_ID = "11111111-1111-4111-8111-111111111111";
+const GROUP_ID = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1";
+const BUDGET_ID = "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2";
+
+const CURRENT_FY = 2026;
+const PAST_FY = 2025;
+const KNOWN_YEARS = [PAST_FY, CURRENT_FY];
+
+type Actor = "admin" | "accounting" | "leader";
+
+const ACTOR_ROLES: Record<
+  Actor,
+  Array<{ name: string; type: string; accountingGroupId: string | null }>
+> = {
+  admin: [{ name: "Local Admin", type: "admin", accountingGroupId: null }],
+  accounting: [{ name: "会計", type: "accounting", accountingGroupId: null }],
+  leader: [{ name: "leader", type: "leader", accountingGroupId: GROUP_ID }],
+};
+
+function accessFor(actor: Actor) {
+  const roles = ACTOR_ROLES[actor];
+  const groupRoleTypes: Record<string, string[]> = {};
+  for (const r of roles) {
+    if (r.accountingGroupId) groupRoleTypes[r.accountingGroupId] = [r.type];
+  }
+  const isAdmin = roles.some((r) => r.type === "admin");
+  const hasAccountingRole = roles.some((r) => r.name === "会計");
+  return {
+    roles,
+    isAdmin,
+    hasAccountingRole,
+    canManageMembers: isAdmin || hasAccountingRole,
+    groupRoleTypes,
+  };
+}
+
+let actor: Actor;
+
+function resolveQuery(call: QueryCall): QueryResult {
+  if (call.table === "fiscal_years" && call.op === "select") {
+    const year = eqValue(call, "year");
+    if (typeof year === "number") {
+      return KNOWN_YEARS.includes(year)
+        ? { data: { year, is_current: year === CURRENT_FY } }
+        : { data: null };
+    }
+    return { data: { year: CURRENT_FY, is_current: true } };
+  }
+  if (call.table === "budgets" && call.op === "select") {
+    return { data: null };
+  }
+  if (call.table === "budgets") {
+    return { data: [{ id: BUDGET_ID }] };
+  }
+  return { error: null };
+}
+
+let userDb: ReturnType<typeof createSupabaseMock>;
+let adminDb: ReturnType<typeof createSupabaseMock>;
+
+// ---------------------------------------------------------------------------
+// Module mocks
+// ---------------------------------------------------------------------------
+
+vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
+vi.mock("@/utils/supabase/server", () => ({
+  createClient: vi.fn(async () => userDb.client),
+  createAdminClient: vi.fn(() => adminDb.client),
+}));
+vi.mock("@/lib/auth/context", () => {
+  const context = () => ({
+    supabase: userDb.client,
+    user: { id: ACTOR_ID },
+    userId: ACTOR_ID,
+    profileId: ACTOR_ID,
+    studentNumber: null,
+  });
+  return {
+    resolveAuthContext: vi.fn(async () => ({ ok: true, context: context() })),
+    resolveAuthWithRoles: vi.fn(async () => ({
+      ok: true,
+      context: context(),
+      access: accessFor(actor),
+    })),
+  };
+});
+
+const { upsertBudget } = await import("@/app/(authenticated)/budget/actions");
+
+function budgetWrites() {
+  return writesTo(adminDb.calls, "budgets");
+}
+
+beforeEach(() => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  actor = "admin";
+  userDb = createSupabaseMock(resolveQuery);
+  adminDb = createSupabaseMock(resolveQuery);
+});
+
+// ---------------------------------------------------------------------------
+// upsertBudget (R5)
+// ---------------------------------------------------------------------------
+
+describe("upsertBudget", () => {
+  // Bug (R5): the page shows the edit dialog to 会計, the server rejected it.
+  it.fails("lets 会計 set the current fiscal year's budget", async () => {
+    actor = "accounting";
+
+    const result = await upsertBudget(GROUP_ID, 5000, CURRENT_FY);
+
+    expect(result).toEqual({ success: true });
+    expect(budgetWrites()).toHaveLength(1);
+  });
+
+  // Bug (R5, D4): the server let group leaders edit their group's budget.
+  it.fails("rejects a group leader", async () => {
+    actor = "leader";
+
+    const result = await upsertBudget(GROUP_ID, 5000, CURRENT_FY);
+
+    expect(result).toHaveProperty("error");
+    expect(budgetWrites()).toHaveLength(0);
+  });
+});
