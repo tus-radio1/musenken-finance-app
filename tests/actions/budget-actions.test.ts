@@ -50,6 +50,7 @@ function accessFor(actor: Actor) {
 let actor: Actor;
 let existingBudget: { id: string } | null;
 let budgetWriteRows: Array<{ id: string }>;
+let groupWriteRows: Array<{ id: string }>;
 
 function resolveQuery(call: QueryCall): QueryResult {
   if (call.table === "fiscal_years" && call.op === "select") {
@@ -66,6 +67,9 @@ function resolveQuery(call: QueryCall): QueryResult {
   }
   if (call.table === "budgets") {
     return { data: budgetWriteRows };
+  }
+  if (call.table === "accounting_groups") {
+    return { data: groupWriteRows };
   }
   return { error: null };
 }
@@ -101,7 +105,9 @@ vi.mock("@/lib/auth/context", () => {
   };
 });
 
-const { upsertBudget } = await import("@/app/(authenticated)/budget/actions");
+const { upsertBudget, toggleAccountingGroupActive } = await import(
+  "@/app/(authenticated)/budget/actions"
+);
 
 function budgetWrites() {
   return writesTo(adminDb.calls, "budgets");
@@ -112,6 +118,7 @@ beforeEach(() => {
   actor = "admin";
   existingBudget = null;
   budgetWriteRows = [{ id: BUDGET_ID }];
+  groupWriteRows = [{ id: GROUP_ID }];
   userDb = createSupabaseMock(resolveQuery);
   adminDb = createSupabaseMock(resolveQuery);
 });
@@ -181,5 +188,31 @@ describe("upsertBudget", () => {
 
     expect(result).toEqual({ error: "予算の保存に失敗しました" });
     expect(budgetWrites()[0].op).toBe("update");
+  });
+});
+
+describe("toggleAccountingGroupActive", () => {
+  it("toggles a group for an admin", async () => {
+    const result = await toggleAccountingGroupActive(GROUP_ID, false);
+
+    expect(result).toEqual({ success: true });
+  });
+
+  // Review finding: a missing group (0 rows) was reported as success.
+  it("reports an error when no group was updated", async () => {
+    groupWriteRows = [];
+
+    const result = await toggleAccountingGroupActive(GROUP_ID, false);
+
+    expect(result).toEqual({ error: "対象の会計グループが見つかりません" });
+  });
+
+  it("rejects 会計", async () => {
+    actor = "accounting";
+
+    const result = await toggleAccountingGroupActive(GROUP_ID, false);
+
+    expect(result).toHaveProperty("error");
+    expect(writesTo(adminDb.calls, "accounting_groups")).toHaveLength(0);
   });
 });

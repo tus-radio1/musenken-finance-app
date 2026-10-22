@@ -449,7 +449,7 @@ describe("member writes by a non-admin manager", () => {
     expect(insertedRoleIds()).toEqual([ALUMNI_ROLE_ID]);
   });
 
-  it("retireMember keeps a role granted after the check and is idempotent for OB・OG", async () => {
+  it("retireMember does not re-grant OB・OG and removes only the other roles", async () => {
     assignments[TARGET_ID] = [PROVISIONAL_ROLE_ID, ALUMNI_ROLE_ID];
 
     const result = await retireMember(TARGET_ID);
@@ -458,6 +458,34 @@ describe("member writes by a non-admin manager", () => {
     expect(insertedRoleIds()).toEqual([]);
     const [del] = deleteCalls();
     expect(del.filters).toContainEqual({ method: "in", args: ["role_id", [PROVISIONAL_ROLE_ID]] });
+  });
+
+  // Review finding: roles were re-read after the S1 check, so a protected role
+  // granted in between was deleted with the service-role client.
+  it("retireMember never removes a role granted after the permission check", async () => {
+    let targetRoleReads = 0;
+    const grantAdminAfterFirstRead = (call: QueryCall): QueryResult => {
+      const result = resolveQuery(call);
+      const isTargetRoleRead =
+        call.table === "user_roles" &&
+        call.op === "select" &&
+        eqValue(call, "user_id") === TARGET_ID;
+      if (isTargetRoleRead && ++targetRoleReads === 1) {
+        assignments[TARGET_ID] = [...assignments[TARGET_ID], ADMIN_ROLE_ID];
+      }
+      return result;
+    };
+    userDb = createSupabaseMock(grantAdminAfterFirstRead);
+    adminDb = createSupabaseMock(grantAdminAfterFirstRead);
+
+    const result = await retireMember(TARGET_ID);
+
+    expect(result).toEqual({ success: true });
+    const removed = deleteCalls().flatMap(
+      (c) => c.filters.find((f) => f.method === "in")?.args[1] as string[],
+    );
+    expect(removed).toEqual([PROVISIONAL_ROLE_ID]);
+    expect(removed).not.toContain(ADMIN_ROLE_ID);
   });
 
   it("retireMember stops before any write when no profile row was updated", async () => {

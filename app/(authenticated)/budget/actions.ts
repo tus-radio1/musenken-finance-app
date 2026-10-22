@@ -197,14 +197,18 @@ export async function toggleAccountingGroupActive(
   }
 
   const adminDb = createAdminClient();
-  const { error: dbError } = await adminDb
+  const { data: updatedGroups, error: dbError } = await adminDb
     .from("accounting_groups")
     .update({ is_active: isActive })
-    .eq("id", groupId);
+    .eq("id", groupId)
+    .select("id");
 
   if (dbError) {
     console.error("[toggleAccountingGroupActive] DB error:", dbError);
     return { error: "グループの状態更新に失敗しました" };
+  }
+  if (!updatedGroups || updatedGroups.length !== 1) {
+    return { error: "対象の会計グループが見つかりません" };
   }
 
   updateTag("accounting_groups");

@@ -79,17 +79,22 @@ async function fetchRolesById(
   );
 }
 
-// Whether a non-admin manager may retire/delete this user: only when every role
-// the user holds is delegable. Fail closed: null when roles cannot be read.
-async function isTargetManageableByNonAdmin(
+// The user's role ids (one snapshot) and whether a non-admin manager may
+// retire/delete the user: only when every role is delegable. Callers must act
+// on this same snapshot, never on a later read. Fail closed: null when roles
+// cannot be read.
+async function inspectTargetRoles(
   admin: AdminClient,
   userId: string,
-): Promise<boolean | null> {
+): Promise<{ roleIds: string[]; manageableByNonAdmin: boolean } | null> {
   const roleIds = await fetchAssignedRoleIds(admin, userId);
   if (roleIds === null) return null;
   const rolesById = await fetchRolesById(admin, roleIds);
   if (rolesById === null) return null;
-  return roleIds.every((id) => isDelegableRole(rolesById[id]));
+  return {
+    roleIds,
+    manageableByNonAdmin: roleIds.every((id) => isDelegableRole(rolesById[id])),
+  };
 }
 
 // --- 部員追加 ---
@@ -323,14 +328,12 @@ export async function retireMember(userId: string) {
   // 非管理者は権限ロール保持者（管理者・会計・部長・副部長・グループロール等）を
   // 操作できない（ロール剥奪・アカウント削除による権限奪取の防止）
   const actorIsAdmin = isAdmin(access);
-  if (!actorIsAdmin) {
-    const manageable = await isTargetManageableByNonAdmin(admin, userId);
-    if (manageable === null) {
-      return { error: ROLE_LOOKUP_ERROR } as const;
-    }
-    if (!manageable) {
-      return { error: PROTECTED_TARGET_ERROR } as const;
-    }
+  const targetRoles = await inspectTargetRoles(admin, userId);
+  if (targetRoles === null) {
+    return { error: ROLE_LOOKUP_ERROR } as const;
+  }
+  if (!actorIsAdmin && !targetRoles.manageableByNonAdmin) {
+    return { error: PROTECTED_TARGET_ERROR } as const;
   }
 
   // Writes use the service-role client: profiles / user_roles RLS only lets
@@ -351,10 +354,8 @@ export async function retireMember(userId: string) {
   if (!actorIsAdmin && !isDelegableRole(toRoleAssignment(obRole))) {
     return { error: PROTECTED_ROLE_ERROR } as const;
   }
-  const currentRoleIds = await fetchAssignedRoleIds(admin, userId);
-  if (currentRoleIds === null) {
-    return { error: ROLE_LOOKUP_ERROR } as const;
-  }
+  // The snapshot validated above: roles granted after the check are untouched.
+  const currentRoleIds = targetRoles.roleIds;
 
   // 1) grade を 0 に変更（1 行更新できなければ中止）
   const { data: updatedProfiles, error: profileErr } = await admin
@@ -430,11 +431,11 @@ export async function deleteMember(userId: string) {
   // 非管理者は権限ロール保持者（管理者・会計・部長・副部長・グループロール等）を
   // 操作できない（ロール剥奪・アカウント削除による権限奪取の防止）
   if (!isAdmin(access)) {
-    const manageable = await isTargetManageableByNonAdmin(admin, userId);
-    if (manageable === null) {
+    const targetRoles = await inspectTargetRoles(admin, userId);
+    if (targetRoles === null) {
       return { error: ROLE_LOOKUP_ERROR } as const;
     }
-    if (!manageable) {
+    if (!targetRoles.manageableByNonAdmin) {
       return { error: PROTECTED_TARGET_ERROR } as const;
     }
   }

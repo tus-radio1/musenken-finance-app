@@ -35,6 +35,7 @@ const GROUP_TYPES: Record<string, string | null> = {
 
 const CURRENT_FY = 2026;
 const PAST_FY = 2025;
+const PAST_FY_DATE = new Date("2025-05-01T00:00:00+09:00");
 
 type Actor = "member" | "leader" | "accounting" | "admin" | "outsider";
 
@@ -110,6 +111,13 @@ function resolveQuery(call: QueryCall): QueryResult {
       const year = eqValue(call, "year");
       if (typeof year === "number") {
         return { data: { year, is_current: year === CURRENT_FY } };
+      }
+      // Date lookup (start_date <= date): fiscal years start on April 1st.
+      const date = call.filters.find((f) => f.method === "lte")?.args[1];
+      if (typeof date === "string") {
+        const [y, m] = date.split("-").map(Number);
+        const fy = m >= 4 ? y : y - 1;
+        return { data: { year: fy, is_current: fy === CURRENT_FY } };
       }
       return { data: { year: CURRENT_FY, is_current: true } };
     }
@@ -399,7 +407,7 @@ describe("updateTransaction", () => {
 
     const result = await updateTransaction(
       TX_ID,
-      formValues({ approval_status: "approved" }),
+      formValues({ approval_status: "approved", date: PAST_FY_DATE }),
     );
 
     expect(result).toEqual({ error: "過年度の承認ステータスは管理者のみ変更できます" });
@@ -494,6 +502,58 @@ describe("updateTransaction", () => {
     const [update] = txWrites("update");
     expect(update.payload).not.toHaveProperty("approval_status");
     expect(eqValue(update, "approval_status")).toBe("pending");
+  });
+
+  // Review finding: 会計 moved a past-FY row into the current year with a
+  // content edit, then approved it through updateTransactionStatus.
+  it("rejects 会計 moving a past fiscal year's row into another year", async () => {
+    actor = "accounting";
+    tx = { ...tx, fiscal_year_id: PAST_FY };
+
+    const result = await updateTransaction(TX_ID, formValues());
+
+    expect(result).toEqual({ error: "過年度の取引を別の年度に移せるのは管理者のみです" });
+    expect(txWrites("update")).toHaveLength(0);
+  });
+
+  it("lets 会計 edit a past fiscal year's row within the same year", async () => {
+    actor = "accounting";
+    tx = { ...tx, fiscal_year_id: PAST_FY };
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ description: "Edited", date: PAST_FY_DATE }),
+    );
+
+    expect(result).toEqual({ success: true });
+  });
+
+  it("lets an admin move a past fiscal year's row", async () => {
+    tx = { ...tx, fiscal_year_id: PAST_FY };
+
+    const result = await updateTransaction(TX_ID, formValues());
+
+    expect(result).toEqual({ success: true });
+    expect(txWrites("update")[0].payload).toMatchObject({ fiscal_year_id: CURRENT_FY });
+  });
+
+  // Review finding: a concurrent approver correction must not be overwritten.
+  it("only writes a row whose approval fields and fiscal year are unchanged", async () => {
+    tx = { ...tx, approval_status: "approved", approved_by: OTHER_USER_ID, approved_at: "2026-06-01T00:00:00+00:00" };
+
+    const result = await updateTransaction(
+      TX_ID,
+      formValues({ approved_by: ACTOR_ID }),
+    );
+
+    expect(result).toEqual({ success: true });
+    const [update] = txWrites("update");
+    expect(eqValue(update, "approval_status")).toBe("approved");
+    expect(eqValue(update, "approved_by")).toBe(OTHER_USER_ID);
+    expect(eqValue(update, "approved_at")).toBe("2026-06-01T00:00:00+00:00");
+    expect(eqValue(update, "fiscal_year_id")).toBe(CURRENT_FY);
+    expect(hasFilter(update, "is", "rejected_reason")).toBe(true);
+    expect(update.payload).toMatchObject({ approved_by: ACTOR_ID });
   });
 
   // Bug (item 4): the destination group was never authorized.

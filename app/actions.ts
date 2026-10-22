@@ -523,6 +523,27 @@ export async function updateTransaction(
     .gte("end_date", updateDate)
     .single();
 
+  // Moving a past fiscal year's transaction into another year is admin-only;
+  // otherwise 会計 could move a past row into the current year and approve it
+  // (D7). Rows without a fiscal year can still be corrected.
+  const newFiscalYearId = fy?.year ?? null;
+  if (
+    !isAdmin(access) &&
+    transaction.fiscal_year_id !== null &&
+    newFiscalYearId !== transaction.fiscal_year_id
+  ) {
+    const isStoredYearCurrent = await isCurrentFiscalYear(
+      auth.supabase,
+      transaction.fiscal_year_id,
+    );
+    if (isStoredYearCurrent === null) {
+      return { error: "会計年度の取得に失敗しました" };
+    }
+    if (!isStoredYearCurrent) {
+      return { error: "過年度の取引を別の年度に移せるのは管理者のみです" };
+    }
+  }
+
   const effectiveType = values.type;
   const finalAmount =
     effectiveType === "expense"
@@ -532,7 +553,7 @@ export async function updateTransaction(
   const contentUpdates: TablesUpdate<"transactions"> = {
     amount: finalAmount,
     description: values.description,
-    fiscal_year_id: fy?.year ?? null,
+    fiscal_year_id: newFiscalYearId,
     date: formatDateForDatabase(values.date),
     accounting_group_id: values.accounting_group_id,
     financial_account_id: values.financial_account_id,
@@ -582,7 +603,7 @@ export async function updateTransaction(
       : await isCurrentFiscalYearPair(
           auth.supabase,
           transaction.fiscal_year_id,
-          fy?.year ?? null,
+          newFiscalYearId,
         );
     if (isCurrentYear === null) {
       return { error: "会計年度の取得に失敗しました" };
@@ -644,9 +665,10 @@ export async function updateTransaction(
     }
   }
 
-  // Conditional write: the approval state and creator read above must be
-  // unchanged, so a concurrent decision is never overwritten. RLS or a
-  // concurrent change leaves 0 rows, which is reported as an error.
+  // Conditional write: every value read above that the permission checks or
+  // the audit record depend on must be unchanged, so a concurrent decision or
+  // correction is never overwritten. RLS or a concurrent change leaves 0 rows,
+  // which is reported as an error.
   let updateQuery = auth.supabase
     .from("transactions")
     .update(updates)
@@ -657,6 +679,22 @@ export async function updateTransaction(
     transaction.created_by === null
       ? updateQuery.is("created_by", null)
       : updateQuery.eq("created_by", transaction.created_by);
+  updateQuery =
+    transaction.approved_by === null
+      ? updateQuery.is("approved_by", null)
+      : updateQuery.eq("approved_by", transaction.approved_by);
+  updateQuery =
+    transaction.approved_at === null
+      ? updateQuery.is("approved_at", null)
+      : updateQuery.eq("approved_at", transaction.approved_at);
+  updateQuery =
+    transaction.rejected_reason === null
+      ? updateQuery.is("rejected_reason", null)
+      : updateQuery.eq("rejected_reason", transaction.rejected_reason);
+  updateQuery =
+    transaction.fiscal_year_id === null
+      ? updateQuery.is("fiscal_year_id", null)
+      : updateQuery.eq("fiscal_year_id", transaction.fiscal_year_id);
 
   const { data: updatedRows, error: updateError } =
     await updateQuery.select("id");
