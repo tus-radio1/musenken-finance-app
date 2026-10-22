@@ -55,13 +55,17 @@ import {
 import { subsidyFormSchema } from "@/lib/schema";
 import { uploadReceiptAction } from "@/app/actions";
 import { createSubsidyItem } from "@/app/(authenticated)/subsidies/actions";
-import { compressImageToWebp } from "@/lib/image";
+import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
 import {
   CATEGORY_LABELS,
   CATEGORY_TERMS,
   EXPENSE_TYPE_LABELS,
   CATEGORY_EXPENSE_TYPES,
 } from "@/lib/constants/subsidy";
+import {
+  MAX_RECEIPT_FILE_SIZE_MB,
+  RECEIPT_FORMAT_LABEL,
+} from "@/lib/receipt-upload";
 
 type Category = {
   id: string;
@@ -72,11 +76,6 @@ type Props = {
   categories: Category[];
   triggerButton?: React.ReactNode;
 };
-
-/** Generate a unique file name for subsidy evidence uploads (module-scoped to avoid purity lint) */
-function generateEvidenceFileName(fileExt: string | undefined): string {
-  return `subsidy-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-}
 
 
 export function SubsidyForm({ categories, triggerButton }: Props) {
@@ -163,13 +162,10 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
       setIsUploading(true);
       try {
-        const compressedFile = await compressImageToWebp(file);
-        const fileExt = compressedFile.name.split(".").pop();
-        const fileName = generateEvidenceFileName(fileExt);
+        const preparedFile = await prepareReceiptFile(file);
 
         const formData = new FormData();
-        formData.append("file", compressedFile);
-        formData.append("fileName", fileName);
+        formData.append("file", preparedFile);
 
         const uploadResult = await uploadReceiptAction(formData);
         if (uploadResult.error) {
@@ -179,8 +175,13 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
         }
 
         evidenceUrl = uploadResult.filePath ?? "";
-      } catch {
-        toast.error("書類のアップロード中にエラーが発生しました");
+      } catch (error) {
+        toast.error(
+          getReceiptFileErrorMessage(
+            error,
+            "書類のアップロード中にエラーが発生しました",
+          ),
+        );
         setIsUploading(false);
         return;
       }
@@ -520,7 +521,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                 見積書やHP等の料金が記載された資料をアップロードしてください。
               </FormDescription>
               <p className="text-xs text-muted-foreground">
-                対応形式: JPEG / PNG / WebP / GIF / HEIC / TIFF / BMP / PDF &nbsp;|&nbsp; 最大サイズ: 10MB
+                対応形式: {RECEIPT_FORMAT_LABEL} &nbsp;|&nbsp; 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
               </p>
               <div className="flex items-center gap-4">
                 <Button

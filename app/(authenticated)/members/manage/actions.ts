@@ -9,9 +9,11 @@ import {
   deriveInitialPassword,
   generateSecurePassword,
 } from "@/lib/account";
-import { resolveAuthContext } from "@/lib/auth/context";
+import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import { verifyAdmin, verifyManageMembersPermission } from "@/lib/auth/permissions";
+import { isDelegableRole, planRoleSync } from "@/lib/roles/assignment";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
+import type { RoleAssignment } from "@/lib/roles/types";
 import { logAuditEvent } from "@/lib/audit-log";
 import { passwordResetRateLimiter } from "@/lib/rate-limit";
 import { headers } from "next/headers";
@@ -31,6 +33,67 @@ function sanitizeForGoTrue(name: string): string {
       return cp > 0xffff ? `[U+${cp.toString(16).toUpperCase()}]` : ch;
     })
     .join("");
+}
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+const PROTECTED_ROLE_ERROR = "このロールの変更には管理者権限が必要です";
+const PROTECTED_TARGET_ERROR = "この部員の操作には管理者権限が必要です";
+const ROLE_LOOKUP_ERROR = "操作に失敗しました。しばらくしてから再試行してください。";
+
+// Role ids currently assigned to the user, read with the service-role client so
+// the result does not depend on the caller's RLS visibility.
+async function fetchAssignedRoleIds(
+  admin: AdminClient,
+  userId: string,
+): Promise<string[] | null> {
+  const { data, error } = await admin
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[members] Role assignment fetch error:", error);
+    return null;
+  }
+  return (data ?? []).map((row) => row.role_id);
+}
+
+async function fetchRolesById(
+  admin: AdminClient,
+  roleIds: readonly string[],
+): Promise<Record<string, RoleAssignment> | null> {
+  if (roleIds.length === 0) return {};
+  const { data, error } = await admin
+    .from("roles")
+    .select("id, name, type, accounting_group_id")
+    .in("id", [...roleIds]);
+  if (error) {
+    console.error("[members] Role fetch error:", error);
+    return null;
+  }
+  return Object.fromEntries(
+    (data ?? []).map((role) => [
+      role.id,
+      {
+        name: role.name,
+        type: role.type,
+        accountingGroupId: role.accounting_group_id,
+      },
+    ]),
+  );
+}
+
+// Whether a non-admin manager may retire/delete this user: only when every role
+// the user holds is delegable. Fail closed: null when roles cannot be read.
+async function isTargetManageableByNonAdmin(
+  admin: AdminClient,
+  userId: string,
+): Promise<boolean | null> {
+  const roleIds = await fetchAssignedRoleIds(admin, userId);
+  if (roleIds === null) return null;
+  const rolesById = await fetchRolesById(admin, roleIds);
+  if (rolesById === null) return null;
+  return roleIds.every((id) => isDelegableRole(rolesById[id]));
 }
 
 // --- 部員追加 ---
@@ -140,23 +203,51 @@ export async function updateMember(
   if (!memberValidation.success) {
     return { error: "入力データが不正です" } as const;
   }
+  const input = memberValidation.data.data;
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error } as const;
 
   const auth = authResult.context;
-  const perm = await verifyManageMembersPermission(auth);
+  const access = authResult.access;
+  const perm = await verifyManageMembersPermission(auth, access);
   if (!perm.ok) return { error: perm.error } as const;
 
   const admin = createAdminClient();
+
+  // 0) ロール変更の可否を書き込み前に判定する。
+  //    非管理者は権限に影響するロール（管理者・会計・部長・副部長・グループロール等）を
+  //    付与・解除できない（lib/roles/assignment.ts 参照）。
+  const currentRoleIds = await fetchAssignedRoleIds(admin, userId);
+  if (currentRoleIds === null) {
+    return { error: "ロールの更新に失敗しました" } as const;
+  }
+  const roleById = await fetchRolesById(admin, [
+    ...new Set([...currentRoleIds, ...input.role_ids]),
+  ]);
+  if (roleById === null) {
+    return { error: "ロールの更新に失敗しました" } as const;
+  }
+  const rolePlan = planRoleSync({
+    actorIsAdmin: access.isAdmin,
+    currentRoleIds,
+    requestedRoleIds: input.role_ids,
+    roleById,
+  });
+  if (!rolePlan.ok) {
+    if (rolePlan.reason === "protected_role") {
+      return { error: PROTECTED_ROLE_ERROR } as const;
+    }
+    return { error: "入力データが不正です" } as const;
+  }
 
   // 1) profiles 更新 - uses RLS-respecting client
   const { error: profileErr } = await auth.supabase
     .from("profiles")
     .update({
-      name: data.name,
-      student_number: data.student_number,
-      grade: data.grade,
+      name: input.name,
+      student_number: input.student_number,
+      grade: input.grade,
       updated_at: new Date().toISOString(),
     })
     .eq("id", userId)
@@ -169,9 +260,9 @@ export async function updateMember(
   // 2) auth user metadata update - requires admin client for auth.admin.*
   const { error: authErr } = await admin.auth.admin.updateUserById(userId, {
     user_metadata: {
-      name: sanitizeForGoTrue(data.name),
-      student_number: data.student_number,
-      grade: data.grade,
+      name: sanitizeForGoTrue(input.name),
+      student_number: input.student_number,
+      grade: input.grade,
     },
   });
   if (authErr) {
@@ -179,16 +270,22 @@ export async function updateMember(
     return { error: "ユーザー情報の更新に失敗しました" } as const;
   }
 
-  // 3) ロール同期: 既存の全ロール割り当てを削除して再割り当て - uses admin client to bypass RLS
-  const { error: roleDelErr } = await admin.from("user_roles").delete().eq("user_id", userId);
-  if (roleDelErr) {
-    console.error("[updateMember] Role deletion error:", roleDelErr);
-    return { error: "ロールの更新に失敗しました" } as const;
+  // 3) ロール同期: 差分のみ削除・追加する（判定済みの割り当て以外には触れない）
+  //    - uses admin client to bypass RLS
+  if (rolePlan.toRemove.length > 0) {
+    const { error: roleDelErr } = await admin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId)
+      .in("role_id", rolePlan.toRemove);
+    if (roleDelErr) {
+      console.error("[updateMember] Role deletion error:", roleDelErr);
+      return { error: "ロールの更新に失敗しました" } as const;
+    }
   }
 
-  // 新しいロールを割り当て
-  if (data.role_ids.length > 0) {
-    const inserts = data.role_ids.map((roleId) => ({
+  if (rolePlan.toAdd.length > 0) {
+    const inserts = rolePlan.toAdd.map((roleId) => ({
       user_id: userId,
       role_id: roleId,
     }));
@@ -211,14 +308,27 @@ export async function retireMember(userId: string) {
     return { error: "入力データが不正です" } as const;
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error } as const;
 
   const auth = authResult.context;
-  const perm = await verifyManageMembersPermission(auth);
+  const access = authResult.access;
+  const perm = await verifyManageMembersPermission(auth, access);
   if (!perm.ok) return { error: perm.error } as const;
 
   const admin = createAdminClient();
+
+  // 非管理者は権限ロール保持者（管理者・会計・部長・副部長・グループロール等）を
+  // 操作できない（ロール剥奪・アカウント削除による権限奪取の防止）
+  if (!access.isAdmin) {
+    const manageable = await isTargetManageableByNonAdmin(admin, userId);
+    if (manageable === null) {
+      return { error: ROLE_LOOKUP_ERROR } as const;
+    }
+    if (!manageable) {
+      return { error: PROTECTED_TARGET_ERROR } as const;
+    }
+  }
 
   // 1) grade を 0 に変更 - uses RLS-respecting client
   const { error: profileErr } = await auth.supabase
@@ -276,14 +386,27 @@ export async function deleteMember(userId: string) {
     return { error: "入力データが不正です" } as const;
   }
 
-  const authResult = await resolveAuthContext();
+  const authResult = await resolveAuthWithRoles();
   if (!authResult.ok) return { error: authResult.error } as const;
 
   const auth = authResult.context;
-  const perm = await verifyManageMembersPermission(auth);
+  const access = authResult.access;
+  const perm = await verifyManageMembersPermission(auth, access);
   if (!perm.ok) return { error: perm.error } as const;
 
   const admin = createAdminClient();
+
+  // 非管理者は権限ロール保持者（管理者・会計・部長・副部長・グループロール等）を
+  // 操作できない（ロール剥奪・アカウント削除による権限奪取の防止）
+  if (!access.isAdmin) {
+    const manageable = await isTargetManageableByNonAdmin(admin, userId);
+    if (manageable === null) {
+      return { error: ROLE_LOOKUP_ERROR } as const;
+    }
+    if (!manageable) {
+      return { error: PROTECTED_TARGET_ERROR } as const;
+    }
+  }
 
   // Fetch current profile data for audit log before soft delete
   const { data: oldProfile } = await auth.supabase

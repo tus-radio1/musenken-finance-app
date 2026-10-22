@@ -18,6 +18,12 @@ import { resolveAuthContext, resolveAuthWithRoles } from "@/lib/auth/context";
 import { createAdminClient } from "@/utils/supabase/server";
 import { formatDateForDatabase } from "@/lib/date";
 import {
+  RECEIPT_PATH_ERROR_MESSAGE,
+  checkReceiptPathUpdates,
+  isReceiptPathOwnedBy,
+} from "@/lib/receipt-upload";
+import { removeReplacedReceipt } from "@/lib/receipt-storage";
+import {
   updateMySubsidyItemSchema,
   deleteSubsidyItemSchema,
   validateInput,
@@ -43,6 +49,11 @@ export async function createSubsidyItem(
   const authResult = await resolveAuthContext();
   if (!authResult.ok) return { error: authResult.error };
   const auth = authResult.context;
+
+  // The evidence file must be an object the caller uploaded via uploadReceiptAction.
+  if (!isReceiptPathOwnedBy(validatedValues.evidence_url, auth.userId)) {
+    return { error: RECEIPT_PATH_ERROR_MESSAGE };
+  }
 
   // 現在の会計年度を取得
   const { data: fy } = await auth.supabase
@@ -147,6 +158,9 @@ export async function updateMySubsidyItem(
   if (!inputValidation.success) {
     return { error: "入力データが不正です" };
   }
+  // Only schema-validated fields are used below; unknown keys (status,
+  // approved_amount, applicant_id, ...) are stripped by the schema.
+  const validatedValues = inputValidation.data.values;
 
   const authResult = await resolveAuthContext();
   if (!authResult.ok) return { error: authResult.error };
@@ -155,7 +169,7 @@ export async function updateMySubsidyItem(
   // Ensure the user actually owns this subsidy item and it is currently 'pending'
   const { data: item, error: fetchError } = await auth.supabase
     .from("subsidy_items")
-    .select("status, applicant_id")
+    .select("status, applicant_id, receipt_url, evidence_url")
     .eq("id", id)
     .is("deleted_at", null)
     .single();
@@ -176,32 +190,57 @@ export async function updateMySubsidyItem(
   if (item.status === "approved") {
     // approved: receipt_url only
     updateData = {};
-    if (values.receipt_url !== undefined) {
-      updateData.receipt_url = values.receipt_url;
+    if (validatedValues.receipt_url !== undefined) {
+      updateData.receipt_url = validatedValues.receipt_url;
     }
   } else {
     // pending: general fields + evidence_url (receipt_url is not allowed)
     // receipt_url は pending 時に更新不可のため分割代入で除外
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { receipt_url: _receipt_url, ...rest } = values;
+    const { receipt_url: _receipt_url, ...rest } = validatedValues;
     updateData = { ...rest };
-    if (values.date) {
-      updateData.date = formatDateForDatabase(values.date);
+    if (validatedValues.date) {
+      updateData.date = formatDateForDatabase(validatedValues.date);
     }
   }
 
+  // A replaced receipt / evidence path must be an object the caller uploaded.
+  const receiptCheck = checkReceiptPathUpdates(updateData, item, auth.userId);
+  if (!receiptCheck.ok) {
+    return { error: RECEIPT_PATH_ERROR_MESSAGE };
+  }
+  updateData = { ...updateData, ...receiptCheck.normalized };
+
   // Use admin client to bypass RLS for the update.
-  // Ownership and status are already validated above with the user's client.
+  // Ownership and status are already validated above with the user's client;
+  // the status / deleted_at predicates make the write fail if either changed
+  // between that read and this update (e.g. approved by accounting meanwhile).
   const supabaseAdmin = createAdminClient();
-  const { error: updateError } = await supabaseAdmin
+  const { data: updatedRows, error: updateError } = await supabaseAdmin
     .from("subsidy_items")
     .update(updateData)
     .eq("id", id)
-    .eq("applicant_id", auth.profileId);
+    .eq("applicant_id", auth.profileId)
+    .eq("status", item.status)
+    .is("deleted_at", null)
+    .select("id");
 
   if (updateError) {
     console.error("updateMySubsidyItem error:", updateError);
     return { error: "申請情報の更新に失敗しました" };
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    return { error: "申請の状態が変更されたため更新できませんでした。再読み込みしてください" };
+  }
+
+  // Remove replaced files only after the record points to the new ones.
+  // Old paths come from the DB row read above, never from client input.
+  for (const column of receiptCheck.changed) {
+    await removeReplacedReceipt({
+      oldPath: item[column],
+      newPath: receiptCheck.normalized[column],
+      actorUserId: auth.userId,
+    });
   }
 
   revalidatePath("/subsidies");
