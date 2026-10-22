@@ -4,7 +4,8 @@ import Link from "next/link";
 import { SubsidyForm } from "@/components/subsidy-form";
 import { SubsidyItemsTable } from "@/components/subsidy-items-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getUserTeams } from "@/lib/teams";
+import { requireRoleAccess } from "@/lib/roles/access";
+import { isAdmin } from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
 
@@ -48,9 +49,9 @@ export default async function SubsidiesPage({
   const page = Math.max(0, parseInt(params.page ?? "0", 10) || 0);
   const offset = page * PAGE_SIZE;
 
-  // 会計グループ一覧を取得 & isGlobalAdmin判定
-  const teamData = await getUserTeams(supabase, supabase, user.id);
-  const isGlobalAdmin = teamData.isGlobalAdmin;
+  // isGlobalAdmin 判定
+  const access = await requireRoleAccess({ supabase, profileId: user.id });
+  const isGlobalAdmin = isAdmin(access);
 
   const { data: accountingGroups } = await supabase
     .from("accounting_groups")

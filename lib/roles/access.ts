@@ -1,91 +1,52 @@
 /**
- * ロールに基づくアクセス制御の判定ロジック。
+ * ログインユーザーのロール取得（サーバー専用）。
  *
- * user_roles → roles テーブルを JOIN してユーザーのロール一覧を取得し、
- * グローバル管理者・会計・部員管理権限などの判定を行う。
+ * user_roles → roles を JOIN して取得し、解釈は lib/roles/parse.ts、
+ * 操作ごとの判定は lib/roles/permissions.ts に任せる。
  * Server Action の認可プリアンブルで resolveAuthWithRoles() 経由で呼ばれる。
  */
 
+import "server-only";
+
 import type { AuthContext } from "@/lib/auth/types";
-import type { RoleAssignment, RoleAccessContext } from "./types";
-import {
-  ROLE_TYPES,
-  ROLE_NAMES_JA,
-  MANAGE_MEMBER_ROLE_NAMES,
-  type RoleNameJa,
-  type RoleType,
-} from "./constants";
+import { buildRoleAccess, parseRoleAssignments } from "./parse";
+import type { RoleAccessContext } from "./types";
 
-type RawRoleRow = {
-  name: string | null;
-  type: string | null;
-  accounting_group_id: string | null;
-};
+export type RoleAccessResult =
+  | { ok: true; access: RoleAccessContext }
+  | { ok: false };
 
+/**
+ * ロールの取得に失敗した場合は空のロールで続行せず ok: false を返す
+ * （権限がないのか取得できなかったのかを区別するため）。
+ */
 export async function getUserRoleAccess(
-  auth: AuthContext,
-): Promise<RoleAccessContext> {
-  const { data: userRoles } = await auth.supabase
+  auth: Pick<AuthContext, "supabase" | "profileId">,
+): Promise<RoleAccessResult> {
+  const { data, error } = await auth.supabase
     .from("user_roles")
     .select("roles(name, type, accounting_group_id)")
     .eq("user_id", auth.profileId);
 
-  const roles: RoleAssignment[] = (userRoles || []).flatMap((ur) => {
-    const rr = (ur as unknown as { roles?: RawRoleRow | RawRoleRow[] | null })
-      .roles;
-    if (Array.isArray(rr)) return rr.map(normalize);
-    return rr ? [normalize(rr)] : [];
-  });
-
-  const isAdmin = roles.some((r) => r.type === ROLE_TYPES.ADMIN);
-  const hasAccountingRole = roles.some(
-    (r) => r.name === ROLE_NAMES_JA.ACCOUNTING,
-  );
-  const canManageMembers =
-    isAdmin ||
-    roles.some(
-      (r) =>
-        r.name !== null &&
-        (MANAGE_MEMBER_ROLE_NAMES as readonly string[]).includes(r.name),
-    );
-
-  const groupRoleTypes: Record<string, RoleType[]> = {};
-  for (const r of roles) {
-    if (r.accountingGroupId) {
-      const existing = groupRoleTypes[r.accountingGroupId] ?? [];
-      existing.push(r.type);
-      groupRoleTypes[r.accountingGroupId] = existing;
-    }
+  if (error) {
+    console.error("[getUserRoleAccess] Role lookup error:", error);
+    return { ok: false };
   }
 
-  return {
-    roles,
-    isAdmin,
-    hasAccountingRole,
-    canManageMembers,
-    groupRoleTypes,
-  };
+  return { ok: true, access: buildRoleAccess(parseRoleAssignments(data)) };
 }
 
-function normalize(raw: RawRoleRow): RoleAssignment {
-  return {
-    name: (raw.name ?? "") as RoleNameJa,
-    type: (raw.type ?? "") as RoleType,
-    accountingGroupId: raw.accounting_group_id,
-  };
-}
-
-export function isGroupLeader(
-  access: RoleAccessContext,
-  accountingGroupId: string,
-): boolean {
-  const types = access.groupRoleTypes[accountingGroupId];
-  return types?.includes(ROLE_TYPES.LEADER) ?? false;
-}
-
-export function canManageBudget(
-  access: RoleAccessContext,
-  accountingGroupId: string,
-): boolean {
-  return access.isAdmin || isGroupLeader(access, accountingGroupId);
+/**
+ * Server Component 用。取得に失敗した場合は例外を投げてエラー画面
+ * （app/error.tsx）に任せる。空のロールで描画を続けると、権限がない
+ * ユーザーと区別できないため。
+ */
+export async function requireRoleAccess(
+  auth: Pick<AuthContext, "supabase" | "profileId">,
+): Promise<RoleAccessContext> {
+  const result = await getUserRoleAccess(auth);
+  if (!result.ok) {
+    throw new Error("Role lookup failed");
+  }
+  return result.access;
 }

@@ -53,6 +53,8 @@ type Props = {
   categories: Category[];
   canEdit: boolean;
   canDelete: boolean;
+  /** Whether the edit form shows the approval status field. */
+  canChangeApprovalStatus?: boolean;
   userRole?: "admin" | "accounting" | "general" | null;
   users?: { id: string; name: string }[];
   accountingUserId?: string;
@@ -63,6 +65,7 @@ export function TransactionRowActions({
   categories,
   canEdit,
   canDelete,
+  canChangeApprovalStatus = false,
   userRole,
   users,
   accountingUserId,
@@ -140,6 +143,7 @@ export function TransactionRowActions({
           userRole={userRole}
           users={users}
           accountingUserId={accountingUserId}
+          canChangeApprovalStatus={canChangeApprovalStatus}
         />
       )}
     </>

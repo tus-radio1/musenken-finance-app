@@ -105,6 +105,8 @@ type Props = {
   financialAccounts?: FinancialAccount[];
   /** Default financial_account_id to pre-select */
   defaultFinancialAccountId?: string;
+  /** Whether the approval status field is shown (edit form only). */
+  canChangeApprovalStatus?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -122,6 +124,7 @@ function TransactionFormInner({
   onClose,
   financialAccounts,
   defaultFinancialAccountId,
+  canChangeApprovalStatus,
 }: {
   categories: Category[];
   initialData?: TransactionData;
@@ -131,6 +134,7 @@ function TransactionFormInner({
   onClose: () => void;
   financialAccounts?: FinancialAccount[];
   defaultFinancialAccountId?: string;
+  canChangeApprovalStatus?: boolean;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -442,6 +446,7 @@ function TransactionFormInner({
           users={users}
           accountingUserId={accountingUserId}
           isEditing={!!initialData}
+          canChangeApprovalStatus={canChangeApprovalStatus}
         />
 
         {/* 備考 */}
@@ -496,6 +501,7 @@ export function TransactionForm({
   accountingUserId = ACCOUNTING_USER_ID_FALLBACK,
   financialAccounts,
   defaultFinancialAccountId,
+  canChangeApprovalStatus,
 }: Props) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -539,6 +545,7 @@ export function TransactionForm({
             onClose={() => setOpen(false)}
             financialAccounts={financialAccounts}
             defaultFinancialAccountId={defaultFinancialAccountId}
+            canChangeApprovalStatus={canChangeApprovalStatus}
           />
         )}
       </DialogContent>

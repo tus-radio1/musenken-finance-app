@@ -9,7 +9,7 @@ import {
   canViewClubLedger,
   canCreateClubTransaction,
   canManageFinancialAccounts,
-} from "@/lib/auth/permissions";
+} from "@/lib/roles/permissions";
 import type { RoleAccessContext } from "@/lib/roles/types";
 
 // ---------------------------------------------------------------------------

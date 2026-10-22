@@ -3,13 +3,10 @@
 /**
  * 出納帳データ取得の Server Action。
  *
- * 権限モデル:
- *   - 管理者・会計・部長・副部長: 全グループのデータ閲覧可
- *   - 一般部員: general タイプのグループ + 自分が所属するグループのみ
- * アクセス判定の順序:
- *   1. isFullAccess (admin/accounting/chair/vice_chair) → 無条件OK
- *   2. general タイプのグループ → 全ユーザーに公開
- *   3. 所属グループ → ロール割当で判定
+ * 権限モデル（lib/roles/permissions.ts の canViewGroup）:
+ *   - 部全体会計（type = club）: 管理者・会計・部長・副部長（後者は閲覧のみ）
+ *   - それ以外: 管理者・会計・部長・副部長は全グループ、一般部員は
+ *     type が general / 未設定のグループと自分が所属するグループのみ
  */
 
 import { getAccountingUserIdSync } from "@/lib/system-config";
@@ -19,9 +16,11 @@ import {
   validateInput,
 } from "@/lib/validations";
 import { resolveAuthWithRoles } from "@/lib/auth/context";
-import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { revalidatePath } from "next/cache";
-import { canViewClubLedger } from "@/lib/auth/permissions";
+import {
+  canCreateClubTransaction,
+  canViewGroup,
+} from "@/lib/roles/permissions";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
 
 import {
@@ -44,37 +43,20 @@ export async function fetchLedgerTransactions(params: {
   const auth = authResult.context;
   const access = authResult.access;
 
-  const isAccountingUser = access.hasAccountingRole;
-  const isFullAccess =
-    access.isAdmin ||
-    isAccountingUser ||
-    access.roles.some(
-      (r) =>
-        r.name === ROLE_NAMES_JA.CHAIR || r.name === ROLE_NAMES_JA.VICE_CHAIR,
-    );
-
   const requestedGroupId = params.accountingGroupId;
 
-  // Check group type for access control
-  const { data: groupInfo } = await auth.supabase
+  // Check group type for access control. A missing group or a lookup error
+  // denies access.
+  const { data: groupInfo, error: groupError } = await auth.supabase
     .from("accounting_groups")
-    .select("type")
+    .select("id, type")
     .eq("id", requestedGroupId)
     .maybeSingle();
 
-  const isClubGroup = groupInfo?.type === "club";
-  const isGeneralGroup = groupInfo?.type === "general";
-
-  // Club-wide group: only accounting/admin can view
-  if (isClubGroup && !canViewClubLedger(access)) {
-    return { error: "アクセス権限がありません" as const };
+  if (groupError) {
+    console.error("[fetchLedgerTransactions] Group fetch error:", groupError);
   }
-
-  const belongsToRequested = access.roles.some(
-    (r) => r.accountingGroupId && r.accountingGroupId === requestedGroupId,
-  );
-
-  if (!isClubGroup && !isFullAccess && !isGeneralGroup && !belongsToRequested) {
+  if (!canViewGroup(access, groupError ? null : groupInfo)) {
     return { error: "アクセス権限がありません" as const };
   }
 
@@ -190,6 +172,7 @@ export async function fetchLedgerTransactions(params: {
 
   const enriched = combinedRows.map((t) => ({
     ...t,
+    accounting_group_type: groupInfo?.type ?? null,
     created_by_name: t.created_by
       ? profileNameMap[t.created_by] || "未登録"
       : "未登録",
@@ -250,7 +233,7 @@ export async function createTransfer(params: {
   const access = authResult.access;
 
   // Only accounting/admin can create transfers
-  if (!access.isAdmin && !access.hasAccountingRole) {
+  if (!canCreateClubTransaction(access)) {
     return { error: "資金移動の作成には会計担当または管理者権限が必要です" };
   }
 
@@ -262,8 +245,9 @@ export async function createTransfer(params: {
       p_from_account_id: params.fromAccountId,
       p_to_account_id: params.toAccountId,
       p_description: params.description,
-      p_receipt_url: params.receiptUrl ?? null,
-      p_remarks: params.remarks ?? null,
+      // Omitted optional RPC arguments fall back to the SQL default (NULL).
+      p_receipt_url: params.receiptUrl ?? undefined,
+      p_remarks: params.remarks ?? undefined,
       p_created_by: auth.profileId,
     },
   );

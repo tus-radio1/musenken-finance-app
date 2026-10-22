@@ -4,10 +4,11 @@
  * 取引の承認/却下ボタン。
  *
  * 承認フロー許可遷移:
- *   pending → approved  (グローバル管理者 or 対象グループ leader)
+ *   pending → approved  (管理者・会計。過年度は管理者のみ)
  *   pending → rejected  (同上)
- * 制約: 自分の申請は承認不可 (isMyTransaction で制御)。
- * サーバー側の権限チェックは app/actions.ts の updateTransactionStatus が二重に行う。
+ * 制約: 自分の申請は誰も承認できない (isMyTransaction で制御)。
+ * サーバー側の権限チェックは app/actions.ts の updateTransactionStatus が二重に行う
+ * （判定は lib/roles/permissions.ts の checkTransactionApproval）。
  */
 
 import { useState } from "react";
