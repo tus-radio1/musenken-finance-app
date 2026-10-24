@@ -101,12 +101,13 @@ export async function submitExpense(page: Page, description: string, filename: s
   await dialog.getByRole("combobox", { name: "会計グループ", exact: true }).click();
   await page.getByRole("option", { name: groups.team.name, exact: true }).click();
   await dialog.getByLabel("概要", { exact: true }).fill(description);
-  // Both the current upload and PR #49's dropzone keep a hidden file input
-  // inside the receipt field. Do not click the file-picker/dropzone button.
-  const receiptField = dialog.locator("div").filter({
-    has: page.locator("label").filter({ hasText: "領収書データ" }),
-  }).filter({ has: page.locator('input[type="file"]') }).last();
-  await receiptField.locator('input[type="file"]').setInputFiles(path.resolve("e2e/fixtures", filename));
+  // The shared dropzone exposes its hidden file input through aria-labelledby.
+  // Do not click the dropzone, which would open the native file picker.
+  const receiptInput = dialog.getByLabel("領収書データ (任意)", { exact: true })
+    .and(dialog.locator('input[type="file"]'));
+  await expect(receiptInput).toHaveCount(1);
+  await receiptInput.setInputFiles(path.resolve("e2e/fixtures", filename));
+  await expect(dialog.getByText(filename, { exact: false })).toBeVisible();
   await dialog.getByRole("button", { name: "登録する", exact: true }).click();
   await expect(dialog).toBeHidden();
   const row = transactionRow(page, description);
