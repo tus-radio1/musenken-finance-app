@@ -9,7 +9,7 @@ export const PAGE_WIDTH_CLASS: Record<PageWidth, string> = {
 
 export const DIALOG_WIDTH_CLASS = {
   confirm: "sm:max-w-md",
-  form: "sm:max-w-3xl",
+  form: "sm:max-w-4xl",
 } as const;
 
 type PageShellProps = {

@@ -43,6 +43,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -277,16 +278,18 @@ function TransferFormInner({
           )}
         />
 
-        <Button
-          type="submit"
-          className="w-full md:col-span-2"
-          disabled={form.formState.isSubmitting}
-        >
-          {form.formState.isSubmitting && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-          )}
-          資金移動を登録
-        </Button>
+        <DialogFooter className="md:col-span-2">
+          <Button
+            type="submit"
+            className="w-full md:w-auto"
+            disabled={form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
+            資金移動を登録
+          </Button>
+        </DialogFooter>
       </form>
     </Form>
   );

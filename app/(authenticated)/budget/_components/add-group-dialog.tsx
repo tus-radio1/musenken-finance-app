@@ -144,10 +144,10 @@ export function AddGroupDialog({ fiscalYear }: AddGroupDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => handleOpen(false)}>
+          <Button variant="ghost" className="w-full md:w-auto" onClick={() => handleOpen(false)}>
             キャンセル
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending}>
+          <Button className="w-full md:w-auto" onClick={handleSubmit} disabled={isPending}>
             {isPending ? "作成中..." : "作成"}
           </Button>
         </DialogFooter>

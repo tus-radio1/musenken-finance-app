@@ -15,9 +15,20 @@ export type FileDropzoneProps = {
   existingUrl?: string | null;
   disabled?: boolean;
   error?: string | null;
+  className?: string;
+  dropzoneClassName?: string;
 };
 
-export function FileDropzone({ label, file, onFileChange, existingUrl, disabled = false, error }: FileDropzoneProps) {
+export function FileDropzone({
+  label,
+  file,
+  onFileChange,
+  existingUrl,
+  disabled = false,
+  error,
+  className,
+  dropzoneClassName,
+}: FileDropzoneProps) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -49,7 +60,7 @@ export function FileDropzone({ label, file, onFileChange, existingUrl, disabled 
   };
 
   return (
-    <div className="space-y-2">
+    <div className={cn("flex flex-col gap-2", className)}>
       <p id={`${id}-label`} className="text-sm font-medium">{label}</p>
       <p id={`${id}-hint`} className="text-xs text-muted-foreground">
         対応形式: {RECEIPT_FORMAT_LABEL} | 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB | 1ファイル
@@ -78,6 +89,7 @@ export function FileDropzone({ label, file, onFileChange, existingUrl, disabled 
           "flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-4 text-center text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           dragOver && !disabled ? "border-primary bg-primary/10" : "border-input bg-muted/30",
           disabled && "cursor-not-allowed opacity-50",
+          dropzoneClassName,
         )}
         onClick={openPicker}
         onKeyDown={(event) => {
@@ -115,9 +127,9 @@ export function FileDropzone({ label, file, onFileChange, existingUrl, disabled 
         {file && <span className="max-w-full break-all">{file.name}（{(file.size / 1024).toFixed(1)} KB）</span>}
       </div>
       {file && (
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={openPicker}>変更</Button>
-          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => {
+        <div className="flex gap-1.5">
+          <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={disabled} onClick={openPicker}>変更</Button>
+          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={disabled} onClick={() => {
             setSelectionError(null);
             onFileChange(null);
           }}>選択を解除</Button>

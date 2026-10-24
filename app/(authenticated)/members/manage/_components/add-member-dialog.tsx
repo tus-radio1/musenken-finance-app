@@ -121,12 +121,13 @@ export function AddMemberDialog() {
             <Button
               type="button"
               variant="outline"
+              className="w-full md:w-auto"
               onClick={() => setOpen(false)}
               disabled={loading}
             >
               キャンセル
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" className="w-full md:w-auto" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               追加する
             </Button>

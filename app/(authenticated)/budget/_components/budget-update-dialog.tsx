@@ -174,10 +174,10 @@ export function BudgetUpdateDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => handleOpen(false)}>
+          <Button variant="ghost" className="w-full md:w-auto" onClick={() => handleOpen(false)}>
             キャンセル
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending}>
+          <Button className="w-full md:w-auto" onClick={handleSubmit} disabled={isPending}>
             {isPending ? "保存中..." : "保存"}
           </Button>
         </DialogFooter>
