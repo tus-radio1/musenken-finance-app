@@ -54,11 +54,10 @@ import {
 import {
   createTransaction,
   updateTransaction,
-  uploadReceiptAction,
 } from "@/app/actions";
 
 import { formSchema } from "@/lib/schema";
-import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
+import { useReceiptUpload } from "@/components/receipt/use-receipt-upload";
 import { parseDateInputValue, parseDateOnly } from "@/lib/date";
 import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
@@ -136,8 +135,7 @@ function TransactionFormInner({
   defaultFinancialAccountId?: string;
   canChangeApprovalStatus?: boolean;
 }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const { file, setFile, upload, isUploading, error: uploadError } = useReceiptUpload();
   const router = useRouter();
 
   const preventCoreEdits = false;
@@ -187,33 +185,12 @@ function TransactionFormInner({
       const transactionId = initialData?.id || crypto.randomUUID();
 
       if (file) {
-        setIsUploading(true);
-
-        try {
-          const preparedFile = await prepareReceiptFile(file);
-
-          const formData = new FormData();
-          formData.append("file", preparedFile);
-
-          const result = await uploadReceiptAction(formData);
-
-          if (result.error) {
-            toast.error(result.error);
-            setIsUploading(false);
-            return;
-          }
-
-          receiptPath = result.filePath;
-        } catch (error) {
-          console.error("Image processing error:", error);
-          toast.error(
-            getReceiptFileErrorMessage(error, "画像の処理中にエラーが発生しました"),
-          );
-          setIsUploading(false);
+        const uploaded = await upload();
+        if (uploaded.error !== undefined) {
+          toast.error(uploaded.error);
           return;
         }
-
-        setIsUploading(false);
+        receiptPath = uploaded.filePath;
       }
 
       if (!initialData && receiptPath === undefined) {
@@ -469,7 +446,13 @@ function TransactionFormInner({
         />
 
         {/* 領収書アップロード */}
-        <ReceiptUpload file={file} onFileChange={setFile} />
+        <ReceiptUpload
+          file={file}
+          onFileChange={setFile}
+          existingUrl={initialData?.receipt_url}
+          disabled={form.formState.isSubmitting || isUploading}
+          error={uploadError}
+        />
 
         <Button
           type="submit"

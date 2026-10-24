@@ -9,21 +9,18 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { FormLabel } from "@/components/ui/form";
-import {
-  MAX_RECEIPT_FILE_SIZE_MB,
-  RECEIPT_FORMAT_LABEL,
-} from "@/lib/receipt-upload";
+import { FileText } from "lucide-react";
+import { FileDropzone } from "@/components/receipt/file-dropzone";
 
 type Props = {
   file: File | null;
   onFileChange: (file: File | null) => void;
+  existingUrl?: string | null;
+  disabled?: boolean;
+  error?: string | null;
 };
 
-export function ReceiptUpload({ file, onFileChange }: Props) {
+export function ReceiptUpload({ file, onFileChange, existingUrl, disabled, error }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // revoke 用に現在の URL を追跡
   const currentUrlRef = useRef<string | null>(null);
@@ -61,36 +58,15 @@ export function ReceiptUpload({ file, onFileChange }: Props) {
 
   return (
     <div className="space-y-2">
-      <FormLabel>領収書データ (任意)</FormLabel>
-      <p className="text-xs text-muted-foreground">
-        対応形式: {RECEIPT_FORMAT_LABEL} &nbsp;|&nbsp; 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
-      </p>
+      <FileDropzone
+        label="領収書データ (任意)"
+        file={file}
+        onFileChange={handleFileSelect}
+        existingUrl={existingUrl}
+        disabled={disabled}
+        error={error}
+      />
       <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              document.getElementById("receipt-upload")?.click()
-            }
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            {file ? "データを変更" : "データを選択"}
-          </Button>
-          <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-            {file ? file.name : "選択されていません"}
-          </span>
-          <Input
-            id="receipt-upload"
-            type="file"
-            accept="image/*,.pdf"
-            className="hidden"
-            onChange={(e) => {
-              const selectedFile = e.target.files?.[0];
-              handleFileSelect(selectedFile ?? null);
-            }}
-          />
-        </div>
         {/* 画像プレビュー — blob URL (URL.createObjectURL) を表示するため
            next/image は使用不可（src に blob: スキームを渡せない）。
            ローカルファイル選択時のプレビュー専用なのでパフォーマンス影響なし。 */}

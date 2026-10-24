@@ -9,8 +9,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { updateMySubsidyItem, deleteMySubsidyItem } from "@/app/(authenticated)/subsidies/actions";
-import { uploadReceiptAction } from "@/app/actions";
-import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
+import { useReceiptUpload } from "@/components/receipt/use-receipt-upload";
 import { getSortableDateValue } from "@/lib/date";
 import {
   AlertDialog,
@@ -75,7 +74,7 @@ export function SubsidyItemsTable({
     justification: "",
     remarks: "",
   });
-  const [file, setFile] = useState<File | null>(null);
+  const { file, setFile, upload, error: uploadError } = useReceiptUpload();
 
   // --- 削除確認状態 ---
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -192,30 +191,13 @@ export function SubsidyItemsTable({
       : editingItem.evidence_url ?? null;
 
     if (file) {
-      try {
-        const preparedFile = await prepareReceiptFile(file);
-
-        const formData = new FormData();
-        formData.append("file", preparedFile);
-
-        const result = await uploadReceiptAction(formData);
-        if (result.error) {
-          toast.error(result.error);
-          setIsSubmitting(false);
-          return;
-        }
-        uploadedFileUrl = result.filePath;
-      } catch (error) {
-        console.error("Image processing error:", error);
-        toast.error(
-          getReceiptFileErrorMessage(
-            error,
-            "画像の再処理またはアップロード中にエラーが発生しました",
-          ),
-        );
+      const uploaded = await upload();
+      if (uploaded.error !== undefined) {
+        toast.error(uploaded.error);
         setIsSubmitting(false);
         return;
       }
+      uploadedFileUrl = uploaded.filePath;
     }
 
     let updateValues: Parameters<typeof updateMySubsidyItem>[1];
@@ -402,6 +384,7 @@ export function SubsidyItemsTable({
         onEditFormChange={setEditForm}
         onSubmit={handleEditSubmit}
         isSubmitting={isSubmitting}
+        uploadError={uploadError}
         file={file}
         onFileChange={setFile}
         accountingGroups={accountingGroups}

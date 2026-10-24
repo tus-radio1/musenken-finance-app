@@ -5,7 +5,7 @@
  * 承認済み時は領収書アップロードのみ、それ以外は全フィールド編集可能。
  */
 
-import { Loader2, Upload, CalendarIcon } from "lucide-react";
+import { Loader2, CalendarIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -39,10 +39,7 @@ import {
   EXPENSE_TYPE_LABELS,
 } from "@/lib/constants/subsidy";
 import type { SubsidyItem, EditFormState } from "./types";
-import {
-  MAX_RECEIPT_FILE_SIZE_MB,
-  RECEIPT_FORMAT_LABEL,
-} from "@/lib/receipt-upload";
+import { FileDropzone } from "@/components/receipt/file-dropzone";
 
 type AccountingGroup = { id: string; name: string };
 
@@ -53,6 +50,7 @@ type ItemsEditDialogProps = {
   onEditFormChange: (form: EditFormState) => void;
   onSubmit: () => void;
   isSubmitting: boolean;
+  uploadError?: string | null;
   file: File | null;
   onFileChange: (file: File | null) => void;
   accountingGroups: AccountingGroup[];
@@ -67,6 +65,7 @@ export function ItemsEditDialog({
   onEditFormChange,
   onSubmit,
   isSubmitting,
+  uploadError,
   file,
   onFileChange,
   accountingGroups,
@@ -88,39 +87,14 @@ export function ItemsEditDialog({
           {editingItem?.status === "approved" ? (
             /* 承認済み: 領収書アップロードのみ */
             <div className="space-y-2 px-1">
-              <Label>領収書画像</Label>
-              <p className="text-xs text-muted-foreground">
-                対応形式: {RECEIPT_FORMAT_LABEL} | 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
-              </p>
-              <div className="flex items-center gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("receipt-upload")?.click()
-                  }
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {file ? "画像を変更" : "画像を選択"}
-                </Button>
-                <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-                  {file
-                    ? file.name
-                    : editingItem?.receipt_url
-                      ? "登録済み(変更可)"
-                      : "選択されていません"}
-                </span>
-                <Input
-                  id="receipt-upload"
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const selectedFile = e.target.files?.[0];
-                    if (selectedFile) onFileChange(selectedFile);
-                  }}
-                />
-              </div>
+              <FileDropzone
+                label="領収書画像"
+                file={file}
+                onFileChange={onFileChange}
+                existingUrl={editingItem?.receipt_url}
+                disabled={isSubmitting}
+                error={uploadError}
+              />
             </div>
           ) : (
             /* 未承認: 全フィールド編集 */
@@ -355,36 +329,14 @@ export function ItemsEditDialog({
 
               {/* 根拠書類アップロード */}
               <div className="space-y-2 px-1">
-                <Label>根拠書類 (任意)</Label>
-                <div className="flex items-center gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      document.getElementById("evidence-upload")?.click()
-                    }
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    {file ? "ファイルを変更" : "ファイルを選択"}
-                  </Button>
-                  <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-                    {file
-                      ? file.name
-                      : editingItem?.evidence_url
-                        ? "登録済み(変更可)"
-                        : "選択されていません"}
-                  </span>
-                  <Input
-                    id="evidence-upload"
-                    type="file"
-                    accept="image/*,.pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const selectedFile = e.target.files?.[0];
-                      if (selectedFile) onFileChange(selectedFile);
-                    }}
-                  />
-                </div>
+                <FileDropzone
+                  label="根拠書類 (任意)"
+                  file={file}
+                  onFileChange={onFileChange}
+                  existingUrl={editingItem?.evidence_url}
+                  disabled={isSubmitting}
+                  error={uploadError}
+                />
               </div>
             </>
           )}
