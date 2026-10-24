@@ -77,6 +77,7 @@ export function ApprovalActions({
               size="icon"
               variant="outline"
               className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+              aria-label="承認する"
               onClick={() => handleAction("approved")}
               disabled={loading}
             >
@@ -100,6 +101,7 @@ export function ApprovalActions({
               size="icon"
               variant="outline"
               className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+              aria-label="却下する"
               onClick={() => handleAction("rejected")}
               disabled={loading}
             >
