@@ -1,4 +1,6 @@
-import { fetchAllSubsidies, fetchProfilesList } from "./actions";
+import { readAllSubsidies, readProfilesList } from "@/lib/subsidies-data";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
+import { redirect } from "next/navigation";
 import { SubsidiesManageClientPage } from "./client-page";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
 import { PageShell } from "@/components/layout/page-shell";
@@ -6,22 +8,24 @@ import { PageHeader } from "@/components/layout/page-header";
 import { AccessDenied } from "@/components/feedback/access-denied";
 import { ErrorState } from "@/components/feedback/error-state";
 
-import { createClient } from "@/utils/supabase/server";
-
 export default async function SubsidiesManagePage({
   searchParams,
 }: {
   searchParams: Promise<{ year?: string }>;
 }) {
   // Uses createClient() with RLS - role-based access is enforced by RLS policies
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase } = auth;
   const params = await searchParams;
 
   // Fetch fiscal years for year selector
-  const { data: fiscalYears } = await supabase
-    .from("fiscal_years")
-    .select("year, is_current")
-    .order("year", { ascending: false });
+  const [access, { data: fiscalYears }, profilesResult, groupsResult] = await Promise.all([
+    getCurrentRoles(),
+    supabase.from("fiscal_years").select("year, is_current").order("year", { ascending: false }),
+    readProfilesList(auth),
+    supabase.from("accounting_groups").select("id, name").order("name"),
+  ]);
 
   // Determine selected year
   const selectedYearParam = params.year;
@@ -47,11 +51,7 @@ export default async function SubsidiesManagePage({
     fiscalYears?.find((fy) => fy.year === selectedYear)?.is_current ??
     false;
 
-  const [result, profilesResult, groupsResult] = await Promise.all([
-    fetchAllSubsidies(selectedYear),
-    fetchProfilesList(),
-    supabase.from("accounting_groups").select("id, name").order("name"),
-  ]);
+  const result = await readAllSubsidies(auth, access, selectedYear);
 
   const isAdmin = result.isAdmin || false;
   const isReadOnly = !isCurrentFY && !isAdmin;

@@ -1,6 +1,5 @@
 "use client";
 
-import useSWR from "swr";
 import { usePathname } from "next/navigation";
 import {
   Home,
@@ -12,16 +11,13 @@ import {
   UserCog,
   HandCoins,
 } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
-import type { UserProfile } from "@/components/user-nav";
 import type { LucideIcon } from "lucide-react";
-import { buildRoleAccess, parseRoleAssignments } from "@/lib/roles/parse";
 import {
   canManageMembers,
   canManageSubsidies,
   canViewBudgetPage,
 } from "@/lib/roles/permissions";
-import type { RoleAccessContext } from "@/lib/roles/types";
+import type { SidebarData } from "@/lib/sidebar-types";
 
 export type NavItem = {
   href: string;
@@ -29,104 +25,9 @@ export type NavItem = {
   icon: LucideIcon;
 };
 
-type PendingSubsidy = {
-  id: string;
-  name: string | null;
-  category: string | null;
-  requested_amount: number | null;
-  status: string | null;
-};
-
-type SidebarData = {
-  roleNames: string[];
-  roleTypes: string[];
-  access: RoleAccessContext;
-  userProfile: UserProfile | null;
-  pendingSubsidies: PendingSubsidy[];
-};
-
-const EMPTY_SIDEBAR_DATA: SidebarData = {
-  roleNames: [],
-  roleTypes: [],
-  access: buildRoleAccess([]),
-  userProfile: null,
-  pendingSubsidies: [],
-};
-
-/** Distinct non-empty values, in first-seen order (for display). */
-function distinct(values: readonly string[]): string[] {
-  return [...new Set(values.filter((v) => v !== ""))];
-}
-
-async function fetchSidebarData(): Promise<SidebarData> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user?.id) {
-    return EMPTY_SIDEBAR_DATA;
-  }
-
-  const profileId = user.id;
-  const [rolesResult, profileResult, pendingResult] = await Promise.all([
-    supabase
-      .from("user_roles")
-      .select("roles(name, type)")
-      .eq("user_id", profileId),
-    supabase.from("profiles").select("name").eq("id", profileId).maybeSingle(),
-    supabase
-      .from("subsidy_items")
-      .select("id, name, category, requested_amount, status")
-      .eq("applicant_id", profileId)
-      .eq("status", "pending")
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(5),
-  ]);
-
-  if (rolesResult.error) {
-    throw rolesResult.error;
-  }
-
-  if (profileResult.error) {
-    throw profileResult.error;
-  }
-
-  if (pendingResult.error) {
-    throw pendingResult.error;
-  }
-
-  const roles = parseRoleAssignments(rolesResult.data);
-
-  return {
-    roleNames: distinct(roles.map((r) => r.name)),
-    roleTypes: distinct(roles.map((r) => r.type)),
-    access: buildRoleAccess(roles),
-    pendingSubsidies: pendingResult.data ?? [],
-    userProfile: {
-      full_name: profileResult.data?.name || user.user_metadata?.name || "",
-      email: null,
-      role: null,
-    },
-  };
-}
-
-export function useSidebarData() {
+export function useSidebarData(data: SidebarData) {
   const pathname = usePathname();
-  const { data, isLoading } = useSWR("sidebar-data", fetchSidebarData, {
-    fallbackData: EMPTY_SIDEBAR_DATA,
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-  });
-
-  const roleNames = data?.roleNames ?? EMPTY_SIDEBAR_DATA.roleNames;
-  const roleTypes = data?.roleTypes ?? EMPTY_SIDEBAR_DATA.roleTypes;
-  const access = data?.access ?? EMPTY_SIDEBAR_DATA.access;
-  const userProfile = data?.userProfile ?? EMPTY_SIDEBAR_DATA.userProfile;
-  const pendingSubsidies =
-    data?.pendingSubsidies ?? EMPTY_SIDEBAR_DATA.pendingSubsidies;
-
+  const { roleNames, roleTypes, access, userProfile, pendingSubsidies } = data;
 
   const navItems: NavItem[] = [
     { href: "/", label: "ホーム", icon: Home },
@@ -152,7 +53,7 @@ export function useSidebarData() {
     roleNames,
     roleTypes,
     userProfile,
-    isLoadingRoles: isLoading,
+    isLoadingRoles: false,
     pendingSubsidies,
     navItems,
   };

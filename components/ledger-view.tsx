@@ -16,10 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  fetchLedgerTransactions,
-  fetchFinancialAccounts,
-} from "@/app/(authenticated)/ledger/actions";
+import { fetchLedgerTransactions } from "@/app/(authenticated)/ledger/actions";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import {
   canCreateClubTransaction,
@@ -69,6 +66,7 @@ type Props = {
   isReadOnly?: boolean;
   /** サーバー側で取得済みの初期データ。最初のグループ分のみ。 */
   initialData?: LedgerInitialData | null;
+  financialAccounts: FinancialAccountInfo[];
 };
 
 // ---------------------------------------------------------------------------
@@ -86,6 +84,7 @@ export default function LedgerView({
   selectedYear,
   isReadOnly = false,
   initialData,
+  financialAccounts,
 }: Props) {
   // --- 会計グループ選択 ---
   const [selectedGroup, setSelectedGroup] = useState<string | undefined>(
@@ -126,11 +125,6 @@ export default function LedgerView({
   const [filterAccountId, setFilterAccountId] = useState<string>("all");
   const [filterKind, setFilterKind] = useState<string>("all");
 
-  // --- Financial accounts ---
-  const [financialAccounts, setFinancialAccounts] = useState<
-    FinancialAccountInfo[]
-  >([]);
-
   const isGlobalAdmin = isAdmin(access);
   const isAccountingUser = isAccounting(access);
   const isCurrentFiscalYear =
@@ -166,16 +160,6 @@ export default function LedgerView({
     },
     [sortKey, sortDir],
   );
-
-  // --- Financial accounts effect (load once) ---
-  useEffect(() => {
-    void (async () => {
-      const res = await fetchFinancialAccounts();
-      if (!("error" in res) && res.data) {
-        setFinancialAccounts(res.data.map((fa) => ({ id: fa.id, name: fa.name })));
-      }
-    })();
-  }, []);
 
   // --- グループ / 年度変更 + Realtime + ledger-refresh を統合した effect ---
   // fetchData を effect 内のローカル関数として定義し、

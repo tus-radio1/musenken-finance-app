@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
 import {
   Card,
@@ -22,18 +22,14 @@ type MemberRoleRow = {
 };
 
 export default async function MembersManagementPage() {
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase } = auth;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const profiles = await fetchMemberProfiles(supabase);
-
-  const { data: allUserRoles } = await supabase
-    .from("user_roles")
-    .select("user_id, roles(name, accounting_group_id)");
+  const [profiles, { data: allUserRoles }] = await Promise.all([
+    fetchMemberProfiles(supabase),
+    supabase.from("user_roles").select("user_id, roles(name, accounting_group_id)"),
+  ]);
 
   const roleNamesByUser: Record<string, string[]> = {};
   (allUserRoles as MemberRoleRow[] | null | undefined)?.forEach((row) => {

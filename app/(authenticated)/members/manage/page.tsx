@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -6,7 +6,6 @@ import {
   type MemberManageRow,
 } from "./_components/manage-members-client";
 import type { RoleOption } from "./_components/edit-member-dialog";
-import { requireRoleAccess } from "@/lib/roles/access";
 import { normalizeJoined } from "@/lib/roles/parse";
 import { canManageMembers, isAdmin } from "@/lib/roles/permissions";
 import {
@@ -28,14 +27,11 @@ type UserRoleAssignmentRow = {
 };
 
 export default async function MembersManagePage() {
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase } = auth;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const access = await requireRoleAccess({ supabase, profileId: user.id });
+  const access = await getCurrentRoles();
   const hasAccess = canManageMembers(access);
 
   if (!hasAccess) {
@@ -47,14 +43,11 @@ export default async function MembersManagePage() {
     );
   }
 
-  // --- データ取得（RLS-respecting client）---
-  const profiles = await fetchMemberProfiles(supabase);
-
-  // 全ロール一覧
-  const { data: rolesData } = await supabase
-    .from("roles")
-    .select("id, name")
-    .order("name");
+  const [profiles, { data: rolesData }, { data: allUserRoles }] = await Promise.all([
+    fetchMemberProfiles(supabase),
+    supabase.from("roles").select("id, name").order("name"),
+    supabase.from("user_roles").select("user_id, role_id, roles(name)"),
+  ]);
 
   const allRoles: RoleOption[] = (
     (rolesData as Array<{ id: string; name: string }> | null) || []
@@ -62,11 +55,6 @@ export default async function MembersManagePage() {
     id: r.id,
     name: r.name,
   }));
-
-  // 全ユーザーのロール割当取得
-  const { data: allUserRoles } = await supabase
-    .from("user_roles")
-    .select("user_id, role_id, roles(name)");
 
   // ユーザーごとのロール情報をマップ
   const rolesByUser: Record<string, { names: string[]; ids: string[] }> = {};

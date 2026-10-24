@@ -1,6 +1,7 @@
+import { cache } from "react";
 import { createClient } from "@/utils/supabase/server";
 import { extractStudentNumberFromUser } from "@/lib/account";
-import { getUserRoleAccess } from "@/lib/roles/access";
+import { getUserRoleAccess, requireRoleAccess } from "@/lib/roles/access";
 import type { RoleAccessContext } from "@/lib/roles/types";
 import type {
   AuthContext,
@@ -49,3 +50,17 @@ export async function resolveAuthWithRoles(options?: {
   if (!roleResult.ok) return { ok: false, error: ROLE_LOOKUP_ERROR };
   return { ok: true, context: authResult.context, access: roleResult.access };
 }
+
+/** Server render only: React discards these snapshots after each request.
+ * Server Actions keep using the uncached resolveAuth* functions above.
+ */
+export const getCurrentUser = cache(async (): Promise<AuthContext | null> => {
+  const result = await resolveAuthContext();
+  return result.ok ? result.context : null;
+});
+
+export const getCurrentRoles = cache(async (): Promise<RoleAccessContext> => {
+  const auth = await getCurrentUser();
+  if (!auth) throw new Error("Authentication required");
+  return requireRoleAccess(auth);
+});
