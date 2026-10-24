@@ -49,6 +49,7 @@ S1〜S3 では service-role クライアントを使っているため、RLS で
 - 未対応：部員の削除（`deleteMember`）は、非管理者が実行するとロールの削除とプロフィールの論理削除が 0 行になる。続く Auth ユーザーの削除でプロフィールが連鎖して物理削除され（取引がある部員では Auth の削除が失敗する）、論理削除の意図どおりにならない。次の対応候補。
 
 ### 2. CI・E2E テストの整備
+- **段階 1 の初回分を実装**：ローカル Supabase 上の Playwright 12 テストと CI の `e2e` ジョブを追加。実行方法は [testing-ci.md](testing-ci.md#e2e-の実行方法)。段階 0 の coverage 下限・Node 固定も追加し、`e2e` の必須チェック化は安定後に行う。
 - CI の補強：カバレッジの下限を設定する、`.nvmrc` で Node を固定する、main への PR にレビュー承認を必須にする、staging・Production 環境にブランチ制限をかける、`deploy-db.yml` を CI 成功後に動かす。
 - Playwright で E2E を導入する。ローカルの Supabase を使い、テストユーザーは global setup で作成する（`seed.sql` は staging にも適用されるため使わない）。最初に通す流れ：ログイン → 領収書付きの申請 → 承認・却下 → 帳簿への反映、そして権限の境界。
 - RLS の pgTAP テストと、Server Action の結合テストを追加する。

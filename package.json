@@ -14,7 +14,10 @@
     "db:reset": "supabase db reset",
     "db:status": "supabase status",
     "db:types": "supabase gen types typescript --local > lib/database.types.ts",
-    "functions:serve": "supabase functions serve"
+    "functions:serve": "supabase functions serve",
+    "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -50,6 +53,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@supabase/mcp-server-supabase": "^0.5.10",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

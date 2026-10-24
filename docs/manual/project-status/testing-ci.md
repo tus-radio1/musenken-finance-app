@@ -195,6 +195,43 @@ Environment にブランチ制限が無いため、`workflow_dispatch` を任意
 
 ---
 
+## E2E の実行方法
+
+段階 1 の最初の 12 テストを `e2e/` に追加しました。Chromium と実際のローカル Supabase を使い、ログイン、PDF・PNG 領収書付き申請、会計・管理者の承認、自己承認の禁止、班長・部長・他の部員の操作制限を検証します。各テストは固有の概要を使うため、順序に依存せず再実行できます。却下・補助金など、計画中の残りのシナリオは今後追加します。
+
+Node は `.nvmrc` の 22 を使います。以下の DB リセットはローカルのデータを初期化します。
+
+```bash
+npm ci
+supabase start -x studio,imgproxy,mailpit,realtime,edge-runtime,logflare,vector,supavisor
+supabase db reset --local
+
+# ローカルキーを表示せず取り込む。シェルの xtrace は有効にしない。
+eval "$(supabase status -o env)"
+export SUPABASE_URL="$API_URL"
+export NEXT_PUBLIC_SUPABASE_URL="$API_URL"
+export NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY"
+export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+
+npm run e2e:install
+npm run build
+npm run e2e
+# DB をリセットせず、もう一度実行してもよい。
+npm run e2e
+```
+
+`NEXT_PUBLIC_*` はビルド時に埋め込まれるため、必ず上記の環境変数を設定してからビルドします。Playwright の `webServer` が `npm run start` を起動するので、ポート 3000 は空けておきます。global setup は接続先がローカル HTTP URL かを確認し、リモートへの管理 API 呼び出しを拒否します。
+
+global setup が `9900001`〜`9900006`（メールは `<学籍番号>@ed.tus.ac.jp`）の一般部員 A・B、会計、管理者、部長、班長を作成します。会計は `accounting` 型で、管理者権限は付けません。会計にも E2E 班の一般ロールを付けるのは、現状の非部全体 INSERT ポリシーに班所属が必要なためです。専用の `team` 型班と `general` 型公開グループを使い、`seed.sql` は変更しません。既存のテストユーザーはパスワードとロールを更新し、E2E 用と識別できない既存ユーザーは上書きしません。
+
+パスワードは実行ごとに生成します（必要なら `E2E_PASSWORD` で指定）。各ロールは実フォームで 1 回ログインし、`e2e/.auth/` の保存済みセッションを各 spec が再利用します。6 ロールで IP 単位の上限（5 回）を超えないよう、setup の各ブラウザには異なるローカル IP の `x-forwarded-for` を設定します。ログイン失敗テストは別のコンテキストで 1 回だけ実行し、アプリのレート制限は変更しません。
+
+結果は `playwright-report/`（`npx playwright show-report` で表示）、失敗時のスクリーンショットや CI の初回リトライの trace は `test-results/` に保存します。認証状態と両ディレクトリは Git 管理外です。CI の `e2e` ジョブはローカルキーでビルドし、失敗時だけ HTML report と trace を 7 日間保存します。認証情報を含み得るため、artifact の扱いには注意します。Ruleset の必須チェックへの追加は安定性を確認してから行います。
+
+段階 0 のリポジトリ内の未対応分も追加しました。`npm run test:coverage` は `lib/**`（生成 DB 型を除く）の lines 40% を下限とし、既存の `app` ジョブで実行します。Node は `.nvmrc` を参照します。型ドリフトの必須検査と pgTAP は既存の `db` ジョブを継続します。GitHub Environments のブランチ制限・main の PR 承認設定はリポジトリ外の設定なので、管理側で別途確認します。
+
+---
+
 ## 関連ドキュメント
 
 - `docs/manual/dev-environment/ci-cd.md`: ワークフローとマイグレーションの流れ
