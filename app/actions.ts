@@ -159,7 +159,7 @@ export async function uploadReceiptAction(formData: FormData) {
   const auth = authResult.context;
 
   // Rate limiting: 10 uploads per hour per user
-  const rateLimitResult = uploadRateLimiter.check(auth.userId);
+  const rateLimitResult = await uploadRateLimiter.check(auth.userId);
   if (!rateLimitResult.success) {
     const retryMinutes = Math.ceil(
       (rateLimitResult.resetAt - Date.now()) / 1000 / 60,

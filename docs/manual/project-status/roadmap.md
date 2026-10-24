@@ -67,6 +67,8 @@ S1〜S3 では service-role クライアントを使っているため、RLS で
 
 ## P2: その後にやる
 
+- **対応済み（2026-10-24）**：IP 取得を共通化し、レート制限を Supabase の固定窓カウンターに永続化。ログインは IP 20 回・学籍番号 5 回/15 分、アップロード 10 回/時、パスワードリセット 3 回/15 分を適用し、DB 障害時はログを残して許可する。未使用の旧 admin アクション 2 ファイルも削除した。
+
 ### UI・デザインの統一（4 段階）
 1. 意味を持つ色トークン（success・warning・info）、Badge のバリアント、ステータス表記の一元化。
 2. `PageShell`・`PageHeader`、`(authenticated)/loading.tsx`、`AccessDenied`・`ErrorState`・`EmptyState` を作り、年度セレクタを統合する。
@@ -82,7 +84,7 @@ S1〜S3 では service-role クライアントを使っているため、RLS で
 ### 機能の欠落
 - 振替フォーム（`TransferForm`）を画面に組み込む（バックエンドは実装済み）。
 - 口座マスタ（`financial_accounts`）の管理画面と、監査ログの閲覧画面を作る。
-- 未使用コードを削除する：`app/(authenticated)/admin/actions.ts`、`admin/create-user.ts`。
+- ~~未使用コードを削除する：`app/(authenticated)/admin/actions.ts`、`admin/create-user.ts`。~~ 上記 P2 対応で削除済み。
 - ~~部全体の班を名前 `"部全体"` で判定している箇所（`components/ledger-view.tsx:127`）を、`type === "club"` での判定に揃える。~~ PR-A（R4）で対応済み。
 
 ## 今はやらないもの

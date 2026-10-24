@@ -119,6 +119,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"rate_limit_hits": {
+                  Row: {
+                    "bucket": string,"count": number,"key_hash": string,"reset_at": string,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "bucket": string,"count": number,"key_hash": string,"reset_at": string,"window_start": string
+                  }
+                  Update: {
+                    "bucket"?: string,"count"?: number,"key_hash"?: string,"reset_at"?: string,"window_start"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"roles": {
                   Row: {
                     "accounting_group_id": string | null,"created_at": string | null,"id": string,"name": string,"type": string,"updated_at": string | null
@@ -342,6 +356,11 @@ isOneToOne: false
                            },
 "is_restricted_api_writer":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"rate_limit_hit":
+{ Args: { "p_bucket": string,"p_key": string,"p_max": number,"p_window_seconds": number }; Returns: {
+              "allowed": boolean,"remaining": number,"reset_at": string
+            }[]
                            },
 "soft_delete_subsidy_item":
 { Args: { "p_id": string }; Returns: string
