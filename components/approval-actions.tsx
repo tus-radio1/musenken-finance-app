@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/status-badge";
+import { ConfirmDialog } from "@/components/feedback/confirm-dialog";
 
 type Props = {
   transactionId: string;
@@ -42,25 +43,25 @@ export function ApprovalActions({
   amount: _amount,
 }: Props) {
   const [loading, setLoading] = useState(false);
+  const [confirmationStatus, setConfirmationStatus] = useState<"approved" | "rejected" | null>(null);
 
   // 将来拡張(部全体会計): transaction_kind = "transfer" の場合、
   // ペアとなる2行を同時に承認/却下する追加ロジックが必要。
   // cf. docs/club-wide-ledger-spec.md — 承認フロー
   const handleAction = async (newStatus: "approved" | "rejected") => {
-    if (
-      !confirm(newStatus === "approved" ? "承認しますか？" : "却下しますか？")
-    )
-      return;
-
     setLoading(true);
-    const res = await updateTransactionStatus(transactionId, newStatus);
-    setLoading(false);
-
-    if ("error" in res) {
-      toast.error(res.error);
-    } else {
-      toast.success(newStatus === "approved" ? "承認しました" : "却下しました");
-      window.dispatchEvent(new Event("ledger-refresh"));
+    try {
+      const res = await updateTransactionStatus(transactionId, newStatus);
+      if ("error" in res) {
+        toast.error(res.error);
+      } else {
+        toast.success(newStatus === "approved" ? "承認しました" : "却下しました");
+        window.dispatchEvent(new Event("ledger-refresh"));
+      }
+    } catch {
+      toast.error("処理に失敗しました");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -76,15 +77,15 @@ export function ApprovalActions({
             <Button
               size="icon"
               variant="outline"
-              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+              className="h-11 w-11 text-success-foreground hover:bg-success hover:text-success-foreground"
               aria-label="承認する"
-              onClick={() => handleAction("approved")}
+              onClick={() => setConfirmationStatus("approved")}
               disabled={loading}
             >
               {loading ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
               ) : (
-                <Check className="h-4 w-4" />
+                <Check className="h-4 w-4" aria-hidden="true" />
               )}
             </Button>
           </TooltipTrigger>
@@ -100,12 +101,12 @@ export function ApprovalActions({
             <Button
               size="icon"
               variant="outline"
-              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="h-11 w-11 text-destructive hover:text-destructive hover:bg-destructive/10"
               aria-label="却下する"
-              onClick={() => handleAction("rejected")}
+              onClick={() => setConfirmationStatus("rejected")}
               disabled={loading}
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -113,6 +114,18 @@ export function ApprovalActions({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      <ConfirmDialog
+        open={confirmationStatus !== null}
+        onOpenChange={(open) => !open && setConfirmationStatus(null)}
+        title={confirmationStatus === "approved" ? "申請を承認しますか？" : "申請を却下しますか？"}
+        description={confirmationStatus === "approved" ? "この申請を承認します。" : "この申請を却下します。"}
+        confirmLabel={confirmationStatus === "approved" ? "承認する" : "却下する"}
+        destructive={confirmationStatus === "rejected"}
+        pending={loading}
+        onConfirm={() => {
+          if (confirmationStatus) return handleAction(confirmationStatus);
+        }}
+      />
     </div>
   );
 }

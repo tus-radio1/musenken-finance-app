@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { deleteGroupYearData } from "../actions";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 type DeleteGroupYearButtonProps = {
   groupId: string;
@@ -51,12 +52,13 @@ export function DeleteGroupYearButton({
         <Button
           variant="ghost"
           size="icon"
-          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+          aria-label="年度予算を削除"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
         </Button>
       </AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent className={DIALOG_WIDTH_CLASS.confirm}>
         <AlertDialogHeader>
           <AlertDialogTitle>
             {`「${groupName}」の${fiscalYear}年度データを削除しますか？`}
@@ -65,7 +67,7 @@ export function DeleteGroupYearButton({
             この操作は取り消せません。予算データおよびすべての出納帳（取引記録）が完全に削除されます。
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>
             キャンセル
