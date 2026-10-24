@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium, expect, type FullConfig } from "@playwright/test";
 import type { User } from "@supabase/supabase-js";
@@ -67,6 +67,18 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     if (assignmentError) throw assignmentError;
   }
 
+  // Account ownership was checked above. Delete only these six E2E account
+  // hashes and user IDs, so repeated suites do not inherit fixed-window limits.
+  const hash = (key: string): string => createHash("sha256").update(key).digest("hex");
+  for (const [bucket, keys] of [
+    ["login-account", Object.values(users).map((user) => user.studentNumber)],
+    ["upload", Object.values(userIds)],
+  ] as const) {
+    const { error } = await admin.from("rate_limit_hits").delete()
+      .eq("bucket", bucket).in("key_hash", keys.map(hash));
+    if (error) throw error;
+  }
+
   const { data: fy, error: fyError } = await admin.from("fiscal_years")
     .select("year, start_date").eq("is_current", true).single();
   if (fyError) throw fyError;
@@ -83,13 +95,14 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   await writeFile(metadataPath, JSON.stringify(metadata), { mode: 0o600 });
 
   const browser = await chromium.launch();
+  // A fresh documentation-range IP per run avoids clearing any shared IP row.
+  // All six accounts share this bucket, within the 20-attempt/IP limit.
+  const clientIp = `2001:db8:${randomBytes(10).toString("hex").match(/.{4}/g)!.join(":")}:1`;
   try {
-    for (const [index, role] of (Object.keys(users) as UserRole[]).entries()) {
+    for (const role of Object.keys(users) as UserRole[]) {
       const context = await browser.newContext({
         baseURL: config.projects[0].use.baseURL,
-        // Six roles exceed the five-attempt/IP limit even once each. Simulate
-        // separate local clients using the same header the login action reads.
-        extraHTTPHeaders: { "x-forwarded-for": `127.0.0.${index + 2}` },
+        extraHTTPHeaders: { "x-forwarded-for": clientIp },
       });
       try {
         const page = await context.newPage();
