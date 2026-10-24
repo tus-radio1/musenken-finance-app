@@ -94,7 +94,7 @@ export function MobileSidebar() {
           className="h-10 w-10 rounded-full bg-background/80 backdrop-blur shadow-sm border text-foreground"
           aria-label="メニューを開く"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5" aria-hidden="true" />
         </Button>
       </div>
 
@@ -126,7 +126,7 @@ export function MobileSidebar() {
                       active && "font-semibold",
                     )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4" aria-hidden="true" />
                     <span>{item.label}</span>
                   </Button>
                 </Link>

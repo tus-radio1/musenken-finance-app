@@ -120,7 +120,7 @@ export function LedgerMobileCards({
                   {r.is_subsidy && (
                     <Badge
                       variant="secondary"
-                      className="mr-1 bg-blue-100 text-blue-800 hover:bg-blue-100 border-none text-xs"
+                      className="mr-1 bg-info text-info-foreground hover:bg-info border-none text-xs"
                     >
                       支援金
                     </Badge>
@@ -151,8 +151,7 @@ export function LedgerMobileCards({
                       <ChevronDown
                         className={`ml-1 h-3.5 w-3.5 transition-transform ${
                           openCards.has(r.id) ? "rotate-180" : ""
-                        }`}
-                      />
+                        }`} aria-hidden="true" />
                     </Button>
                   </CollapsibleTrigger>
                 </div>
@@ -208,7 +207,7 @@ export function LedgerMobileCards({
                           return (
                             <Button variant="outline" size="sm" asChild>
                               <Link href="/subsidies/manage">
-                                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                <ExternalLink className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                                 支援金
                               </Link>
                             </Button>
@@ -217,7 +216,7 @@ export function LedgerMobileCards({
                           return (
                             <Button variant="outline" size="sm" asChild>
                               <Link href="/subsidies">
-                                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                <ExternalLink className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                                 支援金
                               </Link>
                             </Button>
@@ -234,7 +233,7 @@ export function LedgerMobileCards({
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          <Receipt className="h-3.5 w-3.5 mr-1" />
+                          <Receipt className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                           領収書
                         </a>
                       </Button>

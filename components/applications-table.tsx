@@ -155,7 +155,7 @@ export function ApplicationsTable({
       {/* フィルタ・検索バー */}
       <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
             placeholder="概要で検索..."
             value={searchQuery}
@@ -164,7 +164,7 @@ export function ApplicationsTable({
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Select value={incomeTypeFilter} onValueChange={setIncomeTypeFilter}>
             <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="支出・収入" />
@@ -228,7 +228,7 @@ export function ApplicationsTable({
                         onClick={() => toggleSort("date")}
                       >
                         日付
-                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                     </TableHead>
                     <TableHead>収支</TableHead>
@@ -242,7 +242,7 @@ export function ApplicationsTable({
                         onClick={() => toggleSort("amount")}
                       >
                         金額
-                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                        <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                     </TableHead>
                     <TableHead className="w-[100px]">状態</TableHead>
@@ -311,7 +311,7 @@ export function ApplicationsTable({
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                <ExternalLink className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                                 表示
                               </a>
                             </Button>
@@ -406,8 +406,7 @@ export function ApplicationsTable({
                           <ChevronDown
                             className={`ml-1 h-3.5 w-3.5 transition-transform ${
                               openCards.has(tx.id) ? "rotate-180" : ""
-                            }`}
-                          />
+                            }`} aria-hidden="true" />
                         </Button>
                       </CollapsibleTrigger>
                     </div>
@@ -439,7 +438,7 @@ export function ApplicationsTable({
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                              <ExternalLink className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                               表示
                             </a>
                           </Button>

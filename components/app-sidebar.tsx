@@ -35,7 +35,7 @@ export function AppSidebar() {
                   active && "font-semibold",
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4" aria-hidden="true" />
                 <span>{item.label}</span>
               </Button>
             </Link>

@@ -51,7 +51,7 @@ export function LedgerSummary({ budgetAmount, carryoverAmount, totals }: Props) 
         <div className="bg-muted rounded p-4">
           <div className="text-sm text-muted-foreground">今年度予算残高</div>
           <div
-            className={`text-xl font-semibold ${totals.budgetRemaining < 0 ? "text-red-600" : ""}`}
+            className={`text-xl font-semibold ${totals.budgetRemaining < 0 ? "text-destructive" : ""}`}
           >
             {formatCurrency(totals.budgetRemaining)}
           </div>

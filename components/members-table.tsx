@@ -72,6 +72,7 @@ function SortableHeader({
       {label}
       <Icon
         className={`h-3.5 w-3.5 ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}
+        aria-hidden="true"
       />
     </Button>
   );
@@ -171,12 +172,13 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="members-filter-name" className="text-xs font-medium text-muted-foreground">
             氏名
           </label>
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
+              id="members-filter-name"
               placeholder="名前で検索"
               value={filterName}
               onChange={(e) => setFilterName(e.target.value)}
@@ -185,12 +187,13 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
           </div>
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="members-filter-student-number" className="text-xs font-medium text-muted-foreground">
             学籍番号
           </label>
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
+              id="members-filter-student-number"
               placeholder="学籍番号で検索"
               value={filterStudentNumber}
               onChange={(e) => setFilterStudentNumber(e.target.value)}
@@ -199,11 +202,11 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
           </div>
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
+          <span id="members-filter-grade-label" className="text-xs font-medium text-muted-foreground">
             学年
-          </label>
+          </span>
           <Select value={filterGrade} onValueChange={setFilterGrade}>
-            <SelectTrigger className="h-9 w-28 text-sm">
+            <SelectTrigger className="h-9 w-28 text-sm" aria-labelledby="members-filter-grade-label">
               <SelectValue placeholder="全学年" />
             </SelectTrigger>
             <SelectContent>
@@ -217,22 +220,23 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
           </Select>
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
+          <span id="members-filter-roles-label" className="text-xs font-medium text-muted-foreground">
             役職
-          </label>
+          </span>
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-9 w-36 justify-between text-sm font-normal"
+                aria-labelledby="members-filter-roles-label"
               >
                 <span className="truncate">
                   {filterRoles.length === 0
                     ? "全役職"
                     : `${filterRoles.length}件選択中`}
                 </span>
-                <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-48 p-2" align="start">
@@ -273,7 +277,7 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
             className="h-9 gap-1 text-xs text-muted-foreground"
             onClick={clearFilters}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
             フィルタをクリア
           </Button>
         )}

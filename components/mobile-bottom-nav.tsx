@@ -31,7 +31,7 @@ export function MobileBottomNav() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
+              <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} aria-hidden="true" />
               <span>{item.label}</span>
             </Link>
           );

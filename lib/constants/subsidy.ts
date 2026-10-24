@@ -41,7 +41,7 @@ export const CATEGORY_EXPENSE_TYPES: Record<string, string[]> = {
 
 /** 支援金種別バッジの色 (テーブル用) */
 export const CATEGORY_BADGE_COLORS: Record<string, string> = {
-  activity: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  league: "bg-sky-100 text-sky-800 border-sky-200",
-  special: "bg-amber-100 text-amber-800 border-amber-200",
+  activity: "bg-success text-success-foreground border-success/50",
+  league: "bg-info text-info-foreground border-info/50",
+  special: "bg-warning text-warning-foreground border-warning/50",
 };

@@ -62,7 +62,7 @@ export function ManageDesktopTable({
                 onClick={() => onSortToggle("created_at")}
               >
                 申請日
-                <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
                 {sortKey === "created_at" && (
                   <span className="ml-0.5 text-[10px]">
                     {sortOrder === "asc" ? "↑" : "↓"}
@@ -81,7 +81,7 @@ export function ManageDesktopTable({
                 onClick={() => onSortToggle("requested_amount")}
               >
                 申請額
-                <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
                 {sortKey === "requested_amount" && (
                   <span className="ml-0.5 text-[10px]">
                     {sortOrder === "asc" ? "↑" : "↓"}
@@ -135,7 +135,7 @@ export function ManageDesktopTable({
                 <td className="p-3">
                   <div className="font-medium">{item.name}</div>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    <span className="px-1.5 py-0 rounded text-[11px] bg-blue-100 text-blue-800 border border-blue-200">
+                    <span className="px-1.5 py-0 rounded text-[11px] bg-info text-info-foreground border border-info/50">
                       {CATEGORY_MAP[item.category] || item.category}
                     </span>
                     <span className="px-1.5 py-0 rounded text-[11px] bg-muted text-muted-foreground border">
@@ -177,7 +177,7 @@ export function ManageDesktopTable({
                   <span
                     className={
                       item.calculated_amount > 0
-                        ? "font-medium text-emerald-600"
+                        ? "font-medium text-income"
                         : "text-muted-foreground"
                     }
                   >
@@ -192,9 +192,9 @@ export function ManageDesktopTable({
                         href={receiptViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center text-blue-600 hover:underline text-xs"
+                        className="flex items-center text-primary hover:underline text-xs"
                       >
-                        <Receipt className="h-4 w-4 mr-1" />
+                        <Receipt className="h-4 w-4 mr-1" aria-hidden="true" />
                         領収書
                       </a>
                     ) : null}
@@ -203,9 +203,9 @@ export function ManageDesktopTable({
                         href={evidenceViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center text-blue-600 hover:underline text-xs"
+                        className="flex items-center text-primary hover:underline text-xs"
                       >
-                        <FileText className="h-4 w-4 mr-1" />
+                        <FileText className="h-4 w-4 mr-1" aria-hidden="true" />
                         根拠書類
                       </a>
                     ) : null}
@@ -223,8 +223,7 @@ export function ManageDesktopTable({
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
                         openDetailRows.has(item.id) ? "rotate-180" : ""
-                      }`}
-                    />
+                      }`} aria-hidden="true" />
                   </Button>
                 </td>
 
@@ -249,7 +248,7 @@ export function ManageDesktopTable({
                         <span
                           className={
                             item.actual_expense > 0
-                              ? "font-medium text-blue-600"
+                              ? "font-medium text-expense"
                               : "text-muted-foreground"
                           }
                         >

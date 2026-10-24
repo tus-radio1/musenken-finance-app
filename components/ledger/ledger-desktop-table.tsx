@@ -63,11 +63,11 @@ function SortableHeader({
       >
         {label}
         {isActive && currentSortDir === "asc" ? (
-          <ArrowUp className="h-3.5 w-3.5" />
+          <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
         ) : isActive && currentSortDir === "desc" ? (
-          <ArrowDown className="h-3.5 w-3.5" />
+          <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
         ) : (
-          <ArrowUpDown className="h-3.5 w-3.5 opacity-30" />
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-30" aria-hidden="true" />
         )}
       </button>
     </TableHead>
@@ -198,7 +198,7 @@ export function LedgerDesktopTable({
                   {r.is_subsidy && (
                     <Badge
                       variant="secondary"
-                      className="mr-1 bg-blue-100 text-blue-800 hover:bg-blue-100 border-none"
+                      className="mr-1 bg-info text-info-foreground hover:bg-info border-none"
                     >
                       支援金
                     </Badge>
@@ -206,7 +206,7 @@ export function LedgerDesktopTable({
                   {r.transaction_kind === "transfer" && (
                     <Badge
                       variant="secondary"
-                      className="mr-1 bg-purple-100 text-purple-800 hover:bg-purple-100 border-none"
+                      className="mr-1 bg-secondary text-secondary-foreground hover:bg-secondary border-none"
                     >
                       移動
                     </Badge>
@@ -244,9 +244,9 @@ export function LedgerDesktopTable({
                         return (
                           <Link
                             href="/subsidies/manage"
-                            className="flex items-center text-blue-600 hover:underline text-xs"
+                            className="flex items-center text-primary hover:underline text-xs"
                           >
-                            <ExternalLink className="h-4 w-4 mr-1" />
+                            <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
                             支援金詳細
                           </Link>
                         );
@@ -254,9 +254,9 @@ export function LedgerDesktopTable({
                         return (
                           <Link
                             href="/subsidies"
-                            className="flex items-center text-blue-600 hover:underline text-xs"
+                            className="flex items-center text-primary hover:underline text-xs"
                           >
-                            <ExternalLink className="h-4 w-4 mr-1" />
+                            <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
                             支援金詳細
                           </Link>
                         );
@@ -266,9 +266,9 @@ export function LedgerDesktopTable({
                             href={r.receipt_public_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center text-blue-600 hover:underline text-xs"
+                            className="flex items-center text-primary hover:underline text-xs"
                           >
-                            <Receipt className="h-4 w-4 mr-1" />
+                            <Receipt className="h-4 w-4 mr-1" aria-hidden="true" />
                             領収書確認
                           </a>
                         );
@@ -283,9 +283,9 @@ export function LedgerDesktopTable({
                           href={r.receipt_public_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center text-blue-600 hover:underline text-xs"
+                          className="flex items-center text-primary hover:underline text-xs"
                         >
-                          <Receipt className="h-4 w-4 mr-1" />
+                          <Receipt className="h-4 w-4 mr-1" aria-hidden="true" />
                           確認
                         </a>
                       );

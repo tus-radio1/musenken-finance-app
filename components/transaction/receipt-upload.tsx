@@ -82,7 +82,7 @@ export function ReceiptUpload({ file, onFileChange, existingUrl, disabled, error
         )}
         {file && file.type === "application/pdf" && (
           <div className="w-full max-w-[200px] h-24 border rounded-md bg-muted flex items-center justify-center text-sm font-medium text-muted-foreground flex-col gap-2">
-            <FileText className="h-8 w-8 text-muted-foreground/60" />
+            <FileText className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
             <span>PDFデータ</span>
           </div>
         )}
