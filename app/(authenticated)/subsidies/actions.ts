@@ -25,6 +25,7 @@ import {
   isReceiptPathOwnedBy,
 } from "@/lib/receipt-upload";
 import { removeReplacedReceipt } from "@/lib/receipt-storage";
+import { getStatusDisplay } from "@/lib/status-display";
 import {
   updateMySubsidyItemSchema,
   deleteSubsidyItemSchema,
@@ -188,7 +189,9 @@ export async function updateMySubsidyItem(
   }
 
   if (item.status !== "pending" && item.status !== "approved") {
-    return { error: "受付中または審査通過の申請のみ編集できます" };
+    return {
+      error: `受付中または${getStatusDisplay("subsidy", "approved").label}の申請のみ編集できます`,
+    };
   }
 
   let updateData: Record<string, unknown>;

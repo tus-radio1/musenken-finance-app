@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { STATUS_VARIANT_MAP as STATUS_MAP } from "@/lib/constants/subsidy";
+import { getStatusOptions } from "@/lib/status-display";
 import type { SortKey, SortOrder } from "./types";
 
 type Profile = { id: string; name: string };
@@ -123,8 +123,8 @@ export function ManageFilterBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">すべての状況</SelectItem>
-              {Object.entries(STATUS_MAP).map(([key, { label }]) => (
-                <SelectItem key={key} value={key}>
+              {getStatusOptions("subsidy").map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>
               ))}

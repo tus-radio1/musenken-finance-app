@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STATUS_LABELS } from "@/lib/constants/subsidy";
+import { getStatusOptions } from "@/lib/status-display";
 
 type AccountingGroup = { id: string; name: string };
 
@@ -98,8 +98,8 @@ export function ItemsFilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">すべての状態</SelectItem>
-            {Object.entries(STATUS_LABELS).map(([key, label]) => (
-              <SelectItem key={key} value={key}>
+            {getStatusOptions("subsidy").map(({ value, label }) => (
+              <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>
             ))}

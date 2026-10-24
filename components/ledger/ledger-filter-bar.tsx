@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { FinancialAccountInfo } from "./types";
+import { getStatusOptions } from "@/lib/status-display";
 
 type Props = {
   loading: boolean;
@@ -102,13 +103,11 @@ export function LedgerFilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">すべて</SelectItem>
-            <SelectItem value="pending">受付中</SelectItem>
-            <SelectItem value="accepted">受付済</SelectItem>
-            <SelectItem value="receipt_received">領収書受領済</SelectItem>
-            <SelectItem value="approved">承認済</SelectItem>
-            <SelectItem value="rejected">却下</SelectItem>
-            <SelectItem value="received">受領済</SelectItem>
-            <SelectItem value="refunded">処理済(確定)</SelectItem>
+            {getStatusOptions("transaction").map(({ value, label }) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

@@ -144,7 +144,7 @@ export function ItemsDesktopTable({
                       ? formatCurrency(item.approved_amount)
                       : "-"}
                   </TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
+                  <TableCell><StatusBadge status={item.status} domain="subsidy" /></TableCell>
                   <TableCell className="w-[120px]">
                     <div className="flex flex-col gap-1">
                       {item.receipt_public_url ? (

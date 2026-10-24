@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { formatStoredDate } from "@/lib/date";
+import { EmptyState } from "@/components/feedback/empty-state";
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(
@@ -15,6 +16,7 @@ type Item = {
   description: string;
   amount: number;
   approval_status: string;
+  source: "transaction" | "subsidy";
 };
 
 export function RecentApplications({ items }: { items: Item[] }) {
@@ -27,9 +29,7 @@ export function RecentApplications({ items }: { items: Item[] }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {items.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            申請はまだありません。
-          </p>
+          <EmptyState message="申請はまだありません。" className="py-0 text-left text-xs" />
         )}
         {items.map((item) => {
           return (
@@ -44,7 +44,11 @@ export function RecentApplications({ items }: { items: Item[] }) {
                 <div className="text-[11px] text-muted-foreground flex items-center gap-2">
                   <span>{formatStoredDate(item.date)}</span>
                   <span>・</span>
-                  <StatusBadge status={item.approval_status} className="text-[10px] px-1.5 py-0" />
+                  <StatusBadge
+                    status={item.approval_status}
+                    domain={item.source}
+                    className="text-[10px] px-1.5 py-0"
+                  />
                 </div>
               </div>
               <div className="text-right shrink-0">

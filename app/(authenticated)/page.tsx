@@ -115,7 +115,7 @@ export default async function Home() {
       ["pending", "paid"].includes(s.status as string),
     ).length;
 
-  // 承認済: 経費の「承認済」「領収書受領済」「返金済」+ 支援金の「審査通過(receipt_submitted)」「返金済(receipt_received)」
+  // 完了分: 経費と支援金の完了ステータスを合算
   const approvedCountThisYear =
     txList.filter((tx) =>
       ["approved", "receipt_received", "refunded"].includes(

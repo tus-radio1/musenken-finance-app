@@ -20,9 +20,10 @@ import { formatCurrency } from "@/lib/format";
 import {
   CATEGORY_LABELS as CATEGORY_MAP,
   EXPENSE_TYPE_LABELS as EXPENSE_TYPE_MAP,
-  STATUS_VARIANT_MAP as STATUS_MAP,
 } from "@/lib/constants/subsidy";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { getStatusOptions } from "@/lib/status-display";
+import { EmptyState } from "@/components/feedback/empty-state";
 import type { SubsidyItem, SortKey, SortOrder } from "./types";
 
 type ManageDesktopTableProps = {
@@ -97,11 +98,8 @@ export function ManageDesktopTable({
         <tbody className="divide-y">
           {filteredItems.length === 0 ? (
             <tr>
-              <td
-                colSpan={9}
-                className="p-6 text-center text-muted-foreground"
-              >
-                該当する支援金申請はありません
+              <td colSpan={9} className="p-6">
+                <EmptyState message="該当する支援金申請はありません" className="py-0" />
               </td>
             </tr>
           ) : (
@@ -160,8 +158,8 @@ export function ManageDesktopTable({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(STATUS_MAP).map(([key, { label }]) => (
-                        <SelectItem key={key} value={key}>
+                      {getStatusOptions("subsidy").map(({ value, label }) => (
+                        <SelectItem key={value} value={value}>
                           {label}
                         </SelectItem>
                       ))}

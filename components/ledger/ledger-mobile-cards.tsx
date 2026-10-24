@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/format";
 import { formatStoredDate } from "@/lib/date";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
 import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/feedback/empty-state";
 import { ApprovalActions } from "@/components/approval-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -74,9 +75,7 @@ export function LedgerMobileCards({
   return (
     <div className="xl:hidden space-y-3">
       {rows.length === 0 ? (
-        <div className="py-8 text-center text-muted-foreground text-sm">
-          取引データがありません
-        </div>
+        <EmptyState message="取引データがありません" />
       ) : (
         rows.map((r) => {
           const isOwner =
@@ -108,8 +107,8 @@ export function LedgerMobileCards({
                     <div
                       className={`text-base font-semibold ${
                         Number(r.amount) < 0
-                          ? "text-red-600"
-                          : "text-green-600"
+                          ? "text-expense"
+                          : "text-income"
                       }`}
                     >
                       {formatCurrency(Number(r.amount))}
@@ -134,6 +133,7 @@ export function LedgerMobileCards({
                     {r.is_subsidy ? (
                       <StatusBadge
                         status={r.approval_status || "pending"}
+                        domain="subsidy"
                       />
                     ) : (
                       <ApprovalActions
