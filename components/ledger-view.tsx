@@ -30,6 +30,9 @@ import {
 import type { RoleAccessContext } from "@/lib/roles/types";
 import { createClient } from "@/utils/supabase/client";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
+import { PageHeader } from "@/components/layout/page-header";
+import { ErrorState } from "@/components/feedback/error-state";
+import { EmptyState } from "@/components/feedback/empty-state";
 import {
   calculateLedgerTotals,
   calculateClubLedgerSummary,
@@ -92,6 +95,8 @@ export default function LedgerView({
   // --- データ state ---
   // initialData がある場合は初期値として使う (P-1: 二重フェッチ回避)
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [rows, setRows] = useState<LedgerTransaction[]>(
     () => initialData?.data ?? [],
   );
@@ -191,10 +196,9 @@ export default function LedgerView({
       if (!active) return;
 
       if ("error" in res) {
-        setRows([]);
-        setBudgetAmount(0);
-        setCarryoverAmount(0);
+        setLoadError(true);
       } else {
+        setLoadError(false);
         setRows((res.data as LedgerTransaction[]) || []);
         setBudgetAmount(Number(res.budgetAmount) || 0);
         setCarryoverAmount(Number(res.carryoverAmount) || 0);
@@ -246,7 +250,7 @@ export default function LedgerView({
         void supabase.removeChannel(channel);
       }
     };
-  }, [selectedGroup, fyYear, teams]);
+  }, [selectedGroup, fyYear, teams, retryKey]);
 
   // --- 集計 (lib/ledger.ts の純粋関数に委譲) ---
   const totals = useMemo(
@@ -335,12 +339,13 @@ export default function LedgerView({
   return (
     <>
       {/* ヘッダー: グループ選択 + 年度切替 */}
-      <div>
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold tracking-tight flex items-baseline gap-0 flex-wrap">
+      <PageHeader
+        title={selectedTeam ? `${selectedTeam.name}の出納帳` : "出納帳"}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-              <SelectTrigger className="inline-flex w-auto gap-1 border-none shadow-none px-0 text-2xl font-bold h-auto focus:ring-0 text-primary border-b-2 border-dotted border-primary/40 rounded-none hover:border-primary transition-colors cursor-pointer">
-                <SelectValue placeholder="選択してください" />
+              <SelectTrigger aria-label="会計グループ" className="w-[180px]">
+                <SelectValue placeholder="グループを選択" />
               </SelectTrigger>
               <SelectContent>
                 {teams.map((tm) => (
@@ -350,23 +355,30 @@ export default function LedgerView({
                 ))}
               </SelectContent>
             </Select>
-            <span className="ml-1">の出納帳</span>
-          </h1>
-          {fiscalYears && fiscalYears.length > 0 && (
-            <FiscalYearSelector
-              fiscalYears={fiscalYears}
-              selectedYear={selectedYear}
-              basePath="/ledger"
-            />
-          )}
-        </div>
-        {isReadOnly && (
-          <div className="mt-3 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
-            過年度データのため閲覧専用です
+            {fiscalYears && fiscalYears.length > 0 && (
+              <FiscalYearSelector
+                fiscalYears={fiscalYears}
+                selectedYear={selectedYear}
+                basePath="/ledger"
+              />
+            )}
           </div>
-        )}
-      </div>
+        }
+      />
+      {isReadOnly && (
+        <div className="rounded-md border border-warning/50 bg-warning px-4 py-3 text-sm text-warning-foreground">
+          過年度データのため閲覧専用です
+        </div>
+      )}
 
+      {loadError ? (
+        <ErrorState
+          title="出納帳データを読み込めませんでした"
+          description="取引データの取得中にエラーが発生しました。時間をおいて再度お試しください。"
+          onRetry={() => setRetryKey((current) => current + 1)}
+        />
+      ) : (
+        <>
       {/* サマリーカード */}
       {isClubWideGroup && clubSummary ? (
         <ClubLedgerSummary
@@ -406,6 +418,13 @@ export default function LedgerView({
             onFilterKindChange={isClubWideGroup ? setFilterKind : undefined}
           />
 
+          {processedRows.length === 0 ? (
+            <EmptyState
+              message={rows.length === 0 ? "取引データがありません" : "条件に一致する取引がありません"}
+              className="py-6"
+            />
+          ) : (
+            <>
           {/* モバイル表示 */}
           <LedgerMobileCards
             rows={processedRows}
@@ -436,8 +455,12 @@ export default function LedgerView({
             accountingUserId={accountingUserId}
             showExtendedColumns={isClubWideGroup}
           />
+            </>
+          )}
         </CardContent>
       </Card>
+        </>
+      )}
     </>
   );
 }

@@ -61,6 +61,8 @@
 | ナビゲーション | `AppSidebar` と `MobileSidebar` が、ナビ項目・申請中の支援金リスト・ロール表示の JSX をほぼ二重に持つ | `SidebarNavList` と `PendingSubsidyList` を切り出して両方から使う（`components/app-sidebar.tsx:25-110`, `components/mobile-sidebar.tsx:111-165`） |
 | `formatCurrency` | 5 箇所で再定義 | `lib/format.ts` の関数に寄せる |
 
+段階 2 の実装では、一覧ページの幅を `max-w-7xl`、設定などのフォームページの幅を `max-w-3xl` に統一します。ページ本体の横幅は `PageShell` の `list` / `form` で選び、モバイル余白と縦方向の間隔も同じシェルで管理します。
+
 ## アクセシビリティ・レスポンシブ
 
 ### アクセシビリティ

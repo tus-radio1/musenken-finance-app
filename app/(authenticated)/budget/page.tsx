@@ -11,7 +11,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { YearSelector } from "./_components/year-selector";
 import { BudgetUpdateDialog } from "./_components/budget-update-dialog";
 import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
 import { ToggleGroupActiveDialog } from "./_components/toggle-group-active-dialog";
@@ -27,6 +26,10 @@ import {
 } from "@/lib/roles/permissions";
 import { getAccountingGroups, getFiscalYears } from "@/lib/cache";
 import { formatCurrency } from "@/lib/format";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { AccessDenied } from "@/components/feedback/access-denied";
+import { FiscalYearSelector } from "@/components/fiscal-year-selector";
 
 const BudgetOverview = dynamic(
   () =>
@@ -104,18 +107,10 @@ export default async function BudgetPage({
   // 会計ロールを持たないユーザーはアクセス不可
   if (!canViewBudgetPage(access)) {
     return (
-      <main className="flex-1 flex items-center justify-center p-6">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>アクセス権限がありません</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              このページは会計またはAdmin権限を持つユーザーのみアクセスできます。
-            </p>
-          </CardContent>
-        </Card>
-      </main>
+      <PageShell>
+        <PageHeader title="予算管理" />
+        <AccessDenied description="このページは会計またはAdmin権限を持つユーザーのみアクセスできます。" />
+      </PageShell>
     );
   }
 
@@ -192,22 +187,20 @@ export default async function BudgetPage({
   const canEdit = canEditBudget(access, { isCurrent: isCurrentFY });
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-5xl mx-auto w-full space-y-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              予算管理
-            </h1>
-          </div>
-          <YearSelector
+    <PageShell>
+      <PageHeader
+        title="予算管理"
+        actions={
+          <FiscalYearSelector
             fiscalYears={(fiscalYears || []).map((fy) => ({ ...fy, is_current: fy.is_current ?? false }))}
             selectedYear={fyYear}
+            basePath="/budget"
           />
-        </div>
+        }
+      />
 
         {!isCurrentFY && !isGlobalAdmin && (
-          <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+          <div className="rounded-md border border-warning/50 bg-warning px-4 py-3 text-sm text-warning-foreground">
             過年度データのため閲覧専用です
           </div>
         )}
@@ -274,10 +267,10 @@ export default async function BudgetPage({
                         <span
                           className={`${
                             usageRate > 90
-                              ? "text-red-600 font-semibold"
+                              ? "text-danger-foreground font-semibold"
                               : usageRate > 75
-                                ? "text-orange-600"
-                                : "text-green-600"
+                                ? "text-warning-foreground"
+                                : "text-success-foreground"
                           }`}
                         >
                           {usageRate.toFixed(1)}%
@@ -331,7 +324,6 @@ export default async function BudgetPage({
             )}
           </div>
         )}
-      </div>
-    </main>
+    </PageShell>
   );
 }

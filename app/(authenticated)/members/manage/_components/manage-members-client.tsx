@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/feedback/empty-state";
 import {
   Popover,
   PopoverContent,
@@ -368,9 +369,10 @@ export function ManageMembersClient({
       </div>
 
       {sorted.length === 0 ? (
-        <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
-          該当する部員が見つかりません
-        </div>
+        <EmptyState
+          message="該当する部員が見つかりません"
+          className="flex h-24 items-center justify-center rounded-md border py-0"
+        />
       ) : (
         <Table>
           <TableHeader>
