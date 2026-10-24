@@ -1,12 +1,11 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
 import LedgerView from "@/components/ledger-view";
 import { selectVisibleTeams, type TeamInfo } from "@/lib/teams";
-import { requireRoleAccess } from "@/lib/roles/access";
 import { isAdmin } from "@/lib/roles/permissions";
 import { getAccountingUserId } from "@/lib/system-config";
 import { getFiscalYears, getAccountingGroups } from "@/lib/cache";
-import { fetchLedgerTransactions } from "./actions";
+import { readLedgerTransactions } from "@/lib/ledger-data";
 import type { LedgerInitialData } from "@/lib/ledger";
 import { PageShell } from "@/components/layout/page-shell";
 
@@ -15,28 +14,23 @@ export default async function LedgerPage({
 }: {
   searchParams: Promise<{ year?: string }>;
 }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase, user } = auth;
 
   const profileId = user.id;
 
   const params = await searchParams;
 
-  // roles + groups + accountingUserId + fiscalYears + profiles are independent — run in parallel
-  const [access, allGroups, accountingUserId, fiscalYears, { data: profiles }] =
+  // Roles, metadata, profiles and financial accounts are independent — run in parallel
+  const [access, allGroups, accountingUserId, fiscalYears, { data: profiles }, { data: financialAccounts }] =
     await Promise.all([
-      requireRoleAccess({ supabase, profileId }),
+      getCurrentRoles(),
       getAccountingGroups(),
       getAccountingUserId(),
       getFiscalYears(),
       supabase.from("profiles").select("id, name").is("deleted_at", null),
+      supabase.from("financial_accounts").select("id, name, is_active").order("display_order"),
     ]);
 
   const isGlobalAdmin = isAdmin(access);
@@ -96,10 +90,10 @@ export default async function LedgerPage({
   const firstGroupId = displayTeams[0]?.id;
   let initialData: LedgerInitialData | null = null;
   if (firstGroupId) {
-    const res = await fetchLedgerTransactions({
+    const res = await readLedgerTransactions(auth, access, {
       accountingGroupId: firstGroupId,
       fyYear,
-    });
+    }, { profiles: profiles ?? [], financialAccounts: financialAccounts ?? [] });
     if (!("error" in res)) {
       initialData = res;
     }
@@ -118,6 +112,7 @@ export default async function LedgerPage({
           selectedYear={fyYear}
           isReadOnly={isReadOnly}
           initialData={initialData}
+          financialAccounts={(financialAccounts ?? []).filter((fa) => fa.is_active === true)}
         />
     </PageShell>
   );

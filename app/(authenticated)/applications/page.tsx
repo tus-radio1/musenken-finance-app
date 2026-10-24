@@ -1,11 +1,11 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { TransactionForm } from "@/components/transaction-form";
 import { ApplicationsTable } from "@/components/applications-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getUserTeams } from "@/lib/teams";
-import { requireRoleAccess } from "@/lib/roles/access";
+import { selectVisibleTeams } from "@/lib/teams";
+import { getAccountingGroups } from "@/lib/cache";
 import {
   canCreateClubTransaction,
   canFileTransactionInGroup,
@@ -22,38 +22,30 @@ export default async function ApplicationsPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const supabase = await createClient();
   const params = await searchParams;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase, user } = auth;
 
   const page = Math.max(0, parseInt(params.page ?? "0", 10) || 0);
   const offset = page * PAGE_SIZE;
 
-  // 会計グループ一覧を取得
-  const access = await requireRoleAccess({ supabase, profileId: user.id });
-  const accountingGroups = await getUserTeams(access);
-
+  const [access, allGroups, { data: transactions, count }] = await Promise.all([
+    getCurrentRoles(),
+    getAccountingGroups(),
+    supabase.from("transactions")
+      .select(
+        "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name, type), financial_account_id, receipt_url, remarks, created_by",
+        { count: "exact" },
+      )
+      .eq("created_by", user.id).order("date", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1),
+  ]);
+  const accountingGroups = selectVisibleTeams(access, allGroups);
   const writableGroups = accountingGroups.filter((group) =>
     canFileTransactionInGroup(access, group),
   );
-
-  // 当該ユーザの過去の申請を取得（会計グループ名付き）
-  const { data: transactions, count } = await supabase
-    .from("transactions")
-    .select(
-      "id, date, amount, description, approval_status, accounting_group_id, accounting_groups(name, type), financial_account_id, receipt_url, remarks, created_by",
-      { count: "exact" },
-    )
-    .eq("created_by", user.id)
-    .order("date", { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
 
   const totalCount = count ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);

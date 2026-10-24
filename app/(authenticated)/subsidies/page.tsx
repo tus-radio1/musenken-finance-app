@@ -1,10 +1,9 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SubsidyForm } from "@/components/subsidy-form";
 import { SubsidyItemsTable } from "@/components/subsidy-items-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { requireRoleAccess } from "@/lib/roles/access";
 import { isAdmin } from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
@@ -19,16 +18,11 @@ export default async function SubsidiesPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const supabase = await createClient();
   const params = await searchParams;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase, user } = auth;
 
   const profileId = user.id;
 
@@ -44,27 +38,20 @@ export default async function SubsidiesPage({
   const page = Math.max(0, parseInt(params.page ?? "0", 10) || 0);
   const offset = page * PAGE_SIZE;
 
-  // isGlobalAdmin 判定
-  const access = await requireRoleAccess({ supabase, profileId: user.id });
+  const [access, { data: accountingGroups }, { data: subsidyItems, count }] =
+    await Promise.all([
+      getCurrentRoles(),
+      supabase.from("accounting_groups").select("id, name")
+        .eq("is_active", true).order("name"),
+      supabase.from("subsidy_items")
+        .select(
+          "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, usage_period, evidence_url, receipt_url, remarks, date, created_at, accounting_group_id, accounting_groups(name)",
+          { count: "exact" },
+        )
+        .eq("applicant_id", profileId).is("deleted_at", null)
+        .order("created_at", { ascending: false }).range(offset, offset + PAGE_SIZE - 1),
+    ]);
   const isGlobalAdmin = isAdmin(access);
-
-  const { data: accountingGroups } = await supabase
-    .from("accounting_groups")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
-
-  // 当該ユーザの支援金申請を取得 (soft-deleted records are excluded)
-  const { data: subsidyItems, count } = await supabase
-    .from("subsidy_items")
-    .select(
-      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, usage_period, evidence_url, receipt_url, remarks, date, created_at, accounting_group_id, accounting_groups(name)",
-      { count: "exact" },
-    )
-    .eq("applicant_id", profileId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
 
   const totalCount = count ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);

@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,6 @@ import { NewFiscalYearDialog } from "./_components/new-fiscal-year-dialog";
 import { ToggleGroupActiveDialog } from "./_components/toggle-group-active-dialog";
 import { AddGroupDialog } from "./_components/add-group-dialog";
 import { DeleteGroupYearButton } from "./_components/delete-group-year-button";
-import { requireRoleAccess } from "@/lib/roles/access";
 import {
   canEditBudget,
   canCreateFiscalYear,
@@ -50,19 +49,20 @@ export default async function BudgetPage({
 }: {
   searchParams: Promise<{ year?: string }>;
 }) {
-  const supabase = await createClient();
   const params = await searchParams;
 
   // Step 1: auth + fiscalYears are independent — run in parallel
-  const [{ data: { user } }, fiscalYears] =
+  const [auth, fiscalYears] =
     await Promise.all([
-      supabase.auth.getUser(),
+      getCurrentUser(),
       getFiscalYears(),
     ]);
 
-  if (!user) {
+  if (!auth) {
     redirect("/login");
   }
+
+  const { supabase } = auth;
 
   // 選択された年度、またはデフォルトで現在の年度
   const selectedYearParam = params.year;
@@ -94,7 +94,7 @@ export default async function BudgetPage({
     { data: budgets, error: budgetsError },
     { data: usageRows, error: usageError },
   ] = await Promise.all([
-    requireRoleAccess({ supabase, profileId: user.id }),
+    getCurrentRoles(),
     getAccountingGroups(),
     budgetQuery,
     fyYear

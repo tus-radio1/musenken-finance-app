@@ -1,38 +1,30 @@
-import { createClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import { DashboardStats } from "@/components/dashboard-stats";
 import { RecentApplications } from "@/components/recent-applications";
 import { MobileNewTransactionFab } from "@/components/mobile-new-transaction-fab";
 import { getSortableDateValue } from "@/lib/date";
-import { getUserTeams } from "@/lib/teams";
+import { selectVisibleTeams } from "@/lib/teams";
+import { getAccountingGroups } from "@/lib/cache";
 import { canFileTransactionInGroup } from "@/lib/roles/permissions";
-import { requireRoleAccess } from "@/lib/roles/access";
 import { PageShell } from "@/components/layout/page-shell";
 import { PageHeader } from "@/components/layout/page-header";
 import { ErrorState } from "@/components/feedback/error-state";
 
 export default async function Home() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const profileId = user?.id ?? null;
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase, profileId } = auth;
 
   // 会計年度の決定 + チーム情報を並列取得
-  const [{ data: fyCurrent }, teams] = await Promise.all([
+  const [{ data: fyCurrent }, access, allGroups] = await Promise.all([
     supabase
       .from("fiscal_years")
       .select("year")
       .eq("is_current", true)
       .single(),
-    user
-      ? requireRoleAccess({ supabase, profileId: user.id }).then(async (access) =>
-          (await getUserTeams(access)).filter((group) =>
-            canFileTransactionInGroup(access, group),
-          ),
-        )
-      : Promise.resolve([] as { id: string; name: string }[]),
+    getCurrentRoles(),
+    getAccountingGroups(),
   ]);
 
   let fyYear: number | undefined = fyCurrent?.year ?? undefined;
@@ -46,7 +38,9 @@ export default async function Home() {
     fyYear = fyLatest?.[0]?.year ?? undefined;
   }
 
-  const categories = teams;
+  const categories = selectVisibleTeams(access, allGroups).filter((group) =>
+    canFileTransactionInGroup(access, group),
+  );
 
   // 経費取引・支援金申請を並列取得
   let myTxQuery = supabase
