@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { uploadReceiptAction } from "@/app/actions";
 import { prepareReceiptFile, ReceiptFileError } from "@/lib/image";
 import { createReceiptUploadController, type ReceiptUploadStatus } from "@/lib/receipt-upload-controller";
-import { RECEIPT_TYPE_ERROR_MESSAGE } from "@/lib/receipt-upload";
+import { selectReceiptFile } from "@/lib/receipt-file-selection";
+import { MAX_RECEIPT_FILE_SIZE_BYTES, RECEIPT_TYPE_ERROR_MESSAGE } from "@/lib/receipt-upload";
 
 vi.mock("@/app/actions", () => ({ uploadReceiptAction: vi.fn() }));
 vi.mock("@/lib/image", async (importOriginal) => ({
@@ -99,6 +100,60 @@ describe("useReceiptUpload controller", () => {
     expect(controller.getSnapshot().error).toBeNull();
   });
 
+  it("resets the upload session and ignores a late failure from the previous file", async () => {
+    const controller = createReceiptUploadController();
+    const firstFile = pdf();
+    const nextFile = new File(["next"], "next.pdf", { type: "application/pdf" });
+    controller.setFile(firstFile);
+
+    let finishUpload!: (result: Awaited<ReturnType<typeof uploadReceiptAction>>) => void;
+    vi.mocked(uploadReceiptAction).mockImplementation(() => new Promise((resolve) => {
+      finishUpload = resolve;
+    }));
+    const pendingUpload = controller.upload();
+    await vi.waitFor(() => expect(uploadReceiptAction).toHaveBeenCalledTimes(1));
+
+    controller.setFile(null);
+    expect(controller.getSnapshot()).toEqual({ file: null, status: "idle", error: null });
+    controller.setFile(nextFile);
+    finishUpload({ error: "前の書類のアップロードに失敗しました" });
+    await pendingUpload;
+
+    expect(controller.getSnapshot()).toEqual({ file: nextFile, status: "idle", error: null });
+  });
+
+  it("allows oversized images through selection and checks size after compression", async () => {
+    const largeImage = new File(
+      [new Uint8Array(MAX_RECEIPT_FILE_SIZE_BYTES + 1)],
+      "large.jpg",
+      { type: "image/jpeg" },
+    );
+    const compressedImage = new File(["small"], "large.webp", { type: "image/webp" });
+    expect(selectReceiptFile([largeImage])).toEqual({ file: largeImage, error: null });
+
+    const controller = createReceiptUploadController();
+    vi.mocked(prepareReceiptFile).mockResolvedValue(compressedImage);
+    controller.setFile(largeImage);
+
+    expect(await controller.upload()).toEqual({ filePath: "member/receipt.pdf" });
+    expect(prepareReceiptFile).toHaveBeenCalledWith(largeImage);
+    expect(uploadReceiptAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("defers empty MIME type validation until HEIC preparation", async () => {
+    const heic = new File(["raw heic"], "receipt.heic", { type: "" });
+    const converted = new File(["jpeg"], "receipt.jpg", { type: "image/jpeg" });
+    expect(selectReceiptFile([heic])).toEqual({ file: heic, error: null });
+
+    const controller = createReceiptUploadController();
+    vi.mocked(prepareReceiptFile).mockResolvedValue(converted);
+    controller.setFile(heic);
+
+    expect(await controller.upload()).toEqual({ filePath: "member/receipt.pdf" });
+    expect(prepareReceiptFile).toHaveBeenCalledWith(heic);
+    expect(uploadReceiptAction).toHaveBeenCalledTimes(1);
+  });
+
   it("converts network failures to a Japanese error", async () => {
     const controller = createReceiptUploadController();
     controller.setFile(pdf());
@@ -107,7 +162,7 @@ describe("useReceiptUpload controller", () => {
     expect(controller.getSnapshot().status).toBe("error");
   });
 
-  it("does not accept selection changes or a second upload during preparation or upload", async () => {
+  it("does not accept replacement files or a second upload during preparation or upload", async () => {
     const controller = createReceiptUploadController();
     const file = pdf();
     controller.setFile(file);
@@ -117,7 +172,7 @@ describe("useReceiptUpload controller", () => {
     vi.mocked(uploadReceiptAction).mockImplementation(() => new Promise((resolve) => { finishUpload = resolve; }));
     const pending = controller.upload();
     expect(controller.getSnapshot().status).toBe("preparing");
-    controller.setFile(null);
+    controller.setFile(pdf());
     expect(controller.getSnapshot().file).toBe(file);
     expect(await controller.upload()).toHaveProperty("error");
     finishPreparation(file);
