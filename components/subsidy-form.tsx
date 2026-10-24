@@ -10,7 +10,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Upload, CalendarIcon } from "lucide-react";
+import { Loader2, CalendarIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -53,19 +53,15 @@ import {
 } from "@/components/ui/dialog";
 
 import { subsidyFormSchema } from "@/lib/schema";
-import { uploadReceiptAction } from "@/app/actions";
 import { createSubsidyItem } from "@/app/(authenticated)/subsidies/actions";
-import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
+import { useReceiptUpload } from "@/components/receipt/use-receipt-upload";
+import { FileDropzone } from "@/components/receipt/file-dropzone";
 import {
   CATEGORY_LABELS,
   CATEGORY_TERMS,
   EXPENSE_TYPE_LABELS,
   CATEGORY_EXPENSE_TYPES,
 } from "@/lib/constants/subsidy";
-import {
-  MAX_RECEIPT_FILE_SIZE_MB,
-  RECEIPT_FORMAT_LABEL,
-} from "@/lib/receipt-upload";
 
 type Category = {
   id: string;
@@ -81,8 +77,7 @@ type Props = {
 export function SubsidyForm({ categories, triggerButton }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const { file, setFile, upload, isUploading, error: uploadError } = useReceiptUpload();
 
   const form = useForm<z.infer<typeof subsidyFormSchema>>({
     resolver: zodResolver(subsidyFormSchema),
@@ -158,34 +153,12 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
         return;
       }
 
-      let evidenceUrl: string = "";
-
-      setIsUploading(true);
-      try {
-        const preparedFile = await prepareReceiptFile(file);
-
-        const formData = new FormData();
-        formData.append("file", preparedFile);
-
-        const uploadResult = await uploadReceiptAction(formData);
-        if (uploadResult.error) {
-          toast.error("書類のアップロードに失敗しました");
-          setIsUploading(false);
-          return;
-        }
-
-        evidenceUrl = uploadResult.filePath ?? "";
-      } catch (error) {
-        toast.error(
-          getReceiptFileErrorMessage(
-            error,
-            "書類のアップロード中にエラーが発生しました",
-          ),
-        );
-        setIsUploading(false);
+      const uploaded = await upload();
+      if (uploaded.error !== undefined) {
+        toast.error(uploaded.error);
         return;
       }
-      setIsUploading(false);
+      const evidenceUrl = uploaded.filePath;
 
       const result = await createSubsidyItem({
         ...values,
@@ -516,38 +489,16 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
             {/* --- セクション: 根拠書類アップロード --- */}
             <div className="space-y-2">
-              <FormLabel>根拠書類</FormLabel>
               <FormDescription>
                 見積書やHP等の料金が記載された資料をアップロードしてください。
               </FormDescription>
-              <p className="text-xs text-muted-foreground">
-                対応形式: {RECEIPT_FORMAT_LABEL} &nbsp;|&nbsp; 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
-              </p>
-              <div className="flex items-center gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("subsidy-evidence-upload")?.click()
-                  }
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {file ? "ファイルを変更" : "ファイルを選択"}
-                </Button>
-                <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-                  {file ? file.name : "選択されていません"}
-                </span>
-                <Input
-                  id="subsidy-evidence-upload"
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const selectedFile = e.target.files?.[0];
-                    if (selectedFile) setFile(selectedFile);
-                  }}
-                />
-              </div>
+              <FileDropzone
+                label="根拠書類"
+                file={file}
+                onFileChange={setFile}
+                disabled={form.formState.isSubmitting || isUploading}
+                error={uploadError}
+              />
             </div>
 
             <Button

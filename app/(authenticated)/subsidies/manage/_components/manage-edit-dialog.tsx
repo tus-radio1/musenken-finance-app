@@ -5,7 +5,7 @@
  * 管理者/非管理者で表示フィールドが分岐する申請情報の編集フォーム。
  */
 
-import { Upload, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -29,10 +29,7 @@ import {
   EXPENSE_TYPE_LABELS as EXPENSE_TYPE_MAP,
 } from "@/lib/constants/subsidy";
 import type { SubsidyItem, EditFormState } from "./types";
-import {
-  MAX_RECEIPT_FILE_SIZE_MB,
-  RECEIPT_FORMAT_LABEL,
-} from "@/lib/receipt-upload";
+import { FileDropzone } from "@/components/receipt/file-dropzone";
 
 type AccountingGroup = { id: string; name: string };
 type Profile = { id: string; name: string };
@@ -45,6 +42,8 @@ type ManageEditDialogProps = {
   onSubmit: () => void;
   onDelete: (id: string) => void;
   isSubmitting: boolean;
+  uploadError?: string | null;
+  evidenceUploadError?: string | null;
   isAdmin: boolean;
   profiles: Profile[];
   accountingGroups: AccountingGroup[];
@@ -62,6 +61,8 @@ export function ManageEditDialog({
   onSubmit,
   onDelete,
   isSubmitting,
+  uploadError,
+  evidenceUploadError,
   isAdmin,
   profiles,
   accountingGroups,
@@ -183,43 +184,14 @@ export function ManageEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">根拠書類</Label>
-                <div className="col-span-3">
-                  <p className="text-xs text-muted-foreground mb-2">
-                    対応形式: {RECEIPT_FORMAT_LABEL} &nbsp;|&nbsp; 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
-                  </p>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        document.getElementById("admin-evidence-upload")?.click()
-                      }
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      {evidenceFile ? "ファイルを変更" : "ファイルを選択"}
-                    </Button>
-                    <span className="text-sm text-muted-foreground truncate max-w-[150px]">
-                      {evidenceFile
-                        ? evidenceFile.name
-                        : editingItem?.evidence_url
-                          ? "登録済み(変更可)"
-                          : "未登録"}
-                    </span>
-                    <Input
-                      id="admin-evidence-upload"
-                      type="file"
-                      accept="image/*,.pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const selectedFile = e.target.files?.[0];
-                        if (selectedFile) onEvidenceFileChange(selectedFile);
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
+              <FileDropzone
+                label="根拠書類"
+                file={evidenceFile}
+                onFileChange={onEvidenceFileChange}
+                existingUrl={editingItem?.evidence_url}
+                disabled={isSubmitting}
+                error={evidenceUploadError}
+              />
             </>
           )}
 
@@ -351,43 +323,14 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">領収書画像</Label>
-            <div className="col-span-3">
-              <p className="text-xs text-muted-foreground mb-2">
-                対応形式: {RECEIPT_FORMAT_LABEL} &nbsp;|&nbsp; 最大サイズ: {MAX_RECEIPT_FILE_SIZE_MB}MB
-              </p>
-              <div className="flex items-center gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("admin-receipt-upload")?.click()
-                  }
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {file ? "画像を変更" : "画像を選択"}
-                </Button>
-                <span className="text-sm text-muted-foreground truncate max-w-[150px]">
-                  {file
-                    ? file.name
-                    : editingItem?.receipt_url
-                      ? "登録済み(変更可)"
-                      : "未登録"}
-                </span>
-                <Input
-                  id="admin-receipt-upload"
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const selectedFile = e.target.files?.[0];
-                    if (selectedFile) onFileChange(selectedFile);
-                  }}
-                />
-              </div>
-            </div>
-          </div>
+          <FileDropzone
+            label="領収書画像"
+            file={file}
+            onFileChange={onFileChange}
+            existingUrl={editingItem?.receipt_url}
+            disabled={isSubmitting}
+            error={uploadError}
+          />
 
           <div className="grid grid-cols-4 items-center gap-4">
             <Label className="text-right text-sm">使用時期</Label>
