@@ -5,7 +5,7 @@ import {
 
 export default function SettingsLoading() {
   return (
-    <PageLoadingShell maxWidth="max-w-2xl">
+    <PageLoadingShell width="form">
       {/* ヘッダー */}
       <div className="space-y-2">
         <SkeletonBlock className="h-8 w-16" />

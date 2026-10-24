@@ -56,6 +56,7 @@ import { subsidyFormSchema } from "@/lib/schema";
 import { createSubsidyItem } from "@/app/(authenticated)/subsidies/actions";
 import { useReceiptUpload } from "@/components/receipt/use-receipt-upload";
 import { FileDropzone } from "@/components/receipt/file-dropzone";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 import {
   CATEGORY_LABELS,
   CATEGORY_TERMS,
@@ -186,7 +187,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       <DialogTrigger asChild>
         {triggerButton ? triggerButton : <Button>＋ 支援金申請</Button>}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>支援金の新規申請</DialogTitle>
           <DialogDescription>
@@ -195,13 +196,13 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
             {/* --- セクション: 支援金種別 --- */}
             <FormField
               control={form.control}
               name="category"
               render={({ field }) => (
-                <FormItem className="space-y-3">
+                <FormItem className="space-y-3 md:col-span-2">
                   <FormLabel>支援金種別</FormLabel>
                   <FormControl>
                     <RadioGroup
@@ -230,7 +231,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
             />
 
             {/* --- セクション: 収支区分・日付 --- */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
               {/* 収支区分 */}
               <FormField
                 control={form.control}
@@ -289,7 +290,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                             ) : (
                               <span>日付を選択</span>
                             )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" aria-hidden="true" />
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
@@ -310,7 +311,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
             </div>
 
             {/* --- セクション: 申請期・経費種別 --- */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
               {/* 申請期 */}
               <FormField
                 control={form.control}
@@ -372,7 +373,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               control={form.control}
               name="accounting_group_id"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>会計グループ</FormLabel>
                   <Select
                     onValueChange={field.onChange}
@@ -433,7 +434,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               control={form.control}
               name="justification"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>申請理由</FormLabel>
                   <FormControl>
                     <Textarea
@@ -471,7 +472,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               control={form.control}
               name="remarks"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>備考（任意）</FormLabel>
                   <FormControl>
                     <Textarea
@@ -488,7 +489,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
             />
 
             {/* --- セクション: 根拠書類アップロード --- */}
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-2">
               <FormDescription>
                 見積書やHP等の料金が記載された資料をアップロードしてください。
               </FormDescription>
@@ -507,7 +508,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
               disabled={form.formState.isSubmitting || isUploading}
             >
               {(form.formState.isSubmitting || isUploading) && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
               {isUploading ? "書類を送信中..." : "申請する"}
             </Button>

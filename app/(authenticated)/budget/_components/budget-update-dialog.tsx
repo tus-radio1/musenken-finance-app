@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { upsertBudget } from "../actions";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 type AccountingGroup = {
   id: string;
@@ -104,11 +105,11 @@ export function BudgetUpdateDialog({
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <Pencil className="h-4 w-4 mr-1.5" />
+          <Pencil className="h-4 w-4 mr-1.5" aria-hidden="true" />
           予算額を更新
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>予算額の更新</DialogTitle>
           <DialogDescription>
@@ -116,11 +117,11 @@ export function BudgetUpdateDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
+        <div className="grid gap-4 py-2 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
             <Label htmlFor="budget-group">会計区分</Label>
             <Select value={selectedGroupId} onValueChange={handleGroupChange}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="budget-group" className="w-full">
                 <SelectValue placeholder="会計区分を選択..." />
               </SelectTrigger>
               <SelectContent>
@@ -169,7 +170,7 @@ export function BudgetUpdateDialog({
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>

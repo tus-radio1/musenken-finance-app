@@ -6,7 +6,7 @@ import {
 
 export default function MembersLoading() {
   return (
-    <PageLoadingShell maxWidth="max-w-6xl">
+    <PageLoadingShell>
       <div className="rounded-lg border bg-card p-6 space-y-2">
         <SkeletonBlock className="h-6 w-32" />
         <SkeletonBlock className="h-4 w-64" />

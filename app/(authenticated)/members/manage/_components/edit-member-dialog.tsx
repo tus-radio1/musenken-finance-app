@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { Loader2, Pencil, X } from "lucide-react";
 import { updateMember } from "../actions";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 export type RoleOption = {
   id: string;
@@ -98,18 +99,18 @@ export function EditMemberDialog({ member, allRoles }: EditMemberDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1">
-          <Pencil className="h-3.5 w-3.5" />
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
           編集
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>部員情報を編集</DialogTitle>
           <DialogDescription>
             {member.name} さんの情報を編集します。
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`edit-name-${member.id}`}>氏名</Label>
             <Input
@@ -153,8 +154,8 @@ export function EditMemberDialog({ member, allRoles }: EditMemberDialogProps) {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>役職</Label>
-            <div className="flex flex-wrap gap-1.5">
+            <Label id={`edit-roles-label-${member.id}`}>役職</Label>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby={`edit-roles-label-${member.id}`}>
               {form.role_ids.length === 0 && (
                 <span className="text-sm text-muted-foreground">役職なし</span>
               )}
@@ -170,8 +171,9 @@ export function EditMemberDialog({ member, allRoles }: EditMemberDialogProps) {
                       type="button"
                       onClick={() => removeRole(roleId)}
                       className="rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
+                      aria-label={`${role?.name || roleId}を役職から外す`}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3 w-3" aria-hidden="true" />
                     </button>
                   </span>
                 );
@@ -180,7 +182,7 @@ export function EditMemberDialog({ member, allRoles }: EditMemberDialogProps) {
             {availableRoles.length > 0 && (
               <div className="flex items-center gap-2 pt-1">
                 <Select onValueChange={(v) => addRole(v)}>
-                  <SelectTrigger className="h-8 w-48 text-sm">
+                  <SelectTrigger className="h-8 w-48 text-sm" aria-labelledby={`edit-roles-label-${member.id}`}>
                     <SelectValue placeholder="役職を追加..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -194,7 +196,7 @@ export function EditMemberDialog({ member, allRoles }: EditMemberDialogProps) {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="md:col-span-2">
             <Button
               type="button"
               variant="outline"
@@ -204,7 +206,7 @@ export function EditMemberDialog({ member, allRoles }: EditMemberDialogProps) {
               キャンセル
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               保存する
             </Button>
           </DialogFooter>

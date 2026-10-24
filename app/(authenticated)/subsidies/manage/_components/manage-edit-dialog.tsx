@@ -30,6 +30,7 @@ import {
 } from "@/lib/constants/subsidy";
 import type { SubsidyItem, EditFormState } from "./types";
 import { FileDropzone } from "@/components/receipt/file-dropzone";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 type AccountingGroup = { id: string; name: string };
 type Profile = { id: string; name: string };
@@ -76,16 +77,16 @@ export function ManageEditDialog({
       open={editingItem !== null}
       onOpenChange={(open) => !open && onClose()}
     >
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>申請情報の編集</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
+        <div className="grid gap-4 py-4 md:grid-cols-2">
           {/* 非管理者: 申請理由の読み取り専用表示 */}
           {!isAdmin && editingItem?.justification && (
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right text-sm pt-1">申請理由</Label>
-              <div className="col-span-3 text-sm whitespace-pre-wrap break-words bg-muted/50 rounded-md p-2">
+            <div className="space-y-2 md:col-span-2">
+              <p className="text-sm font-medium">申請理由</p>
+              <div className="text-sm whitespace-pre-wrap break-words bg-muted/50 rounded-md p-2">
                 {editingItem.justification}
               </div>
             </div>
@@ -94,8 +95,8 @@ export function ManageEditDialog({
           {/* 管理者専用フィールド */}
           {isAdmin && (
             <>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">申請者</Label>
+              <div className="space-y-2">
+                <Label htmlFor="manage-edit-applicant">申請者</Label>
                 <div className="col-span-3">
                   <Select
                     value={editForm.applicant_id}
@@ -103,7 +104,7 @@ export function ManageEditDialog({
                       onEditFormChange({ ...editForm, applicant_id: val })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="manage-edit-applicant">
                       <SelectValue placeholder="申請者を選択" />
                     </SelectTrigger>
                     <SelectContent>
@@ -117,10 +118,11 @@ export function ManageEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">申請日時</Label>
+              <div className="space-y-2">
+                <Label htmlFor="manage-edit-created-at">申請日時</Label>
                 <div className="col-span-3">
                   <Input
+                    id="manage-edit-created-at"
                     type="date"
                     value={editForm.created_at}
                     onChange={(e) =>
@@ -130,10 +132,11 @@ export function ManageEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">受領日</Label>
+              <div className="space-y-2">
+                <Label htmlFor="manage-edit-receipt-date">受領日</Label>
                 <div className="col-span-3">
                   <Input
+                    id="manage-edit-receipt-date"
                     type="date"
                     value={editForm.receipt_date}
                     onChange={(e) =>
@@ -146,8 +149,8 @@ export function ManageEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">経費種別</Label>
+              <div className="space-y-2">
+                <Label htmlFor="manage-edit-expense-type">経費種別</Label>
                 <div className="col-span-3">
                   <Select
                     value={editForm.expense_type}
@@ -155,7 +158,7 @@ export function ManageEditDialog({
                       onEditFormChange({ ...editForm, expense_type: val })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="manage-edit-expense-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -169,10 +172,11 @@ export function ManageEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-start gap-4">
-                <Label className="text-right text-sm pt-1">申請理由</Label>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="manage-edit-justification">申請理由</Label>
                 <div className="col-span-3">
                   <Textarea
+                    id="manage-edit-justification"
                     value={editForm.justification}
                     onChange={(e) =>
                       onEditFormChange({ ...editForm, justification: e.target.value })
@@ -184,20 +188,22 @@ export function ManageEditDialog({
                 </div>
               </div>
 
-              <FileDropzone
-                label="根拠書類"
-                file={evidenceFile}
-                onFileChange={onEvidenceFileChange}
-                existingUrl={editingItem?.evidence_url}
-                disabled={isSubmitting}
-                error={evidenceUploadError}
-              />
+              <div className="md:col-span-2">
+                <FileDropzone
+                  label="根拠書類"
+                  file={evidenceFile}
+                  onFileChange={onEvidenceFileChange}
+                  existingUrl={editingItem?.evidence_url}
+                  disabled={isSubmitting}
+                  error={evidenceUploadError}
+                />
+              </div>
             </>
           )}
 
           {/* 共通フィールド */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">カテゴリ</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-category">カテゴリ</Label>
             <div className="col-span-3">
               <Select
                 value={editForm.category}
@@ -205,7 +211,7 @@ export function ManageEditDialog({
                   onEditFormChange({ ...editForm, category: val })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="manage-edit-category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,8 +225,8 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">期</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-term">期</Label>
             <div className="col-span-3">
               <Select
                 value={editForm.term}
@@ -228,7 +234,7 @@ export function ManageEditDialog({
                   onEditFormChange({ ...editForm, term: val })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="manage-edit-term">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,8 +246,8 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">会計区分</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-accounting-group">会計区分</Label>
             <div className="col-span-3">
               <Select
                 value={editForm.accounting_group_id}
@@ -249,7 +255,7 @@ export function ManageEditDialog({
                   onEditFormChange({ ...editForm, accounting_group_id: val })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="manage-edit-accounting-group">
                   <SelectValue placeholder="会計区分を選択" />
                 </SelectTrigger>
                 <SelectContent>
@@ -263,10 +269,11 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">項目名</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-name">項目名</Label>
             <div className="col-span-3">
               <Input
+                id="manage-edit-name"
                 value={editForm.name}
                 onChange={(e) =>
                   onEditFormChange({ ...editForm, name: e.target.value })
@@ -275,10 +282,11 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">申請額</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-requested-amount">申請額</Label>
             <div className="col-span-3">
               <Input
+                id="manage-edit-requested-amount"
                 type="number"
                 value={editForm.requested_amount}
                 onChange={(e) =>
@@ -291,10 +299,11 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">算定額</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-calculated-amount">算定額</Label>
             <div className="col-span-3">
               <Input
+                id="manage-edit-calculated-amount"
                 type="number"
                 value={editForm.calculated_amount}
                 onChange={(e) =>
@@ -307,10 +316,11 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">実経費額</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-actual-amount">実経費額</Label>
             <div className="col-span-3">
               <Input
+                id="manage-edit-actual-amount"
                 type="number"
                 value={editForm.actual_amount}
                 onChange={(e) =>
@@ -323,19 +333,22 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <FileDropzone
-            label="領収書画像"
-            file={file}
-            onFileChange={onFileChange}
-            existingUrl={editingItem?.receipt_url}
-            disabled={isSubmitting}
-            error={uploadError}
-          />
+          <div className="md:col-span-2">
+            <FileDropzone
+              label="領収書画像"
+              file={file}
+              onFileChange={onFileChange}
+              existingUrl={editingItem?.receipt_url}
+              disabled={isSubmitting}
+              error={uploadError}
+            />
+          </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">使用時期</Label>
+          <div className="space-y-2">
+            <Label htmlFor="manage-edit-usage-period">使用時期</Label>
             <div className="col-span-3">
               <Input
+                id="manage-edit-usage-period"
                 value={editForm.usage_period}
                 onChange={(e) =>
                   onEditFormChange({ ...editForm, usage_period: e.target.value })
@@ -345,10 +358,11 @@ export function ManageEditDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right text-sm">備考</Label>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="manage-edit-remarks">備考</Label>
             <div className="col-span-3">
               <Input
+                id="manage-edit-remarks"
                 value={editForm.remarks}
                 onChange={(e) =>
                   onEditFormChange({ ...editForm, remarks: e.target.value })
@@ -379,7 +393,7 @@ export function ManageEditDialog({
             <Button onClick={onSubmit} disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                   保存中...
                 </>
               ) : (

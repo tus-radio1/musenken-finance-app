@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { Loader2, UserPlus } from "lucide-react";
 import { addMember } from "../actions";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 export function AddMemberDialog() {
   const [open, setOpen] = useState(false);
@@ -60,18 +61,18 @@ export function AddMemberDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button className="gap-2">
-          <UserPlus className="h-4 w-4" />
+          <UserPlus className="h-4 w-4" aria-hidden="true" />
           部員を追加
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>部員を追加</DialogTitle>
           <DialogDescription>
             新しい部員の情報を入力してください。初期パスワードは自動生成されます。
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="add-name">氏名</Label>
             <Input
@@ -116,7 +117,7 @@ export function AddMemberDialog() {
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter>
+          <DialogFooter className="md:col-span-2">
             <Button
               type="button"
               variant="outline"
@@ -126,7 +127,7 @@ export function AddMemberDialog() {
               キャンセル
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               追加する
             </Button>
           </DialogFooter>

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { createFiscalYearBudgets, createAccountingGroup } from "../actions";
 import { useRouter } from "next/navigation";
 import { CalendarPlus, Plus, Trash2 } from "lucide-react";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 type AccountingGroup = {
   id: string;
@@ -204,11 +205,11 @@ export function NewFiscalYearDialog({
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <CalendarPlus className="h-4 w-4 mr-1.5" />
+          <CalendarPlus className="h-4 w-4 mr-1.5" aria-hidden="true" />
           新規年度の予算を設定
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>新規年度の予算設定</DialogTitle>
           <DialogDescription>
@@ -230,7 +231,7 @@ export function NewFiscalYearDialog({
           </div>
 
           <div className="space-y-1">
-            <Label>各会計区分の予算額・繰入金（円）</Label>
+            <p className="font-medium">各会計区分の予算額・繰入金（円）</p>
             <p className="text-xs text-muted-foreground mb-2">
               0 のまま残すことも可能です。あとから更新できます。
             </p>
@@ -242,8 +243,9 @@ export function NewFiscalYearDialog({
                   </span>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 space-y-1">
-                      <Label className="text-xs text-muted-foreground">予算額</Label>
+                      <Label htmlFor={`fy-budget-${g.id}`} className="text-xs text-muted-foreground">予算額</Label>
                       <Input
+                        id={`fy-budget-${g.id}`}
                         type="number"
                         min={0}
                         step={100}
@@ -253,8 +255,9 @@ export function NewFiscalYearDialog({
                       />
                     </div>
                     <div className="flex-1 space-y-1">
-                      <Label className="text-xs text-muted-foreground">繰入金</Label>
+                      <Label htmlFor={`fy-carryover-${g.id}`} className="text-xs text-muted-foreground">繰入金</Label>
                       <Input
+                        id={`fy-carryover-${g.id}`}
                         type="number"
                         min={0}
                         step={100}
@@ -277,22 +280,25 @@ export function NewFiscalYearDialog({
                       size="icon"
                       className="h-6 w-6"
                       onClick={() => handleRemoveNewGroup(ng.tempId)}
+                      aria-label="新規グループを削除"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                   </div>
                   <div className="flex gap-2">
                     <div className="flex-1 space-y-1">
-                      <Label className="text-xs text-muted-foreground">グループ名 *</Label>
+                      <Label htmlFor={`fy-group-name-${ng.tempId}`} className="text-xs text-muted-foreground">グループ名 *</Label>
                       <Input
+                        id={`fy-group-name-${ng.tempId}`}
                         placeholder="例: 広報グループ"
                         value={ng.name}
                         onChange={(e) => handleNewGroupChange(ng.tempId, "name", e.target.value)}
                       />
                     </div>
                     <div className="flex-1 space-y-1">
-                      <Label className="text-xs text-muted-foreground">種別 *</Label>
+                      <Label htmlFor={`fy-group-type-${ng.tempId}`} className="text-xs text-muted-foreground">種別 *</Label>
                       <Input
+                        id={`fy-group-type-${ng.tempId}`}
                         placeholder="例: 部門"
                         value={ng.type}
                         onChange={(e) => handleNewGroupChange(ng.tempId, "type", e.target.value)}
@@ -301,8 +307,9 @@ export function NewFiscalYearDialog({
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 space-y-1">
-                      <Label className="text-xs text-muted-foreground">予算額</Label>
+                      <Label htmlFor={`fy-new-budget-${ng.tempId}`} className="text-xs text-muted-foreground">予算額</Label>
                       <Input
+                        id={`fy-new-budget-${ng.tempId}`}
                         type="number"
                         min={0}
                         step={100}
@@ -314,8 +321,9 @@ export function NewFiscalYearDialog({
                       />
                     </div>
                     <div className="flex-1 space-y-1">
-                      <Label className="text-xs text-muted-foreground">繰入金</Label>
+                      <Label htmlFor={`fy-new-carryover-${ng.tempId}`} className="text-xs text-muted-foreground">繰入金</Label>
                       <Input
+                        id={`fy-new-carryover-${ng.tempId}`}
                         type="number"
                         min={0}
                         step={100}
@@ -338,12 +346,12 @@ export function NewFiscalYearDialog({
               className="mt-2 w-full border border-dashed"
               onClick={handleAddNewGroup}
             >
-              <Plus className="h-4 w-4 mr-1.5" />
+              <Plus className="h-4 w-4 mr-1.5" aria-hidden="true" />
               会計グループを追加
             </Button>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>

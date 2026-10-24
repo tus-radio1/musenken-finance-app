@@ -40,6 +40,7 @@ import {
 } from "@/lib/constants/subsidy";
 import type { SubsidyItem, EditFormState } from "./types";
 import { FileDropzone } from "@/components/receipt/file-dropzone";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 type AccountingGroup = { id: string; name: string };
 
@@ -77,16 +78,16 @@ export function ItemsEditDialog({
       open={editingItem !== null}
       onOpenChange={(open) => !open && onClose()}
     >
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>
             {editingItem?.status === "approved" ? "領収書のアップロード" : "申請内容の修正"}
           </DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
+        <div className="grid gap-4 py-4 md:grid-cols-2">
           {editingItem?.status === "approved" ? (
             /* Approved status: receipt upload only. */
-            <div className="space-y-2 px-1">
+            <div className="space-y-2 px-1 md:col-span-2">
               <FileDropzone
                 label="領収書画像"
                 file={file}
@@ -99,8 +100,8 @@ export function ItemsEditDialog({
           ) : (
             /* 未承認: 全フィールド編集 */
             <>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">カテゴリ</Label>
+              <div className="space-y-2">
+                <Label htmlFor="items-edit-category">カテゴリ</Label>
                 <div className="col-span-3">
                   <Select
                     value={editForm.category}
@@ -108,7 +109,7 @@ export function ItemsEditDialog({
                       onEditFormChange({ ...editForm, category: val })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="items-edit-category">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -123,8 +124,8 @@ export function ItemsEditDialog({
               </div>
 
               {/* 収支区分 */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">収支区分</Label>
+              <div className="space-y-2">
+                <Label id="items-edit-income-label">収支区分</Label>
                 <div className="col-span-3">
                   <RadioGroup
                     value={editForm.income_type}
@@ -132,6 +133,7 @@ export function ItemsEditDialog({
                       onEditFormChange({ ...editForm, income_type: val })
                     }
                     className="flex gap-4"
+                    aria-labelledby="items-edit-income-label"
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="expense" id="edit-income-type-expense" />
@@ -150,13 +152,14 @@ export function ItemsEditDialog({
               </div>
 
               {/* 日付 */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">日付</Label>
+              <div className="space-y-2">
+                <Label id="items-edit-date-label">日付</Label>
                 <div className="col-span-3">
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
+                        aria-labelledby="items-edit-date-label"
                         className={cn(
                           "w-full pl-3 text-left font-normal",
                           !editForm.date && "text-muted-foreground",
@@ -167,7 +170,7 @@ export function ItemsEditDialog({
                         ) : (
                           <span>日付を選択</span>
                         )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" aria-hidden="true" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -185,8 +188,8 @@ export function ItemsEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">期</Label>
+              <div className="space-y-2">
+                <Label htmlFor="items-edit-term">期</Label>
                 <div className="col-span-3">
                   <Select
                     value={editForm.term}
@@ -194,7 +197,7 @@ export function ItemsEditDialog({
                       onEditFormChange({ ...editForm, term: val })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="items-edit-term">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -208,8 +211,8 @@ export function ItemsEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">経費種別</Label>
+              <div className="space-y-2">
+                <Label htmlFor="items-edit-expense-type">経費種別</Label>
                 <div className="col-span-3">
                   <Select
                     value={editForm.expense_type}
@@ -217,7 +220,7 @@ export function ItemsEditDialog({
                       onEditFormChange({ ...editForm, expense_type: val })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="items-edit-expense-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -231,8 +234,8 @@ export function ItemsEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">会計区分</Label>
+              <div className="space-y-2">
+                <Label htmlFor="items-edit-accounting-group">会計区分</Label>
                 <div className="col-span-3">
                   <Select
                     value={editForm.accounting_group_id}
@@ -240,7 +243,7 @@ export function ItemsEditDialog({
                       onEditFormChange({ ...editForm, accounting_group_id: val })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="items-edit-accounting-group">
                       <SelectValue placeholder="会計区分を選択" />
                     </SelectTrigger>
                     <SelectContent>
@@ -254,10 +257,11 @@ export function ItemsEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">項目名</Label>
+              <div className="space-y-2">
+                <Label htmlFor="items-edit-name">項目名</Label>
                 <div className="col-span-3">
                   <Input
+                    id="items-edit-name"
                     value={editForm.name}
                     onChange={(e) =>
                       onEditFormChange({ ...editForm, name: e.target.value })
@@ -266,10 +270,11 @@ export function ItemsEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">申請額</Label>
+              <div className="space-y-2">
+                <Label htmlFor="items-edit-requested-amount">申請額</Label>
                 <div className="col-span-3">
                   <Input
+                    id="items-edit-requested-amount"
                     type="number"
                     value={editForm.requested_amount}
                     onChange={(e) =>
@@ -282,10 +287,11 @@ export function ItemsEditDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right text-sm">使用時期</Label>
+              <div className="space-y-2">
+                <Label htmlFor="items-edit-usage-period">使用時期</Label>
                 <div className="col-span-3">
                   <Input
+                    id="items-edit-usage-period"
                     value={editForm.usage_period}
                     onChange={(e) =>
                       onEditFormChange({ ...editForm, usage_period: e.target.value })
@@ -296,10 +302,11 @@ export function ItemsEditDialog({
               </div>
 
               {/* 申請理由 */}
-              <div className="grid grid-cols-4 items-start gap-4">
-                <Label className="text-right text-sm pt-2">申請理由</Label>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="items-edit-justification">申請理由</Label>
                 <div className="col-span-3">
                   <Textarea
+                    id="items-edit-justification"
                     value={editForm.justification}
                     onChange={(e) =>
                       onEditFormChange({ ...editForm, justification: e.target.value })
@@ -312,10 +319,11 @@ export function ItemsEditDialog({
               </div>
 
               {/* 備考 */}
-              <div className="grid grid-cols-4 items-start gap-4">
-                <Label className="text-right text-sm pt-2">備考</Label>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="items-edit-remarks">備考</Label>
                 <div className="col-span-3">
                   <Textarea
+                    id="items-edit-remarks"
                     value={editForm.remarks}
                     onChange={(e) =>
                       onEditFormChange({ ...editForm, remarks: e.target.value })
@@ -328,7 +336,7 @@ export function ItemsEditDialog({
               </div>
 
               {/* 根拠書類アップロード */}
-              <div className="space-y-2 px-1">
+              <div className="space-y-2 px-1 md:col-span-2">
                 <FileDropzone
                   label="根拠書類 (任意)"
                   file={file}
@@ -352,7 +360,7 @@ export function ItemsEditDialog({
           <Button onClick={onSubmit} disabled={isSubmitting}>
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 保存中...
               </>
             ) : (

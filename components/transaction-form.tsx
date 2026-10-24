@@ -63,6 +63,7 @@ import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
 import { ReceiptUpload } from "@/components/transaction/receipt-upload";
 import { AdminFields } from "@/components/transaction/admin-fields";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -230,13 +231,13 @@ function TransactionFormInner({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
         {/* 収支タイプ */}
         <FormField
           control={form.control}
           name="type"
           render={({ field }) => (
-            <FormItem className="space-y-3">
+            <FormItem className="space-y-3 md:col-span-2">
               <FormLabel>収支区分</FormLabel>
               <FormControl>
                 <RadioGroup
@@ -268,7 +269,7 @@ function TransactionFormInner({
         />
 
         {/* 日付 + 金額 */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
           <FormField
             control={form.control}
             name="date"
@@ -298,9 +299,10 @@ function TransactionFormInner({
                       <Button
                         variant={"outline"}
                         size="icon"
+                        aria-label="日付を選択"
                         disabled={preventCoreEdits}
                       >
-                        <CalendarIcon className="h-4 w-4" />
+                        <CalendarIcon className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -403,7 +405,7 @@ function TransactionFormInner({
           control={form.control}
           name="description"
           render={({ field }) => (
-            <FormItem>
+            <FormItem className="md:col-span-2">
               <FormLabel>概要</FormLabel>
               <FormControl>
                 <Input placeholder="例: 秋月電子 パーツ代" {...field} />
@@ -417,21 +419,23 @@ function TransactionFormInner({
         />
 
         {/* 管理者/会計担当者用フィールド — 将来 transaction_kind / financial_account_id はここに追加 */}
-        <AdminFields
-          form={form}
-          userRole={userRole}
-          users={users}
-          accountingUserId={accountingUserId}
-          isEditing={!!initialData}
-          canChangeApprovalStatus={canChangeApprovalStatus}
-        />
+        <div className="md:col-span-2">
+          <AdminFields
+            form={form}
+            userRole={userRole}
+            users={users}
+            accountingUserId={accountingUserId}
+            isEditing={!!initialData}
+            canChangeApprovalStatus={canChangeApprovalStatus}
+          />
+        </div>
 
         {/* 備考 */}
         <FormField
           control={form.control}
           name="remarks"
           render={({ field }) => (
-            <FormItem>
+            <FormItem className="md:col-span-2">
               <FormLabel>備考 (任意)</FormLabel>
               <FormControl>
                 <Input
@@ -446,13 +450,15 @@ function TransactionFormInner({
         />
 
         {/* 領収書アップロード */}
-        <ReceiptUpload
-          file={file}
-          onFileChange={setFile}
-          existingUrl={initialData?.receipt_url}
-          disabled={form.formState.isSubmitting || isUploading}
-          error={uploadError}
-        />
+        <div className="md:col-span-2">
+          <ReceiptUpload
+            file={file}
+            onFileChange={setFile}
+            existingUrl={initialData?.receipt_url}
+            disabled={form.formState.isSubmitting || isUploading}
+            error={uploadError}
+          />
+        </div>
 
         <Button
           type="submit"
@@ -460,7 +466,7 @@ function TransactionFormInner({
           disabled={form.formState.isSubmitting || isUploading}
         >
           {(form.formState.isSubmitting || isUploading) && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           )}
           {isUploading ? "画像を送信中..." : "登録する"}
         </Button>
@@ -507,7 +513,7 @@ export function TransactionForm({
       <DialogTrigger asChild>
         {triggerButton ? triggerButton : <Button>＋ 新規申請</Button>}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>
             {initialData ? "取引の編集" : "新規取引の登録"}

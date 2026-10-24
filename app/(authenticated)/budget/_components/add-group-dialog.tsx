@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { createAccountingGroup } from "../actions";
 import { useRouter } from "next/navigation";
 import { PlusCircle } from "lucide-react";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 interface AddGroupDialogProps {
   fiscalYear: number;
@@ -80,11 +81,11 @@ export function AddGroupDialog({ fiscalYear }: AddGroupDialogProps) {
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <PlusCircle className="h-4 w-4 mr-1.5" />
+          <PlusCircle className="h-4 w-4 mr-1.5" aria-hidden="true" />
           会計グループを追加
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>会計グループを追加</DialogTitle>
           <DialogDescription>
@@ -92,7 +93,7 @@ export function AddGroupDialog({ fiscalYear }: AddGroupDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="grid gap-4 py-2 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="add-group-name">グループ名 *</Label>
             <Input
@@ -139,7 +140,7 @@ export function AddGroupDialog({ fiscalYear }: AddGroupDialogProps) {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-destructive md:col-span-2">{error}</p>}
         </div>
 
         <DialogFooter>

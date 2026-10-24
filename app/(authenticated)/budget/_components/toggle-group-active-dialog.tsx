@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { toggleAccountingGroupActive } from "../actions";
 import { useRouter } from "next/navigation";
 import { Power } from "lucide-react";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 type GroupItem = {
   id: string;
@@ -69,11 +70,11 @@ export function ToggleGroupActiveDialog({
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <Power className="h-4 w-4 mr-1.5" />
+          <Power className="h-4 w-4 mr-1.5" aria-hidden="true" />
           グループ有効/無効
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className={DIALOG_WIDTH_CLASS.confirm}>
         <DialogHeader>
           <DialogTitle>グループの有効/無効切り替え</DialogTitle>
           <DialogDescription>
@@ -82,7 +83,7 @@ export function ToggleGroupActiveDialog({
         </DialogHeader>
 
         <div className="space-y-2 py-2">
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           {localGroups.map((group) => {
             const isThisPending = isPending && pendingGroupId === group.id;
