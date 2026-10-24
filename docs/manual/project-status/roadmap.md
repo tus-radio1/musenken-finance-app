@@ -53,6 +53,7 @@ S1〜S3 では service-role クライアントを使っているため、RLS で
 - RLS の pgTAP テストと、Server Action の結合テストを追加する。
 
 ### 3. 領収書の D&D エリア（ユーザー要望）
+- **対応済み（2026-10-24）**: 共通の `FileDropzone` / `useReceiptUpload` に6か所を集約。複数ファイルは全件拒否し、形式・10MB制限を選択時と送信時に検証します。
 - R1: ドロップゾーンの共通コンポーネント（`<FileDropzone>` と `useReceiptUpload`）を作り、6 箇所のファイル入力をすべて置き換える。
 - ~~R2: 領収書 URL の生成処理（6 箇所）を 1 つの関数にまとめる。~~ S4 とあわせて対応済み（`lib/receipt-url.ts` の `getReceiptViewUrl`）。
 - ブラウザ側でもファイルの種類とサイズをチェックし、許可リストをサーバーと共有する。
