@@ -72,10 +72,10 @@ S1〜S3 では service-role クライアントを使っているため、RLS で
 ### UI・デザインの統一（4 段階）
 1. 意味を持つ色トークン（success・warning・info）、Badge のバリアント、ステータス表記の一元化。
 2. `PageShell`・`PageHeader`、`(authenticated)/loading.tsx`、`AccessDenied`・`ErrorState`・`EmptyState` を作り、年度セレクタを統合する。
-3. ~~既存画面への適用：`confirm()` を ConfirmDialog に置き換える、アクセシビリティを修正する（ラベルの紐づけ、アイコンボタンの名前、コントラスト）、色の直接指定を置き換える。~~ **対応済み（2026-10-24）**：フォームダイアログを `sm:max-w-3xl`、確認ダイアログを `sm:max-w-md` に統一。短いフォーム項目は PC で 2 列にし、ConfirmDialog、ラベル関連付け、アイコン名と装飾アイコンの扱い、意味色トークンへの置き換えを反映した。
+3. ~~既存画面への適用：`confirm()` を ConfirmDialog に置き換える、アクセシビリティを修正する（ラベルの紐づけ、アイコンボタンの名前、コントラスト）、色の直接指定を置き換える。~~ **対応済み（2026-10-24）**：フォームダイアログを `sm:max-w-4xl`、確認ダイアログを `sm:max-w-md` に統一。領収書・書類を添付するフォームは PC（1024px 以上）で「左に入力欄、右に書類」の 2 ペインにし、1366×768 でもスクロールせずに収まるようにした。送信ボタンは共通のフッターで右寄せにし、ConfirmDialog、ラベル関連付け、アイコン名と装飾アイコンの扱い、意味色トークンへの置き換えを反映した。
 4. 任意：表とカードを切り替える共通ラッパー、サイドバーの共通化、日本語フォント。
 
-ダイアログ幅のルールは `components/layout/page-shell.tsx` の `DIALOG_WIDTH_CLASS` に集約する。`confirm` は `sm:max-w-md`、`form` は `sm:max-w-3xl`。一覧テーブルを収めるダイアログができた場合のみ `wide` の追加を検討する。
+ダイアログ幅のルールは `components/layout/page-shell.tsx` の `DIALOG_WIDTH_CLASS` に集約する。`confirm` は `sm:max-w-md`、`form` は `sm:max-w-4xl`。一覧テーブルを収めるダイアログができた場合のみ `wide` の追加を検討する。
 
 ### 処理の高速化（計測してから着手）
 - まず Vercel の関数リージョンと Supabase のリージョンが一致しているか確認する（コード変更なしで確認できる）。
