@@ -1,34 +1,32 @@
+import {
+  PageLoadingShell,
+  SkeletonBlock,
+} from "@/components/page-loading";
+
 export default function HomeLoading() {
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto w-full space-y-8">
-        {/* Page title */}
-        <div className="h-8 bg-muted rounded animate-pulse w-24" />
-
-        {/* Recent applications card */}
-        <div className="rounded-lg border bg-card p-6 space-y-4">
-          <div className="h-5 bg-muted rounded animate-pulse w-40" />
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4">
-                <div className="h-4 bg-muted rounded animate-pulse flex-1" />
-                <div className="h-4 bg-muted rounded animate-pulse w-20" />
-                <div className="h-4 bg-muted rounded animate-pulse w-16" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-lg border bg-card p-6 space-y-3">
-              <div className="h-4 bg-muted rounded animate-pulse w-1/3" />
-              <div className="h-8 bg-muted rounded animate-pulse w-1/2" />
+    <PageLoadingShell>
+      <SkeletonBlock className="h-8 w-24" />
+      <div className="rounded-lg border bg-card p-6">
+        <SkeletonBlock className="mb-4 h-5 w-40" />
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-4">
+              <SkeletonBlock className="h-4 flex-1" />
+              <SkeletonBlock className="h-4 w-20" />
+              <SkeletonBlock className="h-4 w-16" />
             </div>
           ))}
         </div>
       </div>
-    </main>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="rounded-lg border bg-card p-6">
+            <SkeletonBlock className="mb-3 h-4 w-1/3" />
+            <SkeletonBlock className="h-8 w-1/2" />
+          </div>
+        ))}
+      </div>
+    </PageLoadingShell>
   );
 }
