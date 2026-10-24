@@ -281,6 +281,21 @@ Facts: `deploy-db.yml` pushes migrations on push to `develop` (staging) and `mai
 | Step 12 group rules (restrictive and partly broadening) | Deployed UI only offers groups the new rule allows (`lib/teams.ts:67-100`), except the club group shown to 部長/副部長, which is denied before and after. Direct API misuse is rejected | app (step 7) first; run the production role/group inventory and verify on staging before approving production |
 | Option B `approve_transaction` RPC (additive) | Yes by itself; but app code calling it fails until it exists | **DB first**: merge the migration to `main` alone, approve the production DB deploy, then merge the app change. Keep the RPC when rolling the app back |
 
+PR-B implementation (2026-10-24): `20261024100000_guard_transaction_approval_and_filing.sql`
+implements steps 11/12 and is compatible with the deployed PR-A app, accounting
+role split, and read-only club ledger. The read-only production inventory found
+`general` (open), `team` (restricted), and `club` groups; NULL remains open for
+app parity. The shared helper grants global non-club filing to admin, 会計, 部長,
+and 副部長. Only changed destinations are checked, so historical outsider rows
+and unchanged historical self-approvals remain editable. Non-admin API inserts
+must start pending under the actor; decisions on other creators record the
+actor, and edit-form resets to pending may clear the approver. Admin self-row
+break-glass corrections and trusted service/definer writes remain allowed.
+Release order: **develop → main**. Verify staging first; the **production DB
+deploy requires approval**. No additional app rollout prerequisite remains
+because PR-A and the accounting/club changes are already live. This local
+implementation does not apply migrations to production.
+
 Rollback: steps 10-12 have down scripts in their headers (as in `20261022120000_…sql:30-38`); reverting 11/12 reopens the bugs, so prefer roll-forward. Types must be regenerated in every migration commit, or CI fails after step 1.
 
 ---

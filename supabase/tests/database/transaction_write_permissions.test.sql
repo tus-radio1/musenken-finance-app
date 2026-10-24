@@ -1,7 +1,6 @@
 -- pgTAP: who may write which transactions / subsidy items through the Data API.
 -- Plan: .claude/docs/plans/p1-typed-permissions.md (§2.4-§2.6, steps 3/10/11/12).
--- Assertions inside todo_start/todo_end document known bugs that PR-B
--- (steps 11 and 12) fixes; each fixing step moves its block out of todo.
+-- PR-B regressions are normal assertions (steps 11 and 12).
 -- Run with: supabase test db
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
@@ -32,11 +31,11 @@ INSERT INTO public.fiscal_years (year, start_date, end_date)
 VALUES (2098, '2098-04-01', '2099-03-31')
 ON CONFLICT (year) DO NOTHING;
 
--- G1 / G2 / G3 are restricted (type 'leader') groups.
+-- G1 / G2 / G3 match production restricted groups (type 'team').
 INSERT INTO public.accounting_groups (id, name, type) VALUES
-  ('e1000000-0000-4000-8000-000000000001', 'pgtap tw G1', 'leader'),
-  ('e2000000-0000-4000-8000-000000000002', 'pgtap tw G2', 'leader'),
-  ('e3000000-0000-4000-8000-000000000003', 'pgtap tw G3', 'leader');
+  ('e1000000-0000-4000-8000-000000000001', 'pgtap tw G1', 'team'),
+  ('e2000000-0000-4000-8000-000000000002', 'pgtap tw G2', 'team'),
+  ('e3000000-0000-4000-8000-000000000003', 'pgtap tw G3', 'team');
 
 INSERT INTO public.roles (id, name, type, accounting_group_id) VALUES
   ('f1000000-0000-4000-8000-000000000001', 'pgtap tw member G1', 'general', 'e1000000-0000-4000-8000-000000000001'),
@@ -181,11 +180,10 @@ SELECT is(
 );
 
 -- ---------------------------------------------------------------------------
--- Known bugs fixed in PR-B (steps 11 and 12)
+-- DB regressions fixed in PR-B (steps 11 and 12)
 -- ---------------------------------------------------------------------------
 
 -- Step 11 (PR-B): 会計 approves own transaction through the Data API.
-SELECT todo_start('step 11: no DB guard against 会計 self-approval');
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims',
   '{"sub":"b3000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
@@ -201,10 +199,8 @@ SELECT is(
   'pending',
   '会計 own transaction stays pending'
 );
-SELECT todo_end();
 
 -- Step 12 (PR-B): group checks on INSERT (tautology) and destination moves.
-SELECT todo_start('step 12: transactions_insert_member group check is a tautology');
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims',
   '{"sub":"b5000000-0000-4000-8000-000000000005","role":"authenticated"}', true);
@@ -228,9 +224,7 @@ SELECT is(
   0::bigint,
   'no outsider row was inserted into G1'
 );
-SELECT todo_end();
 
-SELECT todo_start('step 12: no destination check on accounting_group_id changes');
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims',
   '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
@@ -247,7 +241,6 @@ SELECT is(
   'e1000000-0000-4000-8000-000000000001',
   'the transaction stays in G1'
 );
-SELECT todo_end();
 
 SELECT * FROM finish();
 ROLLBACK;
