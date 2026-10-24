@@ -25,7 +25,7 @@ export function UserNav({ user }: { user: UserProfile }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full" aria-label="ユーザーメニューを開く">
           <Avatar className="h-8 w-8">
             <AvatarImage src="" alt={user.full_name || ""} />
             <AvatarFallback>
@@ -50,7 +50,7 @@ export function UserNav({ user }: { user: UserProfile }) {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="text-red-600 focus:text-red-600"
+          className="text-destructive focus:text-destructive"
           onClick={() => signOut()}
         >
           ログアウト

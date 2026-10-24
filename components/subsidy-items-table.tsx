@@ -33,6 +33,7 @@ import { ItemsEditDialog } from "@/components/subsidy/items-edit-dialog";
 import type { SubsidyItem, SortKey, SortOrder, EditFormState } from "@/components/subsidy/types";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
 import { EmptyState } from "@/components/feedback/empty-state";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 export function SubsidyItemsTable({
   items: initialItems,
@@ -364,7 +365,7 @@ export function SubsidyItemsTable({
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className={DIALOG_WIDTH_CLASS.confirm}>
           <AlertDialogHeader>
             <AlertDialogTitle>申請の削除</AlertDialogTitle>
             <AlertDialogDescription>

@@ -124,50 +124,24 @@ Keep this section thin — a brief identity line + pointer. Thick content belong
 
 Rolling progress summary (latest 5 checkpoints): [PROGRESS.md](./PROGRESS.md)
 
-## Current Work: P1-1 typed client + centralized permissions (Codex handoff)
+## Current Work: P2 UI stage 3 + form widths (Codex handoff)
 
 <!-- Maintained by the Claude main agent as a rate-limit fallback. If Claude is unavailable, a Codex session can resume from here. The main agent commits this file on the PR branch right before each push. Last updated: 2026-10-24. -->
 
-**Status (2026-10-24):** PR-A (#44/#45) and the 会計 split (#46/#47) are LIVE in production (prod DB at `20261023110000`, 会計 type = accounting). Now doing PR-B (plan steps 11–12).
-**Authorization (user, 2026-10-24):** after verification, push + open PRs without asking; still ask before merges, prod deploy approval, remote data writes.
-**Routing rule (user, 2026-10-24):** clear-spec / simple tasks → Codex Luna with xhigh effort (`--model "${CODEX_MODEL_LUNA:-gpt-6-luna}" --config model_reasoning_effort=xhigh`); fast mode allowed if it works. Design / review / debugging stays on Sol.
-**PR-B status:** implemented by Codex (commit `95179db`, migration `20261024100000_guard_transaction_approval_and_filing.sql`) and verified by main agent: vitest 486/486, build 0, test db 337 PASS with 0 TODO, no drift. PR #48 MERGED to develop.
-**D&D status:** PR #49 MERGED to develop (worktree removed). Was opened from worktree `/home/yuulis/musenken-finance-app-dnd` (commits af0f99d, 12f9c7d, a0121e0 incl. fixes for 3 review findings; vitest 516/516, build 0). Remove the worktree after merge.
-**E2E status:** PR #50 open; branch includes develop with #48/#49 (merge 5000041) and the dropzone locator fix (c0dc920). Main agent re-ran locally after the fix: vitest 516/516, build 0, E2E 12/12. Waiting for CI `e2e` re-run. OPEN QUESTION: login rate limiter keys on first `x-forwarded-for` (`app/login/actions.ts:25`); confirm Vercel overwrites client XFF.
-**P2 (started 2026-10-24):** #50 merged; release PR #51 (develop → main: #48, #49, #50) opened — prod DB deploy of `20261024100000` needs approval after merge.
-- P2-a rate-limit hardening: PR #52 opened. DONE + verified (commits d0e83ac, b7df322, 7d7333f + E2E_PORT config); PR to develop opened. Verification: vitest 541/541, test db 363 PASS, no drift, build 0, E2E 12/12 (run with `E2E_PORT=3100` because port 3000 was taken by another local project). Was resumed with `.claude/logs/p2-rate-limit-resume-prompt.md` (original spec `.claude/logs/p2-rate-limit-prompt.md`). Design: `lib/client-ip.ts` (Vercel → x-real-ip), Supabase-table limiter via service-role-only SECURITY DEFINER RPC `rate_limit_hit`, login keyed by IP and by student number, fail-open, delete dead admin files.
-- P2-b UI foundation (stages 1–2): PR #53 opened from worktree `/home/yuulis/musenken-finance-app-ui` (commits df50011, 1c306e4, 6925778, 91bd7e2, 087f482). Verified: vitest 522/522, build 0, E2E 12/12 (after locator fix: ledger group Select is now found by its accessible name 会計グループ). Remove the worktree after merge. Manual visual checks listed in the PR.
-- ENV NOTE: this shell may not load nvm; prefix commands with `export PATH=/home/yuulis/.nvm/versions/node/v24.21.0/bin:$PATH` (otherwise node v18 and the Windows codex shim are used and Codex fails with "Missing optional dependency @openai/codex-linux-x64").
-- DOCKER NOTE: run the local stack slim to keep Docker load low: `supabase start -x studio,logflare,vector,realtime,mailpit,imgproxy,edge-runtime`.
-**Prod inventory (2026-10-24, read-only):** group types: general=4 (open, no roles), team=4 (role-restricted, 1 inactive), club=1; no NULL. ~17 historical rows were filed into team groups by users without a role there (must stay editable). 3 historical self-approved rows (approved_by = created_by) — leave as is. 122 profiles, 39 with group roles.
-Known residual issues: non-admin `deleteMember` still has the 0-row/auth-cascade problem; admin can self-approve in two logged steps (reassign created_by, then approve); break-glass intent audit row persists if the update fails.
+**Status (2026-10-24):** P0, P1 (PR-A, PR-B, 会計 split), D&D (#49), E2E (#50), rate-limit hardening (#52) and UI stages 1–2 (#53) are all merged. P0/P1/D&D/E2E are in production via #51; #52/#53 are on develop only (not yet released; #52 ships migration `20261024120000_rate_limit_buckets.sql` — on release approve the prod DB deploy promptly, code is fail-open without it).
+**Current task:** branch `feature/p2-ui-stage3` from develop @ `6a8c9f0`. Round 1 spec `.claude/logs/p2-ui-stage3-prompt.md`: shared dialog-size map, ConfirmDialog replaces `confirm()`, a11y, raw colours → tokens, loading shells reuse `PAGE_WIDTH_CLASS`. User complaint driving it: application form too narrow on PC (needless scrolling), form widths differ per screen.
+**Progress:** round 1 by Codex Luna xhigh (546b4c0, cee6ff8, 2ce088a, 8dbd335); main agent simplified ConfirmDialog and reverted subsidy category colours (3683d0f). Verified: lint/typecheck OK, vitest 547/547, build OK, E2E 12/12. Measurement spec `e2e/tmp-measure/measure.spec.ts` (untracked, NEVER commit) showed the transaction dialog still scrolls at 1366x768 (800 vs 689px). Round 2 DONE (a0e2bab, verified by main agent: lint/typecheck OK, vitest 547/547, build OK, E2E 12/12, measure: transaction 546/546 and subsidy 656/656 at 1366x768 and 1440x900, no scroll; tmp-measure deleted). PR to develop opened from `feature/p2-ui-stage3`. Round 2 spec: `.claude/logs/p2-ui-stage3-forms2-prompt.md` (form width → sm:max-w-4xl for all data-entry dialogs, two panes at lg for forms with documents, shared footer; target scrolls=false at 1366x768 and 1440x900).
+**After it:** verify (lint, typecheck, test, build, measure spec, `E2E_PORT=3100 npm run e2e` with tmp-measure moved aside, verify_delegation), delete `e2e/tmp-measure/`, commit STATE.md, push, open PR to develop. Next P2 item: performance (Vercel/Supabase region check, ledger round trips, `cache()` around `getUser()`, parallel awaits).
+**Authorization (user):** after verification, push + open PRs without asking; still ask before merges, prod deploy approval, remote data writes. Merged branches/worktrees may be deleted.
+**Routing rule (user):** clear-spec / simple tasks → Codex Luna xhigh (`--model "${CODEX_MODEL_LUNA:-gpt-6-luna}" --config model_reasoning_effort=xhigh`); design / review / debugging → Sol. Implementers must not touch `.claude/STATE.md` (not even revert it).
 
-**Read first:**
-- Per-step progress log (appended by the implementer after each commit): `.claude/logs/p1-progress.md`.
-- Plan + binding user decisions: `.claude/docs/plans/p1-typed-permissions.md` (§4 steps, §10 decisions + amendment).
-- Project status / roadmap (Japanese): `docs/manual/project-status/roadmap.md`.
-
-**Binding decisions (summary):**
-- Approvers = admin + 会計, never own rows, and past fiscal years admin-only. Leaders cannot approve or edit others' transactions.
-- Edit-form status change: admin + 会計 on others' rows. An admin may also change their OWN rows (break-glass) and must write an audit_logs entry. 会計 may not change their own rows. The normal approval action blocks self-approval for everyone.
-- Budget edit: admin always, 会計 current fiscal year only, leaders never.
-- The approval RPC is deferred to R6. Use a conditional UPDATE that requires exactly 1 row.
-- PR-A = steps 1–10 + 13, with additive migrations only. PR-B = steps 11–12 (restrictive migrations). Release PR-B only after PR-A is live in production, and run a read-only production role/group inventory before step 12.
-
-**How to resume (Codex):**
-1. Run `git log --oneline develop..HEAD` and compare the commits against plan §4 to find the next step.
-2. Implement the remaining steps with the same rules: tests that prove each bug before its fix, no skipped or weakened tests, Japanese commit messages, no push.
-3. Acceptance:
-   - `npm run lint`
-   - `npm run typecheck`
-   - `npm test`
-   - `npm run build` (with the dummy env from `.github/workflows/ci.yml`)
-   - `supabase db reset --local`, `supabase db lint --local`, `supabase test db --local`
-   - a types drift check: `supabase gen types typescript --local` and `git diff --exit-code lib/database.types.ts`
+**Binding permission decisions (P1):** approvers = admin + 会計, never own rows, past fiscal years admin-only; admin may change own rows via edit form (audited, fail-closed); budget edit: admin always, 会計 current FY only; leaders cannot approve or edit others' rows; 部長/副部長 read the club ledger read-only. Details: `.claude/docs/plans/p1-typed-permissions.md` §10, `.claude/docs/plans/accounting-role-split.md`.
+**Known residual issues:** non-admin `deleteMember` 0-row/auth-cascade problem; admin can self-approve in two logged steps; orphaned storage files; `TransferForm` not mounted; no `financial_accounts` / audit-log UI.
 
 **Environment notes:**
-- Supabase CLI 2.121.0 with the Docker WSL integration. The project is linked, so always pass `--local`; never `db push` or `--linked`.
-- Production DB deploys (main) wait for manual approval by Yuulis.
-- Prod ref: `csphhemmhzayyhlasirc`. Staging ref: `gygyuqivcvwgvyuekqvy`.
+- Prefix commands with `export PATH=/home/yuulis/.nvm/versions/node/v24.21.0/bin:$PATH` (else node v18 + Windows codex shim → "Missing optional dependency @openai/codex-linux-x64").
+- Supabase CLI 2.121.0; project is linked, so always `--local`; never `db push`/`--linked`. Slim stack: `supabase start -x studio,logflare,vector,realtime,mailpit,imgproxy,edge-runtime`. Keep Docker load low: no restarts, few E2E runs.
+- E2E: export env from `supabase status -o env` without printing keys (API_URL → NEXT_PUBLIC_SUPABASE_URL + SUPABASE_URL, ANON_KEY → NEXT_PUBLIC_SUPABASE_ANON_KEY, SERVICE_ROLE_KEY → SUPABASE_SERVICE_ROLE_KEY); port 3000 is another project's dev server → `E2E_PORT=3100`.
+- Prod ref `csphhemmhzayyhlasirc`, staging ref `gygyuqivcvwgvyuekqvy`; prod DB deploys (main) need approval by Yuulis.
+- Roadmap (Japanese): `docs/manual/project-status/roadmap.md`.
 
-**Done so far (all in production):** P0 S1–S4 and B1–B3 (PRs #39–#43).

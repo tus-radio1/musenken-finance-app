@@ -89,7 +89,7 @@ export function SettingsClient({ fullName }: { fullName: string }) {
           </CardHeader>
           <CardContent>
             <div className="space-y-1">
-              <Label className="text-muted-foreground">氏名</Label>
+              <p className="text-sm text-muted-foreground">氏名</p>
               <p className="text-sm font-medium">{fullName}</p>
             </div>
           </CardContent>

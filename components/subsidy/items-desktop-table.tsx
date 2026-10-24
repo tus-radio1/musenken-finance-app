@@ -72,7 +72,7 @@ export function ItemsDesktopTable({
                   onClick={() => onToggleSort("created_at")}
                 >
                   申請日
-                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
                 </Button>
               </TableHead>
               <TableHead>カテゴリ</TableHead>
@@ -87,7 +87,7 @@ export function ItemsDesktopTable({
                   onClick={() => onToggleSort("requested_amount")}
                 >
                   申請金額
-                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                  <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
                 </Button>
               </TableHead>
               <TableHead>算定額</TableHead>
@@ -150,7 +150,7 @@ export function ItemsDesktopTable({
                       {item.receipt_public_url ? (
                         <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
                           <a href={item.receipt_public_url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-3 w-3 mr-1" />
+                            <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />
                             領収書
                           </a>
                         </Button>
@@ -158,7 +158,7 @@ export function ItemsDesktopTable({
                       {item.evidence_public_url ? (
                         <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
                           <a href={item.evidence_public_url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-3 w-3 mr-1" />
+                            <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />
                             根拠書類
                           </a>
                         </Button>
@@ -178,8 +178,7 @@ export function ItemsDesktopTable({
                       <ChevronDown
                         className={`h-4 w-4 transition-transform ${
                           openCards.has(item.id) ? "rotate-180" : ""
-                        }`}
-                      />
+                        }`} aria-hidden="true" />
                     </Button>
                   </TableCell>
                   <TableCell>
@@ -188,13 +187,13 @@ export function ItemsDesktopTable({
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
                             <span className="sr-only">メニューを開く</span>
-                            <MoreHorizontal className="h-4 w-4" />
+                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           {canEdit && (
                             <DropdownMenuItem onClick={() => onEditClick(item)}>
-                              <Pencil className="mr-2 h-4 w-4" />
+                              <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                               編集
                             </DropdownMenuItem>
                           )}
@@ -204,9 +203,9 @@ export function ItemsDesktopTable({
                                 e.preventDefault();
                                 onDeleteClick(item);
                               }}
-                              className="text-red-600 focus:text-red-600"
+                              className="text-destructive focus:text-destructive"
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
+                              <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                               削除
                             </DropdownMenuItem>
                           )}

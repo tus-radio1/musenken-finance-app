@@ -16,8 +16,8 @@ for (const role of ["accounting", "admin"] as const) {
       await expect(row).toBeVisible();
       const approve = row.getByRole("button", { name: "承認する", exact: true });
       await expect(approve).toBeVisible();
-      page.once("dialog", (dialog) => dialog.accept());
       await approve.click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "承認する", exact: true }).click();
       await expect(row).toContainText("承認済");
       await page.reload();
       await openLedger(page, groups.team.name);

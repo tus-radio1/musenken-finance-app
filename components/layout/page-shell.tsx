@@ -2,10 +2,15 @@ import type { ReactElement, ReactNode } from "react";
 
 export type PageWidth = "list" | "form";
 
-const PAGE_WIDTH_CLASS: Record<PageWidth, string> = {
+export const PAGE_WIDTH_CLASS: Record<PageWidth, string> = {
   list: "max-w-7xl",
   form: "max-w-3xl",
 };
+
+export const DIALOG_WIDTH_CLASS = {
+  confirm: "sm:max-w-md",
+  form: "sm:max-w-4xl",
+} as const;
 
 type PageShellProps = {
   children: ReactNode;

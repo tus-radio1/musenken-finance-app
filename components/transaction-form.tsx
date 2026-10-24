@@ -47,6 +47,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -63,6 +64,7 @@ import { ACCOUNTING_USER_ID_FALLBACK } from "@/lib/system-config.shared";
 
 import { ReceiptUpload } from "@/components/transaction/receipt-upload";
 import { AdminFields } from "@/components/transaction/admin-fields";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -230,164 +232,74 @@ function TransactionFormInner({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* 収支タイプ */}
-        <FormField
-          control={form.control}
-          name="type"
-          render={({ field }) => (
-            <FormItem className="space-y-3">
-              <FormLabel>収支区分</FormLabel>
-              <FormControl>
-                <RadioGroup
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                  className="flex space-x-4"
-                  disabled={preventCoreEdits}
-                >
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <RadioGroupItem value="expense" />
-                    </FormControl>
-                    <FormLabel className="font-normal cursor-pointer">
-                      支出
-                    </FormLabel>
-                  </FormItem>
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <RadioGroupItem value="income" />
-                    </FormControl>
-                    <FormLabel className="font-normal cursor-pointer">
-                      収入
-                    </FormLabel>
-                  </FormItem>
-                </RadioGroup>
-              </FormControl>
-            </FormItem>
-          )}
-        />
-
-        {/* 日付 + 金額 */}
-        <div className="grid grid-cols-2 gap-4">
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,1fr)]"
+      >
+        <div className="grid content-start gap-3 md:grid-cols-2">
+          {/* 収支タイプ */}
           <FormField
             control={form.control}
-            name="date"
+            name="type"
             render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>日付</FormLabel>
-                <div className="flex gap-2 items-center">
-                  <FormControl>
-                    <Input
-                      type="text"
-                      placeholder="2024/01/01"
-                      disabled={preventCoreEdits}
-                      value={
-                        field.value ? format(field.value, "yyyy/MM/dd") : ""
-                      }
-                      onChange={(e) => {
-                        const parsed = parseDateInputValue(e.target.value);
-                        if (parsed) {
-                          field.onChange(parsed);
-                        }
-                      }}
-                      className="w-[140px]"
-                    />
-                  </FormControl>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        size="icon"
-                        disabled={preventCoreEdits}
-                      >
-                        <CalendarIcon className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        locale={ja}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="amount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>金額 (円)</FormLabel>
-                <FormControl>
-                  <Input type="number" placeholder="1000" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {/* 会計グループ */}
-        <FormField
-          control={form.control}
-          name="accounting_group_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>会計グループ</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-                disabled={preventCoreEdits}
+              <FormItem
+                className={
+                  financialAccounts?.length
+                    ? "space-y-2 md:col-span-2"
+                    : "space-y-2"
+                }
               >
+                <FormLabel>収支区分</FormLabel>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="グループを選択してください" />
-                  </SelectTrigger>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    className="flex space-x-4"
+                    disabled={preventCoreEdits}
+                  >
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <RadioGroupItem value="expense" />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer">
+                        支出
+                      </FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <RadioGroupItem value="income" />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer">
+                        収入
+                      </FormLabel>
+                    </FormItem>
+                  </RadioGroup>
                 </FormControl>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+              </FormItem>
+            )}
+          />
 
-        {/* 財布 (Financial Account) */}
-        {financialAccounts && financialAccounts.length > 0 && (
+          {/* 会計グループ */}
           <FormField
             control={form.control}
-            name="financial_account_id"
+            name="accounting_group_id"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>財布</FormLabel>
+                <FormLabel>会計グループ</FormLabel>
                 <Select
                   onValueChange={field.onChange}
                   defaultValue={field.value}
+                  disabled={preventCoreEdits}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="財布を選択してください" />
+                      <SelectValue placeholder="グループを選択してください" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {financialAccounts.map((fa) => (
-                      <SelectItem key={fa.id} value={fa.id}>
-                        {fa.name}
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -396,74 +308,183 @@ function TransactionFormInner({
               </FormItem>
             )}
           />
-        )}
 
-        {/* 概要 */}
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>概要</FormLabel>
-              <FormControl>
-                <Input placeholder="例: 秋月電子 パーツ代" {...field} />
-              </FormControl>
-              <FormDescription>
-                具体的な購入内容や店名を記載してください。
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
+          {/* 財布 (Financial Account) */}
+          {financialAccounts && financialAccounts.length > 0 && (
+            <FormField
+              control={form.control}
+              name="financial_account_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>財布</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="財布を選択してください" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {financialAccounts.map((fa) => (
+                        <SelectItem key={fa.id} value={fa.id}>
+                          {fa.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           )}
-        />
 
-        {/* 管理者/会計担当者用フィールド — 将来 transaction_kind / financial_account_id はここに追加 */}
-        <AdminFields
-          form={form}
-          userRole={userRole}
-          users={users}
-          accountingUserId={accountingUserId}
-          isEditing={!!initialData}
-          canChangeApprovalStatus={canChangeApprovalStatus}
-        />
+          {/* 日付 + 金額 */}
+          <div className="grid gap-3 md:grid-cols-2 md:col-span-2">
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>日付</FormLabel>
+                  <div className="flex gap-2 items-center">
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="2024/01/01"
+                        disabled={preventCoreEdits}
+                        value={
+                          field.value ? format(field.value, "yyyy/MM/dd") : ""
+                        }
+                        onChange={(e) => {
+                          const parsed = parseDateInputValue(e.target.value);
+                          if (parsed) {
+                            field.onChange(parsed);
+                          }
+                        }}
+                        className="w-[140px]"
+                      />
+                    </FormControl>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          size="icon"
+                          aria-label="日付を選択"
+                          disabled={preventCoreEdits}
+                        >
+                          <CalendarIcon className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          locale={ja}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-        {/* 備考 */}
-        <FormField
-          control={form.control}
-          name="remarks"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>備考 (任意)</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="追加のコメントやメモ"
-                  {...field}
-                  value={field.value || ""}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>金額 (円)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="1000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* 概要 */}
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>概要</FormLabel>
+                <FormControl>
+                  <Input placeholder="例: 秋月電子 パーツ代" {...field} />
+                </FormControl>
+                <FormDescription>
+                  具体的な購入内容や店名を記載してください。
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* 管理者/会計担当者用フィールド — 将来 transaction_kind / financial_account_id はここに追加 */}
+          <AdminFields
+            form={form}
+            userRole={userRole}
+            users={users}
+            accountingUserId={accountingUserId}
+            isEditing={!!initialData}
+            canChangeApprovalStatus={canChangeApprovalStatus}
+          />
+
+          {/* 備考 */}
+          <FormField
+            control={form.control}
+            name="remarks"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>備考 (任意)</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="追加のコメントやメモ"
+                    {...field}
+                    value={field.value || ""}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+        </div>
 
         {/* 領収書アップロード */}
-        <ReceiptUpload
-          file={file}
-          onFileChange={setFile}
-          existingUrl={initialData?.receipt_url}
-          disabled={form.formState.isSubmitting || isUploading}
-          error={uploadError}
-        />
+        <div className="min-w-0 lg:min-h-full">
+          <ReceiptUpload
+            file={file}
+            onFileChange={setFile}
+            existingUrl={initialData?.receipt_url}
+            disabled={form.formState.isSubmitting || isUploading}
+            error={uploadError}
+            className="h-full lg:min-h-[24rem]"
+            dropzoneClassName="lg:flex-1"
+          />
+        </div>
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={form.formState.isSubmitting || isUploading}
-        >
-          {(form.formState.isSubmitting || isUploading) && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          {isUploading ? "画像を送信中..." : "登録する"}
-        </Button>
+        <DialogFooter className="lg:col-span-2">
+          <Button
+            type="submit"
+            className="w-full md:w-auto"
+            disabled={form.formState.isSubmitting || isUploading}
+          >
+            {(form.formState.isSubmitting || isUploading) && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
+            {isUploading ? "画像を送信中..." : "登録する"}
+          </Button>
+        </DialogFooter>
       </form>
     </Form>
   );
@@ -507,7 +528,7 @@ export function TransactionForm({
       <DialogTrigger asChild>
         {triggerButton ? triggerButton : <Button>＋ 新規申請</Button>}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>
             {initialData ? "取引の編集" : "新規取引の登録"}
