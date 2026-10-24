@@ -2,7 +2,7 @@
 -- inside this transaction, not a copy of its UPDATE. All fixtures roll back.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(46);
+SELECT plan(47);
 SELECT is((SELECT cardinality(statements) FROM supabase_migrations.schema_migrations
   WHERE version = '20261023110000'), 1, 'actual Migration B is available in local migration history');
 
@@ -106,17 +106,19 @@ SELECT set_config('request.jwt.claims',
 SELECT is((SELECT amount FROM public.budgets WHERE fiscal_year_id = 2094
   AND accounting_group_id = 'a9200000-0000-4000-8000-000000000001'),
   12345, 'non-admin accounting reads past-year budgets');
--- Audit finding: PR-A's app grants accounting filing, but non-club INSERT
--- still needs a group-specific role under the existing PR-B policy bug.
--- Migration A intentionally adds no unchosen transaction INSERT rights.
-SELECT throws_ok($$INSERT INTO public.transactions (
+-- PR-B closes the documented app/DB availability gap: a global-only
+-- accountant can now file into non-club groups, matching the deployed app.
+SELECT lives_ok($$INSERT INTO public.transactions (
   date, amount, description, accounting_group_id, fiscal_year_id,
   created_by, financial_account_id, transaction_kind
 ) VALUES ('2094-05-01', -1, 'split global-only non-club insert',
   'a9200000-0000-4000-8000-000000000001', 2094,
   'a9100000-0000-4000-8000-000000000001',
   'a9400000-0000-4000-8000-000000000001', 'expense')$$,
-  '42501', NULL, 'global-only accounting has no non-club INSERT grant (audit open question)');
+  'global-only accounting can file into non-club groups after PR-B');
+SELECT is((SELECT count(*) FROM public.transactions
+  WHERE description = 'split global-only non-club insert'), 1::bigint,
+  'global-only accounting INSERT persisted');
 SELECT lives_ok($$DELETE FROM public.transactions WHERE id IN (
   'a9500000-0000-4000-8000-000000000001', 'a9500000-0000-4000-8000-000000000002',
   'a9500000-0000-4000-8000-000000000003')$$,

@@ -311,7 +311,10 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "can_view_club_ledger":
+            "can_file_into_group":
+{ Args: { "p_group_id": string }; Returns: boolean
+                           },
+"can_view_club_ledger":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "create_transfer":
