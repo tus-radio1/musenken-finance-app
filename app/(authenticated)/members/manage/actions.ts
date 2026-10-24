@@ -18,7 +18,7 @@ import { isAdmin } from "@/lib/roles/permissions";
 import type { RoleAssignment } from "@/lib/roles/types";
 import { logAuditEvent } from "@/lib/audit-log";
 import { passwordResetRateLimiter } from "@/lib/rate-limit";
-import { headers } from "next/headers";
+import { getClientIp } from "@/lib/client-ip";
 import {
   addMemberSchema,
   updateMemberSchema,
@@ -506,12 +506,8 @@ export async function resetPasswordMember(userId: string) {
   }
 
   // Rate limiting: 3 attempts per 15 minutes per IP
-  const headersList = await headers();
-  const ip =
-    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headersList.get("x-real-ip") ||
-    "unknown";
-  const rateLimitResult = passwordResetRateLimiter.check(ip);
+  const ip = await getClientIp();
+  const rateLimitResult = await passwordResetRateLimiter.check(ip);
   if (!rateLimitResult.success) {
     const retryMinutes = Math.ceil(
       (rateLimitResult.resetAt - Date.now()) / 1000 / 60,
