@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useRef, useState, type ReactElement, type ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -12,10 +12,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
-import {
-  areConfirmDialogButtonsDisabled,
-  runConfirmDialogDecision,
-} from "@/lib/confirm-dialog";
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -39,50 +35,37 @@ export function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps): ReactElement {
   const [isConfirming, setIsConfirming] = useState(false);
-  const decisionState = useRef({ pending: false, confirmed: false });
-  const buttonsDisabled = areConfirmDialogButtonsDisabled(
-    pending || isConfirming,
-  );
+  // A ref blocks a double click that lands before the disabled state renders.
+  const inFlight = useRef(false);
+  const buttonsDisabled = pending || isConfirming;
 
-  useEffect(() => {
-    decisionState.current.pending = buttonsDisabled;
-    if (!open) decisionState.current.confirmed = false;
-  }, [buttonsDisabled, open]);
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (buttonsDisabled) return;
+    onOpenChange(nextOpen);
+  };
 
   const handleConfirm = async () => {
-    const canConfirm = runConfirmDialogDecision(
-      "confirm",
-      decisionState.current,
-      () => setIsConfirming(true),
-    );
-    if (!canConfirm) return;
-
+    if (inFlight.current || buttonsDisabled) return;
+    inFlight.current = true;
+    setIsConfirming(true);
     try {
       await onConfirm();
       onOpenChange(false);
     } finally {
+      inFlight.current = false;
       setIsConfirming(false);
-      decisionState.current.confirmed = false;
     }
   };
 
-  const handleCancel = () => {
-    runConfirmDialogDecision("cancel", decisionState.current, () => undefined);
-    onOpenChange(false);
-  };
-
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent className={DIALOG_WIDTH_CLASS.confirm}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel
-            disabled={buttonsDisabled}
-            onClick={handleCancel}
-          >
+          <AlertDialogCancel disabled={buttonsDisabled}>
             キャンセル
           </AlertDialogCancel>
           <Button
