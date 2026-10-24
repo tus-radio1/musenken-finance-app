@@ -98,7 +98,7 @@ export function ItemsMobileCardList({
                   <span className="text-xs text-muted-foreground">
                     {item.term}期
                   </span>
-                  <StatusBadge status={item.status} />
+                  <StatusBadge status={item.status} domain="subsidy" />
                 </div>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 px-2">

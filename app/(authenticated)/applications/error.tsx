@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { AlertTriangle } from "lucide-react";
+import { ErrorState } from "@/components/feedback/error-state";
 
 export default function ApplicationsError({
   error,
@@ -16,25 +15,13 @@ export default function ApplicationsError({
   }, [error]);
 
   return (
-    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-6 p-8">
-      <div className="flex flex-col items-center gap-4 text-center">
-        <AlertTriangle className="h-10 w-10 text-destructive" />
-        <h2 className="text-xl font-bold">申請データの読み込みに失敗しました</h2>
-        <p className="max-w-md text-muted-foreground">
-          申請情報の取得中にエラーが発生しました。しばらくしてから再度お試しください。
-        </p>
-      </div>
-      <div className="flex gap-3">
-        <Button onClick={reset} variant="default">
-          再試行
-        </Button>
-        <Button
-          onClick={() => (window.location.href = "/")}
-          variant="outline"
-        >
-          ホームに戻る
-        </Button>
-      </div>
-    </div>
+    <ErrorState
+      title="申請データの読み込みに失敗しました"
+      description="申請情報の取得中にエラーが発生しました。しばらくしてから再度お試しください。"
+      digest={error.digest}
+      onRetry={reset}
+      showHomeLink
+      headingLevel="h1"
+    />
   );
 }

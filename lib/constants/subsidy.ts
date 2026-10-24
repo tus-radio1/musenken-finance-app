@@ -39,35 +39,6 @@ export const CATEGORY_EXPENSE_TYPES: Record<string, string[]> = {
   special: ["tournament", "expensive_goods", "other"],
 };
 
-/** 支援金ステータスの表示名 */
-export const STATUS_LABELS: Record<string, string> = {
-  pending: "受付中",
-  accounting_received: "受付済",
-  approved: "審査通過",
-  rejected: "却下",
-  application_in_progress: "申請中",
-  application_rejected: "申請拒否",
-  receipt_submitted: "領収書提出済",
-  paid: "受領済",
-  unexecuted: "未執行",
-};
-
-/** 支援金ステータスとバッジvariantの対応 (管理画面用) */
-export const STATUS_VARIANT_MAP: Record<
-  string,
-  { label: string; variant: string }
-> = {
-  pending: { label: "受付中", variant: "secondary" },
-  accounting_received: { label: "受付済", variant: "outline" },
-  rejected: { label: "却下", variant: "destructive" },
-  application_in_progress: { label: "申請中", variant: "secondary" },
-  approved: { label: "審査通過", variant: "default" },
-  application_rejected: { label: "申請拒否", variant: "destructive" },
-  receipt_submitted: { label: "領収書提出済", variant: "default" },
-  paid: { label: "受領済", variant: "default" },
-  unexecuted: { label: "未執行", variant: "outline" },
-};
-
 /** 支援金種別バッジの色 (テーブル用) */
 export const CATEGORY_BADGE_COLORS: Record<string, string> = {
   activity: "bg-emerald-100 text-emerald-800 border-emerald-200",

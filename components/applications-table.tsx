@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
+import { getStatusOptions } from "@/lib/status-display";
+import { EmptyState } from "@/components/feedback/empty-state";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -190,13 +192,11 @@ export function ApplicationsTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">すべての状態</SelectItem>
-              <SelectItem value="pending">受付中</SelectItem>
-              <SelectItem value="accepted">受付済</SelectItem>
-              <SelectItem value="receipt_received">領収書受領済</SelectItem>
-              <SelectItem value="approved">承認済</SelectItem>
-              <SelectItem value="rejected">却下</SelectItem>
-              <SelectItem value="received">受領済</SelectItem>
-              <SelectItem value="refunded">処理済(確定)</SelectItem>
+              {getStatusOptions("transaction").map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -204,11 +204,14 @@ export function ApplicationsTable({
 
       {/* テーブル / カード */}
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          {transactions.length === 0
-            ? "まだ申請はありません。"
-            : "条件に一致する申請がありません。"}
-        </p>
+        <EmptyState
+          message={
+            transactions.length === 0
+              ? "まだ申請はありません。"
+              : "条件に一致する申請がありません。"
+          }
+          className="py-6"
+        />
       ) : (
         <>
           {/* PC table (xl and above) */}
@@ -263,14 +266,14 @@ export function ApplicationsTable({
                           {tx.amount < 0 ? (
                             <Badge
                               variant="outline"
-                              className="text-red-600 border-red-200"
+                              className="text-expense border-expense/30"
                             >
                               支出
                             </Badge>
                           ) : (
                             <Badge
                               variant="outline"
-                              className="text-blue-600 border-blue-200"
+                              className="text-income border-income/30"
                             >
                               収入
                             </Badge>
@@ -289,7 +292,7 @@ export function ApplicationsTable({
                         </TableCell>
                         <TableCell
                           className={`font-semibold ${
-                            tx.amount < 0 ? "text-red-600" : "text-blue-600"
+                            tx.amount < 0 ? "text-expense" : "text-income"
                           }`}
                         >
                           {formatCurrency(Math.abs(tx.amount))}
@@ -356,7 +359,7 @@ export function ApplicationsTable({
                       <div className="text-right shrink-0">
                         <div
                           className={`text-base font-semibold ${
-                            tx.amount < 0 ? "text-red-600" : "text-blue-600"
+                            tx.amount < 0 ? "text-expense" : "text-income"
                           }`}
                         >
                           {formatCurrency(Math.abs(tx.amount))}
@@ -383,14 +386,14 @@ export function ApplicationsTable({
                         {tx.amount < 0 ? (
                           <Badge
                             variant="outline"
-                            className="text-red-600 border-red-200"
+                            className="text-expense border-expense/30"
                           >
                             支出
                           </Badge>
                         ) : (
                           <Badge
                             variant="outline"
-                            className="text-blue-600 border-blue-200"
+                            className="text-income border-income/30"
                           >
                             収入
                           </Badge>

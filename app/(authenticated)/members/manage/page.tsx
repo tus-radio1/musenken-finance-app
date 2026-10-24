@@ -1,12 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   ManageMembersClient,
   type MemberManageRow,
@@ -19,6 +13,9 @@ import {
   fetchMemberProfiles,
   type MemberProfileRow,
 } from "@/lib/profiles";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { AccessDenied } from "@/components/feedback/access-denied";
 
 type RoleAssignment = {
   name?: string | null;
@@ -43,16 +40,10 @@ export default async function MembersManagePage() {
 
   if (!hasAccess) {
     return (
-      <main className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600">
-            アクセス権限がありません
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            このページは部長・副部長・会計・Adminのみアクセス可能です。
-          </p>
-        </div>
-      </main>
+      <PageShell>
+        <PageHeader title="部員管理" />
+        <AccessDenied description="このページは部長・副部長・会計・Adminのみアクセス可能です。" />
+      </PageShell>
     );
   }
 
@@ -108,20 +99,16 @@ export default async function MembersManagePage() {
   const actorIsAdmin = isAdmin(access);
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-6xl mx-auto w-full">
-        <Card>
-          <CardHeader>
-            <CardTitle>部員管理</CardTitle>
-            <CardDescription>
-              部員の追加・編集・退部処理・削除を行います。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ManageMembersClient members={members} allRoles={allRoles} isAdmin={actorIsAdmin} />
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+    <PageShell>
+      <PageHeader
+        title="部員管理"
+        description="部員の追加・編集・退部処理・削除を行います。"
+      />
+      <Card>
+        <CardContent>
+          <ManageMembersClient members={members} allRoles={allRoles} isAdmin={actorIsAdmin} />
+        </CardContent>
+      </Card>
+    </PageShell>
   );
 }

@@ -17,8 +17,8 @@ type BudgetStatus = {
 
 const COLORS = {
   remaining: "#9ca3af", // 灰色 - 残高
-  expenses: "#22c55e", // 緑色 - 支出額（返金済）
-  pending: "#eab308", // 黄色 - 申請中（受付中、受付済、承認済）
+  expenses: "var(--expense)", // Expense amount
+  pending: "var(--warning)", // Pending applications.
 };
 
 function BudgetPieChart({
@@ -115,7 +115,15 @@ export function BudgetOverview({ data }: { data: BudgetStatus[] }) {
               <CardTitle className="text-sm font-medium">
                 {item.category_name}
               </CardTitle>
-              <Badge variant={usagePercent >= 100 ? "destructive" : "outline"}>
+              <Badge
+                variant={
+                  usagePercent >= 100
+                    ? "danger"
+                    : usagePercent >= 80
+                      ? "warning"
+                      : "success"
+                }
+              >
                 {statusText}
               </Badge>
             </CardHeader>

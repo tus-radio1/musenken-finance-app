@@ -3,14 +3,13 @@ import { redirect } from "next/navigation";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { MembersTable, type MemberRow } from "@/components/members-table";
 import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { normalizeJoined } from "@/lib/roles/parse";
 import { fetchMemberProfiles, type MemberProfileRow } from "@/lib/profiles";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
 
 type MemberRole = {
   accounting_group_id?: string | null;
@@ -71,20 +70,16 @@ export default async function MembersManagementPage() {
     });
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-6xl mx-auto w-full">
-        <Card>
-          <CardHeader>
-            <CardTitle>部員情報一覧</CardTitle>
-            <CardDescription>
-              登録されているメンバーの基本情報を一覧表示します。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MembersTable members={members} />
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+    <PageShell>
+      <PageHeader
+        title="部員情報一覧"
+        description="登録されているメンバーの基本情報を一覧表示します。"
+      />
+      <Card>
+        <CardContent>
+          <MembersTable members={members} />
+        </CardContent>
+      </Card>
+    </PageShell>
   );
 }

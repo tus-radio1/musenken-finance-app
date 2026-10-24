@@ -32,6 +32,7 @@ import { ItemsMobileCardList } from "@/components/subsidy/items-mobile-card-list
 import { ItemsEditDialog } from "@/components/subsidy/items-edit-dialog";
 import type { SubsidyItem, SortKey, SortOrder, EditFormState } from "@/components/subsidy/types";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { EmptyState } from "@/components/feedback/empty-state";
 
 export function SubsidyItemsTable({
   items: initialItems,
@@ -323,11 +324,14 @@ export function SubsidyItemsTable({
 
       {/* テーブル / カード表示 */}
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          {items.length === 0
-            ? "まだ支援金の申請はありません。"
-            : "条件に一致する申請がありません。"}
-        </p>
+        <EmptyState
+          message={
+            items.length === 0
+              ? "まだ支援金の申請はありません。"
+              : "条件に一致する申請がありません。"
+          }
+          className="py-6"
+        />
       ) : (
         <>
           {/* PC table (xl and above) */}

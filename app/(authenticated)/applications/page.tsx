@@ -12,6 +12,8 @@ import {
 } from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
 
 const PAGE_SIZE = 50;
 
@@ -77,21 +79,16 @@ export default async function ApplicationsPage({
   }));
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto w-full space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              経費申請
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              無線研での活動費を経費として申請できます。
-            </p>
-          </div>
+    <PageShell>
+      <PageHeader
+        title="経費申請"
+        description="無線研での活動費を経費として申請できます。"
+        actions={
           <div className="hidden md:block">
             <TransactionForm categories={writableGroups} />
           </div>
-        </div>
+        }
+      />
 
         <Card>
           <CardHeader>
@@ -137,7 +134,6 @@ export default async function ApplicationsPage({
         <div className="md:hidden">
           <TransactionForm categories={writableGroups} />
         </div>
-      </div>
-    </main>
+    </PageShell>
   );
 }

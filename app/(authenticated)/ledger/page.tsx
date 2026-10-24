@@ -8,6 +8,7 @@ import { getAccountingUserId } from "@/lib/system-config";
 import { getFiscalYears, getAccountingGroups } from "@/lib/cache";
 import { fetchLedgerTransactions } from "./actions";
 import type { LedgerInitialData } from "@/lib/ledger";
+import { PageShell } from "@/components/layout/page-shell";
 
 export default async function LedgerPage({
   searchParams,
@@ -105,8 +106,7 @@ export default async function LedgerPage({
   }
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto w-full space-y-8">
+    <PageShell>
         <LedgerView
           teams={displayTeams}
           fyYear={fyYear}
@@ -119,7 +119,6 @@ export default async function LedgerPage({
           isReadOnly={isReadOnly}
           initialData={initialData}
         />
-      </div>
-    </main>
+    </PageShell>
   );
 }

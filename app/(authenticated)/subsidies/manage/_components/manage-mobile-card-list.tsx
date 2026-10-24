@@ -25,10 +25,11 @@ import { formatCurrency } from "@/lib/format";
 import {
   CATEGORY_LABELS as CATEGORY_MAP,
   EXPENSE_TYPE_LABELS as EXPENSE_TYPE_MAP,
-  STATUS_VARIANT_MAP as STATUS_MAP,
 } from "@/lib/constants/subsidy";
 import { StatusBadge } from "@/components/status-badge";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { getStatusOptions } from "@/lib/status-display";
+import { EmptyState } from "@/components/feedback/empty-state";
 import type { SubsidyItem } from "./types";
 
 type ManageMobileCardListProps = {
@@ -50,9 +51,7 @@ export function ManageMobileCardList({
 }: ManageMobileCardListProps) {
   if (filteredItems.length === 0) {
     return (
-      <div className="py-8 text-center text-muted-foreground text-sm">
-        該当する支援金申請はありません
-      </div>
+      <EmptyState message="該当する支援金申請はありません" />
     );
   }
 
@@ -96,7 +95,7 @@ export function ManageMobileCardList({
                 <span className="text-xs text-muted-foreground">
                   第{item.term}期
                 </span>
-                <StatusBadge status={item.status} className="text-xs" />
+                <StatusBadge status={item.status} domain="subsidy" className="text-xs" />
               </div>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 px-2">
@@ -141,9 +140,9 @@ export function ManageMobileCardList({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(STATUS_MAP).map(
-                      ([key, { label }]) => (
-                        <SelectItem key={key} value={key}>
+                    {getStatusOptions("subsidy").map(
+                      ({ value, label }) => (
+                        <SelectItem key={value} value={value}>
                           {label}
                         </SelectItem>
                       ),

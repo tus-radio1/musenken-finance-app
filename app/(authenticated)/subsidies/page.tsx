@@ -8,6 +8,9 @@ import { requireRoleAccess } from "@/lib/roles/access";
 import { isAdmin } from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { ErrorState } from "@/components/feedback/error-state";
 
 const PAGE_SIZE = 50;
 
@@ -31,18 +34,10 @@ export default async function SubsidiesPage({
 
   if (!profileId) {
     return (
-      <main className="flex-1 flex items-center justify-center p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>プロフィールが見つかりません</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              ユーザープロフィールが登録されていません。管理者に連絡してください。
-            </p>
-          </CardContent>
-        </Card>
-      </main>
+      <PageShell>
+        <PageHeader title="プロフィールが見つかりません" />
+        <ErrorState description="ユーザープロフィールが登録されていません。管理者に連絡してください。" />
+      </PageShell>
     );
   }
 
@@ -119,28 +114,23 @@ export default async function SubsidiesPage({
     }).format(amount);
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto w-full space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              支援金申請
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              課外活動支援金等の申請と履歴を管理します。
-            </p>
-          </div>
+    <PageShell>
+      <PageHeader
+        title="支援金申請"
+        description="課外活動支援金等の申請と履歴を管理します。"
+        actions={
           <div className="hidden md:block">
             <SubsidyForm categories={accountingGroups || []} />
           </div>
-        </div>
+        }
+      />
 
         {/* 集計カード */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-4 pb-3 px-4">
               <div className="text-xs text-muted-foreground">申請中</div>
-              <div className="text-2xl font-bold text-yellow-600">
+              <div className="text-2xl font-bold text-warning-foreground">
                 {pendingCount}件
               </div>
             </CardContent>
@@ -226,7 +216,6 @@ export default async function SubsidiesPage({
         <div className="md:hidden">
           <SubsidyForm categories={accountingGroups || []} />
         </div>
-      </div>
-    </main>
+    </PageShell>
   );
 }

@@ -230,8 +230,8 @@ export function LedgerDesktopTable({
                   <span
                     className={
                       Number(r.amount) < 0
-                        ? "text-red-600"
-                        : "text-green-600"
+                        ? "text-expense"
+                        : "text-income"
                     }
                   >
                     {formatCurrency(Number(r.amount))}
@@ -306,6 +306,7 @@ export function LedgerDesktopTable({
                   {r.is_subsidy ? (
                     <StatusBadge
                       status={r.approval_status || "pending"}
+                      domain="subsidy"
                     />
                   ) : (
                     <ApprovalActions

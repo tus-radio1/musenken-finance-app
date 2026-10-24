@@ -2,7 +2,7 @@
 
 /**
  * 支援金申請一覧: 編集ダイアログ
- * 承認済み時は領収書アップロードのみ、それ以外は全フィールド編集可能。
+ * Approved status allows receipt upload only; other statuses allow full editing.
  */
 
 import { Loader2, CalendarIcon } from "lucide-react";
@@ -85,7 +85,7 @@ export function ItemsEditDialog({
         </DialogHeader>
         <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
           {editingItem?.status === "approved" ? (
-            /* 承認済み: 領収書アップロードのみ */
+            /* Approved status: receipt upload only. */
             <div className="space-y-2 px-1">
               <FileDropzone
                 label="領収書画像"

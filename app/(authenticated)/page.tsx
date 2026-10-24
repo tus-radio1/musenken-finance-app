@@ -6,6 +6,9 @@ import { getSortableDateValue } from "@/lib/date";
 import { getUserTeams } from "@/lib/teams";
 import { canFileTransactionInGroup } from "@/lib/roles/permissions";
 import { requireRoleAccess } from "@/lib/roles/access";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { ErrorState } from "@/components/feedback/error-state";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -115,7 +118,7 @@ export default async function Home() {
       ["pending", "paid"].includes(s.status as string),
     ).length;
 
-  // 承認済: 経費の「承認済」「領収書受領済」「返金済」+ 支援金の「審査通過(receipt_submitted)」「返金済(receipt_received)」
+  // 完了分: 経費と支援金の完了ステータスを合算
   const approvedCountThisYear =
     txList.filter((tx) =>
       ["approved", "receipt_received", "refunded"].includes(
@@ -135,33 +138,34 @@ export default async function Home() {
     subList.reduce((sum, s) => sum + Number(s.requested_amount), 0);
 
   if (txError || subError) {
+    console.error("[HomeDataError]", {
+      transactionError: txError,
+      subsidyError: subError,
+    });
     return (
-      <div className="p-8 text-red-500">
-        Error loading data: {txError?.message || subError?.message}
-      </div>
+      <PageShell>
+        <PageHeader title="ホーム" />
+        <ErrorState
+          title="ホーム情報を読み込めませんでした"
+          description="データの取得中にエラーが発生しました。時間をおいて再度お試しください。"
+        />
+      </PageShell>
     );
   }
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto w-full space-y-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">ホーム</h1>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <RecentApplications items={allItems} />
-          <DashboardStats
-            totalCountThisYear={totalCountThisYear}
-            pendingCountThisYear={pendingCountThisYear}
-            approvedCountThisYear={approvedCountThisYear}
-            totalAmountThisYear={totalAmountThisYear}
-          />
-        </div>
+    <PageShell>
+      <PageHeader title="ホーム" />
+      <div className="flex flex-col gap-4">
+        <RecentApplications items={allItems} />
+        <DashboardStats
+          totalCountThisYear={totalCountThisYear}
+          pendingCountThisYear={pendingCountThisYear}
+          approvedCountThisYear={approvedCountThisYear}
+          totalAmountThisYear={totalAmountThisYear}
+        />
       </div>
       <MobileNewTransactionFab categories={categories || []} />
-    </main>
+    </PageShell>
   );
 }

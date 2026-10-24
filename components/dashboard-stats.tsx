@@ -33,15 +33,15 @@ export function DashboardStats({
       <Card>
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground mb-1">申請中の件数</div>
-          <div className="text-2xl font-bold text-yellow-600">
+          <div className="text-2xl font-bold text-warning-foreground">
             {pendingCountThisYear}
           </div>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="pt-4">
-          <div className="text-xs text-muted-foreground mb-1">承認済み件数</div>
-          <div className="text-2xl font-bold text-green-600">
+          <div className="text-xs text-muted-foreground mb-1">処理完了件数</div>
+          <div className="text-2xl font-bold text-success-foreground">
             {approvedCountThisYear}
           </div>
         </CardContent>

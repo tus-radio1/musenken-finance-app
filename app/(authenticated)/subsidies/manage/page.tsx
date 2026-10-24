@@ -1,6 +1,10 @@
 import { fetchAllSubsidies, fetchProfilesList } from "./actions";
 import { SubsidiesManageClientPage } from "./client-page";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { AccessDenied } from "@/components/feedback/access-denied";
+import { ErrorState } from "@/components/feedback/error-state";
 
 import { createClient } from "@/utils/supabase/server";
 
@@ -54,29 +58,34 @@ export default async function SubsidiesManagePage({
 
   if (result.error) {
     return (
-      <main className="flex-1 flex justify-center items-center p-6 overflow-y-auto">
-        <div className="text-center space-y-4">
-          <p className="text-destructive font-medium">{result.error}</p>
-        </div>
-      </main>
+      <PageShell>
+        <PageHeader title="支援金管理" />
+        {result.error.includes("権限") ? (
+          <AccessDenied description="このページは会計またはAdmin権限を持つユーザーのみアクセスできます。" />
+        ) : (
+          <ErrorState
+            title="支援金データを読み込めませんでした"
+            description="支援金申請データの取得中にエラーが発生しました。時間をおいて再度お試しください。"
+          />
+        )}
+      </PageShell>
     );
   }
 
   return (
-    <main className="flex-1 overflow-y-auto p-6 pt-16 md:pt-6 pb-20 md:pb-6">
-      <div className="max-w-7xl mx-auto w-full space-y-6">
-        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-          <h2 className="text-2xl font-bold tracking-tight">
-            支援金管理
-          </h2>
+    <PageShell>
+      <PageHeader
+        title="支援金管理"
+        actions={
           <FiscalYearSelector
             fiscalYears={(fiscalYears || []).map((fy) => ({ ...fy, is_current: fy.is_current ?? false }))}
             selectedYear={selectedYear}
             basePath="/subsidies/manage"
           />
-        </div>
+        }
+      />
         {isReadOnly && (
-          <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+          <div className="rounded-md border border-warning/50 bg-warning px-4 py-3 text-sm text-warning-foreground">
             過年度データのため閲覧専用です
           </div>
         )}
@@ -88,7 +97,6 @@ export default async function SubsidiesManagePage({
           isAdmin={isAdmin}
           isReadOnly={isReadOnly}
         />
-      </div>
-    </main>
+    </PageShell>
   );
 }
