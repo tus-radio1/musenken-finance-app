@@ -13,6 +13,7 @@ export type SidebarData = {
   roleNames: string[];
   roleTypes: string[];
   access: RoleAccessContext;
+  showAuditLogs: boolean;
   userProfile: UserProfile | null;
   pendingSubsidies: PendingSubsidy[];
 };
