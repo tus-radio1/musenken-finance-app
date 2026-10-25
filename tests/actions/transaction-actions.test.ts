@@ -78,6 +78,7 @@ function accessFor(actor: Actor) {
 }
 
 type TxRow = {
+  transaction_kind?: string;
   accounting_group_id: string;
   created_by: string;
   approval_status: string;
@@ -153,6 +154,7 @@ vi.mock("@/lib/system-config", () => ({
   getAccountingUserIdSync: vi.fn(() => "00000000-0000-4000-8000-000000000000"),
 }));
 vi.mock("@/lib/receipt-storage", () => ({
+  removeUnreferencedReceipt: vi.fn(async () => false),
   removeReplacedReceipt: vi.fn(async () => undefined),
 }));
 vi.mock("@/utils/supabase/server", () => ({
@@ -695,7 +697,8 @@ describe("deleteTransaction", () => {
     tx = { ...tx, created_by: OTHER_USER_ID, approval_status: status };
     expect(await deleteTransaction(TX_ID)).toEqual({ success: true });
     expect(txWrites("delete")).toHaveLength(1);
-    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    // The DB DELETE trigger owns the atomic audit (covered by pgTAP).
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   // Bug (item 6): a DELETE that removed 0 rows was reported as success.
@@ -708,7 +711,7 @@ describe("deleteTransaction", () => {
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
-  it("deletes an owner's pending transaction and audits it", async () => {
+  it("deletes an owner's pending transaction with DB-owned auditing", async () => {
     actor = "member";
     tx = { ...tx, created_by: ACTOR_ID };
 
@@ -716,7 +719,8 @@ describe("deleteTransaction", () => {
 
     expect(result).toEqual({ success: true });
     expect(txWrites("delete")).toHaveLength(1);
-    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    // The DB DELETE trigger owns the atomic audit (covered by pgTAP).
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -755,5 +759,21 @@ describe.each(["chair", "viceChair"] as const)("club writes by %s", (clubActor) 
     tx = { ...tx, created_by: OTHER_USER_ID };
     expect(await updateTransactionStatus(TX_ID, status, "reason")).toHaveProperty("error");
     expect(txWrites("update")).toHaveLength(0);
+  });
+});
+
+
+describe.each(["accounting", "admin"] as const)("individual transfer protection for %s", (role) => {
+  it("rejects editing, deleting and changing approval without writes", async () => {
+    actor = role;
+    tx = { ...tx, accounting_group_id: CLUB, transaction_kind: "transfer", approval_status: "approved" };
+    expect(await updateTransaction(TX_ID, formValues())).toHaveProperty("error");
+    expect(await deleteTransaction(TX_ID)).toHaveProperty("error");
+    // Legacy pending transfers must not expose a one-leg approval path either.
+    tx = { ...tx, approval_status: "pending" };
+    expect(await updateTransactionStatus(TX_ID, "approved")).toHaveProperty("error");
+    expect(writesTo(userDb.calls, "transactions")).toHaveLength(0);
+    expect(writesTo(adminDb.calls, "transactions")).toHaveLength(0);
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });

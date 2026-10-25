@@ -23,6 +23,7 @@ export type TransactionRef = {
   created_by: string | null;
   approval_status: string | null;
   accounting_group_type?: string | null;
+  transaction_kind?: string | null;
 };
 
 const PENDING = "pending";
@@ -129,7 +130,9 @@ export function checkTransactionApproval(
   actorId: string,
   isCurrentFiscalYear: boolean,
 ): ApprovalCheck {
-  if (!isAdminOrAccounting(access)) return { ok: false, reason: "forbidden" };
+  if (tx.transaction_kind === "transfer" || !isAdminOrAccounting(access)) {
+    return { ok: false, reason: "forbidden" };
+  }
   if (tx.created_by === actorId) return { ok: false, reason: "own_transaction" };
   if (tx.approval_status !== PENDING) return { ok: false, reason: "not_pending" };
   if (!access.isAdmin && !isCurrentFiscalYear) {
@@ -153,6 +156,7 @@ export function canEditTransaction(
   tx: TransactionRef,
   actorId: string,
 ): boolean {
+  if (tx.transaction_kind === "transfer") return false;
   if (isAdminOrAccounting(access)) return true;
   return tx.created_by === actorId && tx.approval_status === PENDING;
 }
@@ -184,6 +188,7 @@ export function canDeleteTransaction(
   tx: TransactionRef,
   actorId: string,
 ): boolean {
+  if (tx.transaction_kind === "transfer") return false;
   if (isAdminOrAccounting(access)) return true;
   return tx.created_by === actorId && tx.approval_status === PENDING;
 }
@@ -191,6 +196,11 @@ export function canDeleteTransaction(
 // ---------------------------------------------------------------------------
 // Budgets and groups
 // ---------------------------------------------------------------------------
+
+/** Only admins and accounting may open the audit-log viewer. */
+export function canViewAuditLogs(access: RoleAccessContext): boolean {
+  return isAdminOrAccounting(access);
+}
 
 /** 予算管理ページを開けるか。 */
 export function canViewBudgetPage(access: RoleAccessContext): boolean {
@@ -280,7 +290,9 @@ export function getTransactionRowPermissions(
     isReadOnly: boolean;
   },
 ): TransactionRowPermissions {
-  if (context.isReadOnly || !context.actorId) return NO_ROW_PERMISSIONS;
+  if (context.isReadOnly || !context.actorId || tx.transaction_kind === "transfer") {
+    return NO_ROW_PERMISSIONS;
+  }
   if (
     tx.accounting_group_type === GROUP_TYPES.CLUB &&
     !canCreateClubTransaction(access)

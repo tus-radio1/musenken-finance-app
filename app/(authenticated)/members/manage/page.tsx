@@ -1,24 +1,20 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   ManageMembersClient,
   type MemberManageRow,
 } from "./_components/manage-members-client";
 import type { RoleOption } from "./_components/edit-member-dialog";
-import { requireRoleAccess } from "@/lib/roles/access";
 import { normalizeJoined } from "@/lib/roles/parse";
 import { canManageMembers, isAdmin } from "@/lib/roles/permissions";
 import {
   fetchMemberProfiles,
   type MemberProfileRow,
 } from "@/lib/profiles";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { AccessDenied } from "@/components/feedback/access-denied";
 
 type RoleAssignment = {
   name?: string | null;
@@ -31,39 +27,27 @@ type UserRoleAssignmentRow = {
 };
 
 export default async function MembersManagePage() {
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase } = auth;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const access = await requireRoleAccess({ supabase, profileId: user.id });
+  const access = await getCurrentRoles();
   const hasAccess = canManageMembers(access);
 
   if (!hasAccess) {
     return (
-      <main className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600">
-            アクセス権限がありません
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            このページは部長・副部長・会計・Adminのみアクセス可能です。
-          </p>
-        </div>
-      </main>
+      <PageShell>
+        <PageHeader title="部員管理" />
+        <AccessDenied description="このページは部長・副部長・会計・Adminのみアクセス可能です。" />
+      </PageShell>
     );
   }
 
-  // --- データ取得（RLS-respecting client）---
-  const profiles = await fetchMemberProfiles(supabase);
-
-  // 全ロール一覧
-  const { data: rolesData } = await supabase
-    .from("roles")
-    .select("id, name")
-    .order("name");
+  const [profiles, { data: rolesData }, { data: allUserRoles }] = await Promise.all([
+    fetchMemberProfiles(supabase),
+    supabase.from("roles").select("id, name").order("name"),
+    supabase.from("user_roles").select("user_id, role_id, roles(name)"),
+  ]);
 
   const allRoles: RoleOption[] = (
     (rolesData as Array<{ id: string; name: string }> | null) || []
@@ -71,11 +55,6 @@ export default async function MembersManagePage() {
     id: r.id,
     name: r.name,
   }));
-
-  // 全ユーザーのロール割当取得
-  const { data: allUserRoles } = await supabase
-    .from("user_roles")
-    .select("user_id, role_id, roles(name)");
 
   // ユーザーごとのロール情報をマップ
   const rolesByUser: Record<string, { names: string[]; ids: string[] }> = {};
@@ -108,20 +87,16 @@ export default async function MembersManagePage() {
   const actorIsAdmin = isAdmin(access);
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-6xl mx-auto w-full">
-        <Card>
-          <CardHeader>
-            <CardTitle>部員管理</CardTitle>
-            <CardDescription>
-              部員の追加・編集・退部処理・削除を行います。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ManageMembersClient members={members} allRoles={allRoles} isAdmin={actorIsAdmin} />
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+    <PageShell>
+      <PageHeader
+        title="部員管理"
+        description="部員の追加・編集・退部処理・削除を行います。"
+      />
+      <Card>
+        <CardContent>
+          <ManageMembersClient members={members} allRoles={allRoles} isAdmin={actorIsAdmin} />
+        </CardContent>
+      </Card>
+    </PageShell>
   );
 }

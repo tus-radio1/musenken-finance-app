@@ -14,8 +14,8 @@ export function MobileNewTransactionFab({ categories }: { categories: { id: stri
         open={open}
         onOpenChange={setOpen}
         triggerButton={
-          <button className="h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center text-3xl">
-            <Plus className="h-6 w-6" />
+          <button aria-label="新規申請" className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center text-3xl">
+            <Plus className="h-6 w-6" aria-hidden="true" />
           </button>
         }
       />

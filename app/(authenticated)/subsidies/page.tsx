@@ -1,13 +1,15 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SubsidyForm } from "@/components/subsidy-form";
 import { SubsidyItemsTable } from "@/components/subsidy-items-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { requireRoleAccess } from "@/lib/roles/access";
 import { isAdmin } from "@/lib/roles/permissions";
 import { Button } from "@/components/ui/button";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { ErrorState } from "@/components/feedback/error-state";
 
 const PAGE_SIZE = 50;
 
@@ -16,60 +18,40 @@ export default async function SubsidiesPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const supabase = await createClient();
   const params = await searchParams;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
+  const { supabase, user } = auth;
 
   const profileId = user.id;
 
   if (!profileId) {
     return (
-      <main className="flex-1 flex items-center justify-center p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>プロフィールが見つかりません</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              ユーザープロフィールが登録されていません。管理者に連絡してください。
-            </p>
-          </CardContent>
-        </Card>
-      </main>
+      <PageShell>
+        <PageHeader title="プロフィールが見つかりません" />
+        <ErrorState description="ユーザープロフィールが登録されていません。管理者に連絡してください。" />
+      </PageShell>
     );
   }
 
   const page = Math.max(0, parseInt(params.page ?? "0", 10) || 0);
   const offset = page * PAGE_SIZE;
 
-  // isGlobalAdmin 判定
-  const access = await requireRoleAccess({ supabase, profileId: user.id });
+  const [access, { data: accountingGroups }, { data: subsidyItems, count }] =
+    await Promise.all([
+      getCurrentRoles(),
+      supabase.from("accounting_groups").select("id, name")
+        .eq("is_active", true).order("name"),
+      supabase.from("subsidy_items")
+        .select(
+          "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, usage_period, evidence_url, receipt_url, remarks, date, created_at, accounting_group_id, accounting_groups(name)",
+          { count: "exact" },
+        )
+        .eq("applicant_id", profileId).is("deleted_at", null)
+        .order("created_at", { ascending: false }).range(offset, offset + PAGE_SIZE - 1),
+    ]);
   const isGlobalAdmin = isAdmin(access);
-
-  const { data: accountingGroups } = await supabase
-    .from("accounting_groups")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
-
-  // 当該ユーザの支援金申請を取得 (soft-deleted records are excluded)
-  const { data: subsidyItems, count } = await supabase
-    .from("subsidy_items")
-    .select(
-      "id, category, term, expense_type, income_type, name, requested_amount, approved_amount, status, justification, usage_period, evidence_url, receipt_url, remarks, date, created_at, accounting_group_id, accounting_groups(name)",
-      { count: "exact" },
-    )
-    .eq("applicant_id", profileId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
 
   const totalCount = count ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -119,28 +101,23 @@ export default async function SubsidiesPage({
     }).format(amount);
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto w-full space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              支援金申請
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              課外活動支援金等の申請と履歴を管理します。
-            </p>
-          </div>
+    <PageShell>
+      <PageHeader
+        title="支援金申請"
+        description="課外活動支援金等の申請と履歴を管理します。"
+        actions={
           <div className="hidden md:block">
             <SubsidyForm categories={accountingGroups || []} />
           </div>
-        </div>
+        }
+      />
 
         {/* 集計カード */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-4 pb-3 px-4">
               <div className="text-xs text-muted-foreground">申請中</div>
-              <div className="text-2xl font-bold text-yellow-600">
+              <div className="text-2xl font-bold text-warning-foreground">
                 {pendingCount}件
               </div>
             </CardContent>
@@ -226,7 +203,6 @@ export default async function SubsidiesPage({
         <div className="md:hidden">
           <SubsidyForm categories={accountingGroups || []} />
         </div>
-      </div>
-    </main>
+    </PageShell>
   );
 }

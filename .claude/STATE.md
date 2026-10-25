@@ -124,45 +124,24 @@ Keep this section thin — a brief identity line + pointer. Thick content belong
 
 Rolling progress summary (latest 5 checkpoints): [PROGRESS.md](./PROGRESS.md)
 
-## Current Work: P1-1 typed client + centralized permissions (Codex handoff)
+## Current Work: P2 orphaned receipts + deleteMember (Codex handoff)
 
 <!-- Maintained by the Claude main agent as a rate-limit fallback. If Claude is unavailable, a Codex session can resume from here. The main agent commits this file on the PR branch right before each push. Last updated: 2026-10-24. -->
 
-**Status (2026-10-24):** PR-A (#44/#45) and the 会計 split (#46/#47) are LIVE in production (prod DB at `20261023110000`, 会計 type = accounting). Now doing PR-B (plan steps 11–12).
-**Authorization (user, 2026-10-24):** after verification, push + open PRs without asking; still ask before merges, prod deploy approval, remote data writes.
-**Routing rule (user, 2026-10-24):** clear-spec / simple tasks → Codex Luna with xhigh effort (`--model "${CODEX_MODEL_LUNA:-gpt-6-luna}" --config model_reasoning_effort=xhigh`); fast mode allowed if it works. Design / review / debugging stays on Sol.
-**PR-B status:** implemented by Codex (commit `95179db`, migration `20261024100000_guard_transaction_approval_and_filing.sql`) and verified by main agent: vitest 486/486, build 0, test db 337 PASS with 0 TODO, no drift. PR #48 MERGED to develop.
-**D&D status:** PR #49 MERGED to develop (worktree removed). Was opened from worktree `/home/yuulis/musenken-finance-app-dnd` (commits af0f99d, 12f9c7d, a0121e0 incl. fixes for 3 review findings; vitest 516/516, build 0). Remove the worktree after merge.
-**E2E status:** PR #50 open; branch includes develop with #48/#49 (merge 5000041) and the dropzone locator fix (c0dc920). Main agent re-ran locally after the fix: vitest 516/516, build 0, E2E 12/12. Waiting for CI `e2e` re-run. OPEN QUESTION: login rate limiter keys on first `x-forwarded-for` (`app/login/actions.ts:25`); confirm Vercel overwrites client XFF.
-**Prod inventory (2026-10-24, read-only):** group types: general=4 (open, no roles), team=4 (role-restricted, 1 inactive), club=1; no NULL. ~17 historical rows were filed into team groups by users without a role there (must stay editable). 3 historical self-approved rows (approved_by = created_by) — leave as is. 122 profiles, 39 with group roles.
-Known residual issues: non-admin `deleteMember` still has the 0-row/auth-cascade problem; admin can self-approve in two logged steps (reassign created_by, then approve); break-glass intent audit row persists if the update fails.
+**Status (2026-10-25):** everything through #56 (transfers auto-approved + audit-log viewer) is merged to develop. #52–#56 are NOT yet released to main; migrations pending prod: `20261024120000_rate_limit_buckets.sql` (#52), `20261025100000_auto_approve_transfers.sql`, `20261025110000_audit_logs_select_accounting.sql` (#56) — all compatible with deployed code; approve prod DB deploy on release.
+**User decisions (2026-10-25):** transfers approved at creation; financial_accounts UI deferred; audit-log viewer = admin + 会計.
+**Current task:** branch `feature/p2-cleanup-integrity` from develop @ `c876fa6`. Codex Sol run, label `p2-cleanup-integrity`, spec `.claude/logs/p2-cleanup-integrity-prompt.md`, result `.claude/logs/p2-cleanup-integrity-result.json`. (A) prevent new orphaned receipt files (cleanup of abandoned uploads with ownership + not-referenced checks; files of deleted records are KEPT as evidence) and a read-only `npm run report:orphans` script (no delete mode). Prod read-only count 2026-10-25: 412 objects, 58 orphans (~11.8 MB). Deleting prod files needs explicit user approval. (B) `deleteMember` → SECURITY DEFINER RPC `soft_delete_member` (migration `20261025120000_soft_delete_member_rpc.sql`, DB must deploy first/with the code) + ban the Auth user instead of deleting it.
+**Progress:** DONE by Codex Sol (d24ac0f, 48b2c04, 1fbc32a, f3c9354) + main agent fix 4737d77 (removed duplicate app-side DELETE audit for subsidy-linked transactions; DB trigger `audit_deleted_transaction` now records every physical delete). Verified: lint/typecheck OK, vitest 631/631, db lint OK, test db 420 PASS, types no drift, build OK, E2E 16/16, local report:orphans OK, no deleteUser in app/lib. Migrations: 20261025120000 soft_delete_member RPC, 20261025121000 delete-evidence triggers, 20261025122000 receipt cleanup claims (SHARE locks on transactions/subsidy_items/audit_logs during claim; deploy DB first or together). PR to develop opened. NEXT: after merge, with user approval, run `npm run report:orphans` against prod (read-only) and ask before deleting any prod file; P2 then complete → offer main release PR (#52–#57).
+**Authorization (user):** after verification, push + open PRs without asking; still ask before merges, prod deploy approval, remote data writes. Merged branches/worktrees may be deleted.
+**Routing rule (user):** clear-spec / simple tasks → Codex Luna xhigh (`--model "${CODEX_MODEL_LUNA:-gpt-6-luna}" --config model_reasoning_effort=xhigh`); design / review / debugging → Sol. Implementers must not touch `.claude/STATE.md` (not even revert it).
 
-**Read first:**
-- Per-step progress log (appended by the implementer after each commit): `.claude/logs/p1-progress.md`.
-- Plan + binding user decisions: `.claude/docs/plans/p1-typed-permissions.md` (§4 steps, §10 decisions + amendment).
-- Project status / roadmap (Japanese): `docs/manual/project-status/roadmap.md`.
-
-**Binding decisions (summary):**
-- Approvers = admin + 会計, never own rows, and past fiscal years admin-only. Leaders cannot approve or edit others' transactions.
-- Edit-form status change: admin + 会計 on others' rows. An admin may also change their OWN rows (break-glass) and must write an audit_logs entry. 会計 may not change their own rows. The normal approval action blocks self-approval for everyone.
-- Budget edit: admin always, 会計 current fiscal year only, leaders never.
-- The approval RPC is deferred to R6. Use a conditional UPDATE that requires exactly 1 row.
-- PR-A = steps 1–10 + 13, with additive migrations only. PR-B = steps 11–12 (restrictive migrations). Release PR-B only after PR-A is live in production, and run a read-only production role/group inventory before step 12.
-
-**How to resume (Codex):**
-1. Run `git log --oneline develop..HEAD` and compare the commits against plan §4 to find the next step.
-2. Implement the remaining steps with the same rules: tests that prove each bug before its fix, no skipped or weakened tests, Japanese commit messages, no push.
-3. Acceptance:
-   - `npm run lint`
-   - `npm run typecheck`
-   - `npm test`
-   - `npm run build` (with the dummy env from `.github/workflows/ci.yml`)
-   - `supabase db reset --local`, `supabase db lint --local`, `supabase test db --local`
-   - a types drift check: `supabase gen types typescript --local` and `git diff --exit-code lib/database.types.ts`
+**Binding permission decisions (P1):** approvers = admin + 会計, never own rows, past fiscal years admin-only; admin may change own rows via edit form (audited, fail-closed); budget edit: admin always, 会計 current FY only; leaders cannot approve or edit others' rows; 部長/副部長 read the club ledger read-only. Details: `.claude/docs/plans/p1-typed-permissions.md` §10, `.claude/docs/plans/accounting-role-split.md`.
+**Known residual issues:** non-admin `deleteMember` 0-row/auth-cascade problem; admin can self-approve in two logged steps; orphaned storage files; `TransferForm` not mounted; no `financial_accounts` / audit-log UI.
 
 **Environment notes:**
-- Supabase CLI 2.121.0 with the Docker WSL integration. The project is linked, so always pass `--local`; never `db push` or `--linked`.
-- Production DB deploys (main) wait for manual approval by Yuulis.
-- Prod ref: `csphhemmhzayyhlasirc`. Staging ref: `gygyuqivcvwgvyuekqvy`.
+- Prefix commands with `export PATH=/home/yuulis/.nvm/versions/node/v24.21.0/bin:$PATH` (else node v18 + Windows codex shim → "Missing optional dependency @openai/codex-linux-x64").
+- Supabase CLI 2.121.0; project is linked, so always `--local`; never `db push`/`--linked`. Slim stack: `supabase start -x studio,logflare,vector,realtime,mailpit,imgproxy,edge-runtime`. Keep Docker load low: no restarts, few E2E runs.
+- E2E: export env from `supabase status -o env` without printing keys (API_URL → NEXT_PUBLIC_SUPABASE_URL + SUPABASE_URL, ANON_KEY → NEXT_PUBLIC_SUPABASE_ANON_KEY, SERVICE_ROLE_KEY → SUPABASE_SERVICE_ROLE_KEY); port 3000 is another project's dev server → `E2E_PORT=3100`.
+- Prod ref `csphhemmhzayyhlasirc`, staging ref `gygyuqivcvwgvyuekqvy`; prod DB deploys (main) need approval by Yuulis.
+- Roadmap (Japanese): `docs/manual/project-status/roadmap.md`.
 
-**Done so far (all in production):** P0 S1–S4 and B1–B3 (PRs #39–#43).

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { ROLE_TYPES } from "@/lib/roles/constants";
 import type { formSchema } from "@/lib/schema";
+import { getStatusDisplay } from "@/lib/status-display";
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -104,20 +105,8 @@ export function AdminFields({
           render={({ field }) => {
             const statuses =
               currentType === "expense"
-                ? [
-                    { value: "pending", label: "受付中" },
-                    { value: "accepted", label: "受付済" },
-                    { value: "approved", label: "承認済" },
-                    { value: "rejected", label: "却下" },
-                    { value: "refunded", label: "処理済(確定)" },
-                  ]
-                : [
-                    { value: "pending", label: "受付中" },
-                    { value: "accepted", label: "受付済" },
-                    { value: "approved", label: "承認済" },
-                    { value: "rejected", label: "却下" },
-                    { value: "received", label: "受領済" },
-                  ];
+                ? ["pending", "accepted", "approved", "rejected", "refunded"]
+                : ["pending", "accepted", "approved", "rejected", "received"];
 
             return (
               <FormItem>
@@ -133,8 +122,8 @@ export function AdminFields({
                   </FormControl>
                   <SelectContent>
                     {statuses.map((st) => (
-                      <SelectItem key={st.value} value={st.value}>
-                        {st.label}
+                      <SelectItem key={st} value={st}>
+                        {getStatusDisplay("transaction", st).label}
                       </SelectItem>
                     ))}
                   </SelectContent>

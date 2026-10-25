@@ -57,14 +57,14 @@ docs/manual/            日本語マニュアル（Git 管理対象）
 | 支援金申請 一覧・新規・編集・削除 | `app/(authenticated)/subsidies/page.tsx`、`components/subsidy-form.tsx`、`components/subsidy-items-table.tsx`、`components/subsidy/items-edit-dialog.tsx`、`app/(authenticated)/subsidies/actions.ts` | 一部 | 新規申請時は「根拠書類」（見積書等）のアップロードが必須。仕様 C3 の「領収書（必須）」とは異なり、領収書は承認後に提出する流れ（`subsidies/actions.ts:9`）。実装が新しく、仕様書が古い可能性が高い |
 | 支援金管理（ステータス変更・詳細編集・削除） | `app/(authenticated)/subsidies/manage/*` | 完了 | admin / 会計のみ（`subsidies/manage/actions.ts:21`）。過年度は admin 以外は読み取り専用（`subsidies/manage/page.tsx:53`） |
 | 出納帳（班別） | `app/(authenticated)/ledger/page.tsx`、`app/(authenticated)/ledger/actions.ts`、`components/ledger-view.tsx`、`components/ledger/*`、`lib/ledger.ts` | 完了 | 支援金を仮想行として統合。グループ閲覧制限はサーバー側で判定（`ledger/actions.ts:64-76`）。Realtime 購読あり（`components/ledger-view.tsx:212-227`） |
-| 部全体会計・財布別残高 | `supabase/migrations/20260612120000_add_club_wide_ledger.sql`、`components/ledger/club-ledger-summary.tsx`、`lib/auth/permissions.ts`（`canViewClubLedger`） | 一部 | 閲覧・集計・財布フィルタは実装済み。財布マスタ（`financial_accounts`）を管理する UI はない（`canManageFinancialAccounts` は定義のみで未使用） |
-| 資金移動（金庫 ⇔ 銀行） | `components/transfer-form.tsx:294`（`TransferForm`）、`app/(authenticated)/ledger/actions.ts:240`（`createTransfer`）、RPC `create_transfer` | 未接続 | `TransferForm` はどこからも import されておらず（`grep -rln TransferForm app components` の結果は自ファイルのみ）、画面から資金移動を登録できない。仕様は `docs/club-wide-ledger-spec.md:218-228` |
+| 部全体会計・財布別残高 | `supabase/migrations/20260612120000_add_club_wide_ledger.sql`、`components/ledger/club-ledger-summary.tsx`、`lib/auth/permissions.ts`（`canViewClubLedger`） | 一部 | 閲覧・集計・財布フィルタは実装済み。財布マスタ（`financial_accounts`）の管理 UI はユーザー判断で延期（2026-10-25） |
+| 資金移動（金庫 ⇔ 銀行） | `components/transfer-form.tsx`、`components/ledger-view.tsx`、RPC `create_transfer` | 完了 | 2026-10-25：部全体出納帳に会計・admin のみ表示。両行を作成時に承認し、承認者・承認日時・登録履歴を一括保存。片側の編集・削除は不可 |
 | 部員情報 | `app/(authenticated)/members/page.tsx`、`components/members-table.tsx` | 完了 | |
 | 部員管理（追加・編集・退部・削除・PW リセット） | `app/(authenticated)/members/manage/*` | 完了 | 会計・部長・副部長・admin。追加時に「仮部員」ロールを自動付与（`members/manage/actions.ts:106`） |
 | 予算管理（年度予算・グループ追加・有効/無効・年度データ削除） | `app/(authenticated)/budget/*` | 完了 | 繰入金・収入（carryover）にも対応（`20260426130000_add_carryover_and_income.sql`） |
 | 会計年度の自動切替 | `supabase/functions/update-fiscal-year/index.ts` | 完了 | 本番では `pg_cron` / `pg_net` / `supabase_vault` 拡張の有効化が前提（マイグレーション内の NOTE） |
 | 設定（パスワード変更・テーマ） | `app/(authenticated)/settings/*` | 完了 | |
-| 監査ログ | `lib/audit-log.ts`、`20260320100200_add_audit_log.sql` | 一部 | 書き込みのみ（`logAuditEvent` の呼び出しは `app/` 内で 9 件）。閲覧 UI はない |
+| 監査ログ | `lib/audit-log.ts`、`app/(authenticated)/audit-logs/page.tsx` | 完了 | 2026-10-25：会計・admin 向け変更履歴。対象・操作・変更者・期間フィルター、50件単位のページ送り、変更項目の差分表示。RLS の SELECT ポリシーを会計向けに追加 |
 | 旧 admin 画面 | `app/(authenticated)/admin/users/page.tsx`、`admin/actions.ts`、`admin/create-user.ts` | 廃止 | ページは `notFound()`。`setGlobalAdmin` などの Server Action は `lib/validations.ts` 以外から参照されておらず、デッドコード |
 | Tier 7（仮部員・OB/OG）のアクセス制限 | `lib/use-sidebar-data.ts:161-177` | 一部 | 仕様では Tier 7 は経費申請・支援金申請・出納帳・部員情報に入れないが、ナビ・ページともに制限がない。一方、ローカルの `docs/beta-test/README.md` は仮部員・OB/OG も「閲覧・申請のみ」可能と書いており、仕様書と矛盾している。どちらが正かの判断が必要 |
 
@@ -142,7 +142,7 @@ docs/manual/            日本語マニュアル（Git 管理対象）
 
 コメントで将来対応が示唆されている箇所は次のとおりです。
 
-- `app/actions.ts:15-16`: `transaction_kind = "transfer"` の 2 行を同時に承認するロジックが将来必要になる、という注記
+- 資金移動は `create_transfer` 内で両行を作成時に承認する（2026-10-25 対応）
 - `lib/rate-limit.ts:8-9`: インメモリ実装なので、複数インスタンス環境では Redis などが必要、という注記
 
 ## 領収書アップロードの現状と D&D 追加時の改修ポイント
@@ -192,11 +192,34 @@ docs/manual/            日本語マニュアル（Git 管理対象）
 1. **PDF のサイズ上限が実質 5MB**: UI とサーバーは「最大 10MB」と案内しています（`receipt-upload.tsx:62`、`app/actions.ts:118`）。しかし `next.config.ts:8` の `serverActions.bodySizeLimit` は `"5mb"` です。PDF は圧縮されないため、5MB を超える PDF は Server Action の段階で失敗すると考えられます。画像は WebP に圧縮されるので通常は影響しません。
 2. **HEIC / TIFF は多くのブラウザで処理に失敗する可能性**: `compressImageToWebp()` は `<img>` と Canvas でデコードします。そのため、HEIC や TIFF を描画できない Chrome / Firefox では `onerror` で reject され、「画像の処理中にエラーが発生しました」になる見込みです（`transaction-form.tsx:210-214`）。対応形式の案内と実際の挙動が一致していません。
 3. **アップロード失敗時に元の領収書が消える**: `uploadReceiptAction` は、新しいファイルをアップロードする**前に**既存ファイルを削除します（`app/actions.ts:129-146`）。新しいファイル名には毎回ランダムな値が入るため、`existingPath !== sanitizedFileName` は常に真です。その後アップロードや DB 更新が失敗すると、DB には削除済みファイルへのパスが残り、リンク切れになります。
-4. **孤立ファイルが残る**: アップロードが成功したあとで取引や支援金の作成が失敗すると、Storage にファイルだけが残ります（`transaction-form.tsx:182-235`、`subsidy-form.tsx:162-195`）。
+4. **孤立ファイル対策は対応済み（2026-10-25）**: 取引・支援金の作成失敗時は Server Action で、ダイアログを閉じた場合や書類差し替え後の保存失敗時は共通アップロード処理で、今回アップロードした未参照ファイルの整理を試みます。削除できるのは本人の `<userId>/` 配下にあるファイルだけで、旧 URL を正規化して論理削除済み行も含めた全参照と削除履歴を確認します。参照中・他人のファイル・削除済みレコードの証憑は削除しません。
 5. **レート制限が会計担当の作業を止める可能性があり、防御としても効かない**: 上限は 10 回 / 時 / ユーザーです。管理画面では 1 件の編集で領収書と根拠書類の 2 回アップロードすることがあるので、5 件ほど処理すると上限に達します。一方で実装はインメモリ（`lib/rate-limit.ts:8-9`）なので、Vercel のように複数インスタンスで動く環境では制限が正しく効きません。また `subsidy-form.tsx:176-178` はサーバーのエラー文言を捨てて汎用メッセージを出すため、レート制限に達しても利用者には理由が分かりません。
 6. **領収書が公開 URL で誰でも見られる**: `receipts` バケットは `public = true`（`20261008120000_ensure_receipts_bucket.sql`）です。認証済みユーザー向けの SELECT ポリシー（`20260325120000_add_storage_policies.sql`）があっても、公開 URL ではそれを経由しません。パスに UUID が入っているので推測は難しいものの、URL が漏れれば誰でも閲覧できます。個人情報を含む領収書であれば、非公開バケットと署名付き URL への移行を検討する価値があります。なお同じファイルの INSERT ポリシーは `<uid>/` フォルダ配下を前提にしていますが、実際のアップロードは service role でバケット直下に置くため、このポリシーは使われていません。
 7. **DB レベルの閲覧制限が弱い**: `transactions` は班をまたいで、`subsidy_items` は全件、ログインユーザーなら anon key で直接読めます。画面上の閲覧制限はアプリ側だけで実装されています。
 8. **部全体グループの判定方法が食い違っている**: サーバーは `accounting_groups.type === "club"`（`ledger/actions.ts:64`）で判定し、クライアントはグループ名 `"部全体"`（`components/ledger-view.tsx:127`）で判定しています。グループ名を変えると、集計カードや拡張列が表示されなくなります。
-9. **資金移動 UI が未接続**: 上の機能表のとおり、`TransferForm` はどこからも使われていません。
+9. **資金移動 UI は接続済み（2026-10-25）**: 部全体出納帳から会計・admin が利用できます。財布管理 UI は同日のユーザー判断で延期しました。
 10. **仕様書と実装の食い違い**: Tier 7 のアクセス制限、経費申請の削除権限、支援金申請時の書類の扱いが、`docs/specification.md` と実装で異なります。仕様書が Git 管理外のため、どちらを正とするかを決めて、仕様を `docs/manual/` か `.claude/docs/DESIGN.md` に取り込む必要があります。
 11. **デッドコード**: `app/(authenticated)/admin/actions.ts`、`admin/create-user.ts`、`lib/auth/permissions.ts` の `canManageFinancialAccounts` は、どこからも呼ばれていません。
+
+
+## 領収書の保持方針と孤立ファイル調査（2026-10-25）
+
+- **レコードを削除しても書類は証憑として保持します。** 取引の単件削除・班年度の一括削除・支援金に連動した取引削除・申請者の支援金削除で Storage のファイルは消しません。物理削除された取引・支援金の内容と書類パスは DB トリガーが `audit_logs.old_data` に保存します。service-role による一括削除など JWT がない操作の変更者は未設定になります。
+- 差し替えは新しいファイルのアップロードと DB 更新が成功してから旧ファイルを整理します。DB に残る参照が1件でもあれば、論理削除済み行の参照も含めて保持します。削除済みレコードの監査ログに残る書類も保持します。
+- 整理時は DB に削除対象パスを記録し、その後同じパスを添付する書き込みを拒否します。参照確認と Storage 削除の間に別の行がそのパスを添付する競合を防ぎます。削除に失敗した場合も対象パスは再利用せず、書類を再アップロードします。
+- ブラウザの強制終了・通信断や Storage 障害で整理できなかったファイルは残る場合があります。既存ファイルを含め、以下の読み取り専用レポートで調べます。
+
+### 読み取り専用の孤立ファイルレポート
+
+`scripts/report-orphan-receipts.mjs` を `npm run report:orphans` で実行します。`SUPABASE_URL` と `SUPABASE_SERVICE_ROLE_KEY` を環境変数で指定してください。キーはログや Git に残さないでください。
+
+**本番への実行は読み取り専用でも事前承認が必要です。本番では承認を受けたメインエージェントだけが実行します。** この対応ではローカル Supabase に対してのみ実行しています。
+
+レポートは `receipts` の全フォルダと全ページ、`transactions.receipt_url`、`subsidy_items.receipt_url` / `evidence_url`、`audit_logs.old_data` / `new_data` の書類項目を調べます。参照には論理削除済み行も含め、旧形式の完全 URL はバケット内のオブジェクト名に正規化します。
+
+未参照ファイルを次の2種類に分け、全体・分類別の件数とバイト数、各ファイルの名前・サイズ・作成日時を出力します。
+
+- `in_audit_log`: 監査ログ内に名前が見つかった書類。削除済みレコードなどの証憑として保持します。
+- `never_referenced`: 現在の行にも監査ログにも名前が見つからない、アップロードごみの候補。過去の監査記録不足もあり得るため、自動削除の根拠にはしません。
+
+**削除モードはありません。** ファイルを削除する判断や実行は別途承認・調査の対象です。2026-10-25 の既存調査では412ファイル中58件（約11.8 MB）が現在の行から未参照でしたが、これは削除可能数ではありません。

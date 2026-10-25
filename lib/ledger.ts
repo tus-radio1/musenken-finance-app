@@ -13,6 +13,7 @@
  */
 
 import { getSortableDateValue } from "@/lib/date";
+import { getStatusDisplay } from "@/lib/status-display";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -158,7 +159,7 @@ export function synthesizeLedgerRows(
           remarks:
             item.status === "paid"
               ? "支援金として受領済"
-              : "支援金として承認済（未受領）",
+              : `支援金として${getStatusDisplay("subsidy", "approved").label}（未受領）`,
           is_subsidy: true,
           subsidy_id: item.id,
         });

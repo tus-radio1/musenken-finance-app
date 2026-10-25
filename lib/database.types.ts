@@ -119,6 +119,34 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"rate_limit_hits": {
+                  Row: {
+                    "bucket": string,"count": number,"key_hash": string,"reset_at": string,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "bucket": string,"count": number,"key_hash": string,"reset_at": string,"window_start": string
+                  }
+                  Update: {
+                    "bucket"?: string,"count"?: number,"key_hash"?: string,"reset_at"?: string,"window_start"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"receipt_cleanup_claims": {
+                  Row: {
+                    "claimed_at": string,"owner_id": string,"path": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "claimed_at"?: string,"owner_id": string,"path": string
+                  }
+                  Update: {
+                    "claimed_at"?: string,"owner_id"?: string,"path"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"roles": {
                   Row: {
                     "accounting_group_id": string | null,"created_at": string | null,"id": string,"name": string,"type": string,"updated_at": string | null
@@ -317,6 +345,9 @@ isOneToOne: false
 "can_view_club_ledger":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"claim_receipt_cleanup":
+{ Args: { "p_owner_id": string,"p_path": string }; Returns: boolean
+                           },
 "create_transfer":
 { Args: { "p_amount": number,"p_created_by"?: string,"p_date": string,"p_description": string,"p_from_account_id": string,"p_receipt_url"?: string,"p_remarks"?: string,"p_to_account_id": string }; Returns: string
                            },
@@ -342,6 +373,17 @@ isOneToOne: false
                            },
 "is_restricted_api_writer":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"rate_limit_hit":
+{ Args: { "p_bucket": string,"p_key": string,"p_max": number,"p_window_seconds": number }; Returns: {
+              "allowed": boolean,"remaining": number,"reset_at": string
+            }[]
+                           },
+"receipt_reference_name":
+{ Args: { "p_value": string }; Returns: string
+                           },
+"soft_delete_member":
+{ Args: { "p_user_id": string }; Returns: string
                            },
 "soft_delete_subsidy_item":
 { Args: { "p_id": string }; Returns: string

@@ -20,6 +20,7 @@ import { ManageMobileCardList } from "./_components/manage-mobile-card-list";
 import { ManageDesktopTable } from "./_components/manage-desktop-table";
 import { ManageEditDialog } from "./_components/manage-edit-dialog";
 import type { SubsidyItem, SortKey, SortOrder, EditFormState } from "./_components/types";
+import { ConfirmDialog } from "@/components/feedback/confirm-dialog";
 
 export function SubsidiesManageClientPage({
   initialData,
@@ -63,6 +64,7 @@ export function SubsidiesManageClientPage({
 
   // --- 編集ダイアログ状態 ---
   const [editingItem, setEditingItem] = useState<SubsidyItem | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState>({
     category: "",
@@ -82,8 +84,8 @@ export function SubsidiesManageClientPage({
     justification: "",
     evidence_url: "",
   });
-  const { file, setFile, upload, error: uploadError } = useReceiptUpload();
-  const { file: evidenceFile, setFile: setEvidenceFile, upload: uploadEvidence, error: evidenceUploadError } = useReceiptUpload();
+  const { file, setFile, upload, withSubmission, error: uploadError } = useReceiptUpload();
+  const { file: evidenceFile, setFile: setEvidenceFile, upload: uploadEvidence, withSubmission: withEvidenceSubmission, error: evidenceUploadError } = useReceiptUpload();
 
   // --- トグル・ソートハンドラ ---
   const toggleCard = (id: string) => {
@@ -203,7 +205,7 @@ export function SubsidiesManageClientPage({
   };
 
   // --- 編集送信 ---
-  const handleEditSubmit = async () => {
+  const handleEditSubmit = async () => withSubmission(() => withEvidenceSubmission(async () => {
     if (!editingItem) return;
     setIsSubmitting(true);
 
@@ -296,20 +298,30 @@ export function SubsidiesManageClientPage({
       setFile(null);
       setEvidenceFile(null);
     }
-  };
+  }));
 
   // --- 削除 ---
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("本当にこの申請を削除しますか？")) return;
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetId) return;
     setIsSubmitting(true);
-    const result = await deleteSubsidyItem(id);
-    setIsSubmitting(false);
-    if (result.error) {
-      toast.error(result.error);
-    } else {
-      toast.success("申請を削除しました");
-      setItems((prev) => prev.filter((i) => i.id !== id));
-      setEditingItem(null);
+    try {
+      const result = await deleteSubsidyItem(deleteTargetId);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("申請を削除しました");
+        setItems((prev) => prev.filter((i) => i.id !== deleteTargetId));
+        setEditingItem(null);
+      }
+    } catch {
+      toast.error("申請の削除に失敗しました");
+    } finally {
+      setIsSubmitting(false);
+      setDeleteTargetId(null);
     }
   };
 
@@ -382,6 +394,16 @@ export function SubsidiesManageClientPage({
         onFileChange={setFile}
         evidenceFile={evidenceFile}
         onEvidenceFileChange={setEvidenceFile}
+      />
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        title="申請を削除しますか？"
+        description="この操作は元に戻せません。選択した申請を削除します。"
+        confirmLabel="削除する"
+        destructive
+        pending={isSubmitting}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

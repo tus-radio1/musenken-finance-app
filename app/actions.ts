@@ -15,8 +15,7 @@
  *   管理者・会計は updateTransaction で承認ステータスを直接変更できる。
  *   会計は自分の取引と過年度の取引を変更できない。管理者が自分の取引を
  *   変更するのは break-glass の修正で、監査ログを先に記録できた場合のみ行う。
- *   ※ 将来仕様で transaction_kind = "transfer" が追加された場合、
- *     ペアとなる2行を同時に承認する追加ロジックが必要になる
+ *   Transfers are approved by create_transfer; individual legs cannot be changed.
  */
 
 import { redirect } from "next/navigation";
@@ -64,7 +63,7 @@ import {
   isReceiptPathOwnedBy,
   validateReceiptFile,
 } from "@/lib/receipt-upload";
-import { removeReplacedReceipt } from "@/lib/receipt-storage";
+import { removeReplacedReceipt, removeUnreferencedReceipt } from "@/lib/receipt-storage";
 
 const RECEIPT_PATH_ERROR = "領収書URLの形式が不正です";
 
@@ -159,7 +158,7 @@ export async function uploadReceiptAction(formData: FormData) {
   const auth = authResult.context;
 
   // Rate limiting: 10 uploads per hour per user
-  const rateLimitResult = uploadRateLimiter.check(auth.userId);
+  const rateLimitResult = await uploadRateLimiter.check(auth.userId);
   if (!rateLimitResult.success) {
     const retryMinutes = Math.ceil(
       (rateLimitResult.resetAt - Date.now()) / 1000 / 60,
@@ -199,7 +198,33 @@ export async function uploadReceiptAction(formData: FormData) {
   return { success: true, filePath };
 }
 
+/** Cancel only the authenticated caller's unreferenced upload. */
+export async function discardReceiptUpload(path: string) {
+  const auth = await resolveAuthContext();
+  if (!auth.ok) return { error: auth.error };
+  if (typeof path !== "string" || !isReceiptPathOwnedBy(path, auth.context.userId)) {
+    return { error: RECEIPT_PATH_ERROR };
+  }
+  const removed = await removeUnreferencedReceipt(path, auth.context.userId);
+  return removed ? { success: true } : { error: "参照中または削除できない書類です" };
+}
+
 export async function createTransaction(
+  values: z.infer<typeof formSchema>,
+  receiptPath?: string | null,
+  transactionId?: string,
+) {
+  let saved = false;
+  try {
+    const result = await persistTransaction(values, receiptPath, transactionId);
+    saved = "success" in result;
+    return result;
+  } finally {
+    if (!saved && receiptPath) await discardReceiptUpload(receiptPath);
+  }
+}
+
+async function persistTransaction(
   values: z.infer<typeof formSchema>,
   receiptPath?: string | null,
   transactionId?: string,
@@ -379,7 +404,7 @@ export async function updateTransactionStatus(
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
     .select(
-      "accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason, fiscal_year_id",
+      "transaction_kind, accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason, fiscal_year_id",
     )
     .eq("id", transactionId)
     .is("deleted_at", null)
@@ -490,7 +515,7 @@ export async function updateTransaction(
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
     .select(
-      "accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason, amount, receipt_url, fiscal_year_id",
+      "transaction_kind, accounting_group_id, created_by, approval_status, approved_by, approved_at, rejected_reason, amount, receipt_url, fiscal_year_id",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -785,7 +810,7 @@ export async function deleteTransaction(id: string) {
   const { data: transaction, error: txFetchError } = await auth.supabase
     .from("transactions")
     .select(
-      "created_by, approval_status, amount, description, accounting_group_id",
+      "transaction_kind, created_by, approval_status, amount, description, accounting_group_id",
     )
     .eq("id", id)
     .single();
@@ -820,20 +845,6 @@ export async function deleteTransaction(id: string) {
   if (!deletedRows || deletedRows.length !== 1) {
     return { error: STALE_TRANSACTION_ERROR };
   }
-
-  await logAuditEvent({
-    tableName: "transactions",
-    recordId: id,
-    action: "DELETE",
-    oldData: {
-      created_by: transaction.created_by,
-      approval_status: transaction.approval_status,
-      amount: transaction.amount,
-      description: transaction.description,
-      accounting_group_id: transaction.accounting_group_id,
-    },
-    changedBy: auth.profileId,
-  });
 
   revalidatePath("/ledger");
   revalidatePath("/applications");

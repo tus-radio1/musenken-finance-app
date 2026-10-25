@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/feedback/empty-state";
 import {
   Popover,
   PopoverContent,
@@ -33,6 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 import { toast } from "sonner";
 import { Loader2, LogOut, Trash2, KeyRound } from "lucide-react";
 import { AddMemberDialog } from "./add-member-dialog";
@@ -92,6 +94,7 @@ function SortableHeader({
         className={`h-3.5 w-3.5 ${
           isActive ? "text-foreground" : "text-muted-foreground/50"
         }`}
+        aria-hidden="true"
       />
     </Button>
   );
@@ -257,12 +260,13 @@ export function ManageMembersClient({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label htmlFor="manage-filter-name" className="text-xs font-medium text-muted-foreground">
               氏名
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
+                id="manage-filter-name"
                 placeholder="名前で検索"
                 value={filterName}
                 onChange={(e) => setFilterName(e.target.value)}
@@ -271,12 +275,13 @@ export function ManageMembersClient({
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label htmlFor="manage-filter-student-number" className="text-xs font-medium text-muted-foreground">
               学籍番号
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
+                id="manage-filter-student-number"
                 placeholder="学籍番号で検索"
                 value={filterStudentNumber}
                 onChange={(e) => setFilterStudentNumber(e.target.value)}
@@ -285,11 +290,11 @@ export function ManageMembersClient({
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
+            <span id="manage-filter-grade-label" className="text-xs font-medium text-muted-foreground">
               学年
-            </label>
+            </span>
             <Select value={filterGrade} onValueChange={setFilterGrade}>
-              <SelectTrigger className="h-9 w-28 text-sm">
+              <SelectTrigger className="h-9 w-28 text-sm" aria-labelledby="manage-filter-grade-label">
                 <SelectValue placeholder="全学年" />
               </SelectTrigger>
               <SelectContent>
@@ -303,22 +308,23 @@ export function ManageMembersClient({
             </Select>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
+            <span id="manage-filter-roles-label" className="text-xs font-medium text-muted-foreground">
               役職
-            </label>
+            </span>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-9 w-36 justify-between text-sm font-normal"
+                  aria-labelledby="manage-filter-roles-label"
                 >
                   <span className="truncate">
                     {filterRoles.length === 0
                       ? "全役職"
                       : `${filterRoles.length}件選択中`}
                   </span>
-                  <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-48 p-2" align="start">
@@ -359,7 +365,7 @@ export function ManageMembersClient({
               className="h-9 gap-1 text-xs text-muted-foreground"
               onClick={clearFilters}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
               フィルタをクリア
             </Button>
           )}
@@ -368,9 +374,10 @@ export function ManageMembersClient({
       </div>
 
       {sorted.length === 0 ? (
-        <div className="flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground">
-          該当する部員が見つかりません
-        </div>
+        <EmptyState
+          message="該当する部員が見つかりません"
+          className="flex h-24 items-center justify-center rounded-md border py-0"
+        />
       ) : (
         <Table>
           <TableHeader>
@@ -452,10 +459,10 @@ export function ManageMembersClient({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        className="gap-1 text-primary hover:text-primary hover:bg-accent"
                         onClick={() => setResetTarget(member)}
                       >
-                        <KeyRound className="h-3.5 w-3.5" />
+                        <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
                         PWリセット
                       </Button>
                     )}
@@ -463,10 +470,10 @@ export function ManageMembersClient({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="gap-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                        className="gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => setRetireTarget(member)}
                       >
-                        <LogOut className="h-3.5 w-3.5" />
+                        <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                         退部
                       </Button>
                     )}
@@ -476,7 +483,7 @@ export function ManageMembersClient({
                       className="gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setDeleteTarget(member)}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       削除
                     </Button>
                   </div>
@@ -496,7 +503,7 @@ export function ManageMembersClient({
         open={!!retireTarget}
         onOpenChange={(open) => !open && setRetireTarget(null)}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={DIALOG_WIDTH_CLASS.confirm}>
           <DialogHeader>
             <DialogTitle>退部処理の確認</DialogTitle>
             <DialogDescription>
@@ -513,13 +520,12 @@ export function ManageMembersClient({
               キャンセル
             </Button>
             <Button
-              variant="default"
-              className="bg-orange-600 hover:bg-orange-700"
+              variant="destructive"
               onClick={handleRetire}
               disabled={retireLoading}
             >
               {retireLoading && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
               退部処理を実行
             </Button>
@@ -532,13 +538,13 @@ export function ManageMembersClient({
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={DIALOG_WIDTH_CLASS.confirm}>
           <DialogHeader>
             <DialogTitle>アカウント削除の確認</DialogTitle>
             <DialogDescription>
               <strong>{deleteTarget?.name}</strong>（
               {deleteTarget?.student_number}
-              ）のアカウントを完全に削除します。この操作は取り消すことができません。誤って登録されたアカウントのみ削除してください。
+              ）のアカウントを停止し、部員一覧から非表示にします。取引・変更履歴と氏名は保持されます。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -555,9 +561,9 @@ export function ManageMembersClient({
               disabled={deleteLoading}
             >
               {deleteLoading && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
-              完全に削除する
+              削除してログインを停止
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -568,7 +574,7 @@ export function ManageMembersClient({
         open={!!resetTarget}
         onOpenChange={(open) => !open && setResetTarget(null)}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={DIALOG_WIDTH_CLASS.confirm}>
           <DialogHeader>
             <DialogTitle>パスワードリセットの確認</DialogTitle>
             <DialogDescription>
@@ -591,7 +597,7 @@ export function ManageMembersClient({
               disabled={resetLoading}
             >
               {resetLoading && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
               リセットする
             </Button>

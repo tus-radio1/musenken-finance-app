@@ -31,20 +31,20 @@ export function ClubLedgerSummary({ summary, financialAccounts }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-muted rounded p-4">
             <div className="text-sm text-muted-foreground">部全体収入</div>
-            <div className="text-xl font-semibold text-green-600">
+            <div className="text-xl font-semibold text-income">
               {formatCurrency(summary.income)}
             </div>
           </div>
           <div className="bg-muted rounded p-4">
             <div className="text-sm text-muted-foreground">部全体支出</div>
-            <div className="text-xl font-semibold text-red-600">
+            <div className="text-xl font-semibold text-expense">
               {formatCurrency(summary.expense)}
             </div>
           </div>
           <div className="bg-muted rounded p-4">
             <div className="text-sm text-muted-foreground">収支差額</div>
             <div
-              className={`text-xl font-semibold ${summary.balance < 0 ? "text-red-600" : ""}`}
+              className={`text-xl font-semibold ${summary.balance < 0 ? "text-expense" : ""}`}
             >
               {formatCurrency(summary.balance)}
             </div>
@@ -74,11 +74,11 @@ export function ClubLedgerSummary({ summary, financialAccounts }: Props) {
         {/* Transfer total */}
         {summary.transferTotal > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded p-4">
+            <div className="bg-info rounded p-4">
               <div className="text-sm text-muted-foreground">
                 当年度資金移動総額
               </div>
-              <div className="text-xl font-semibold text-blue-600">
+              <div className="text-xl font-semibold text-info-foreground">
                 {formatCurrency(summary.transferTotal)}
               </div>
             </div>

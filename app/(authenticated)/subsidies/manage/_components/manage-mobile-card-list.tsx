@@ -25,10 +25,11 @@ import { formatCurrency } from "@/lib/format";
 import {
   CATEGORY_LABELS as CATEGORY_MAP,
   EXPENSE_TYPE_LABELS as EXPENSE_TYPE_MAP,
-  STATUS_VARIANT_MAP as STATUS_MAP,
 } from "@/lib/constants/subsidy";
 import { StatusBadge } from "@/components/status-badge";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { getStatusOptions } from "@/lib/status-display";
+import { EmptyState } from "@/components/feedback/empty-state";
 import type { SubsidyItem } from "./types";
 
 type ManageMobileCardListProps = {
@@ -50,9 +51,7 @@ export function ManageMobileCardList({
 }: ManageMobileCardListProps) {
   if (filteredItems.length === 0) {
     return (
-      <div className="py-8 text-center text-muted-foreground text-sm">
-        該当する支援金申請はありません
-      </div>
+      <EmptyState message="該当する支援金申請はありません" />
     );
   }
 
@@ -87,7 +86,7 @@ export function ManageMobileCardList({
 
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
+                <span className="px-2 py-0.5 rounded text-xs bg-info text-info-foreground border border-info/50">
                   {CATEGORY_MAP[item.category] || item.category}
                 </span>
                 <Badge variant="outline" className="text-xs">
@@ -96,7 +95,7 @@ export function ManageMobileCardList({
                 <span className="text-xs text-muted-foreground">
                   第{item.term}期
                 </span>
-                <StatusBadge status={item.status} className="text-xs" />
+                <StatusBadge status={item.status} domain="subsidy" className="text-xs" />
               </div>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 px-2">
@@ -104,8 +103,7 @@ export function ManageMobileCardList({
                   <ChevronDown
                     className={`ml-1 h-3.5 w-3.5 transition-transform ${
                       openCards.has(item.id) ? "rotate-180" : ""
-                    }`}
-                  />
+                    }`} aria-hidden="true" />
                 </Button>
               </CollapsibleTrigger>
             </div>
@@ -141,9 +139,9 @@ export function ManageMobileCardList({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(STATUS_MAP).map(
-                      ([key, { label }]) => (
-                        <SelectItem key={key} value={key}>
+                    {getStatusOptions("subsidy").map(
+                      ({ value, label }) => (
+                        <SelectItem key={value} value={value}>
                           {label}
                         </SelectItem>
                       ),
@@ -155,13 +153,13 @@ export function ManageMobileCardList({
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                 <div>
                   <span className="text-muted-foreground font-medium">算定額: </span>
-                  <span className={item.calculated_amount > 0 ? "font-medium text-emerald-600" : "text-muted-foreground"}>
+                  <span className={item.calculated_amount > 0 ? "font-medium text-income" : "text-muted-foreground"}>
                     {formatCurrency(item.calculated_amount)}
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground font-medium">実経費額: </span>
-                  <span className={item.actual_expense > 0 ? "font-medium text-blue-600" : "text-muted-foreground"}>
+                  <span className={item.actual_expense > 0 ? "font-medium text-expense" : "text-muted-foreground"}>
                     {formatCurrency(item.actual_expense)}
                   </span>
                 </div>
@@ -185,9 +183,9 @@ export function ManageMobileCardList({
                         href={receiptViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center text-blue-600 hover:underline text-xs"
+                        className="inline-flex items-center text-primary hover:underline text-xs"
                       >
-                        <Receipt className="h-4 w-4 mr-1" />
+                        <Receipt className="h-4 w-4 mr-1" aria-hidden="true" />
                         領収書
                       </a>
                     )}
@@ -196,9 +194,9 @@ export function ManageMobileCardList({
                         href={evidenceViewUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center text-blue-600 hover:underline text-xs"
+                        className="inline-flex items-center text-primary hover:underline text-xs"
                       >
-                        <FileText className="h-4 w-4 mr-1" />
+                        <FileText className="h-4 w-4 mr-1" aria-hidden="true" />
                         根拠書類
                       </a>
                     )}

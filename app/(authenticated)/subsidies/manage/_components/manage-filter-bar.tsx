@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { STATUS_VARIANT_MAP as STATUS_MAP } from "@/lib/constants/subsidy";
+import { getStatusOptions } from "@/lib/status-display";
 import type { SortKey, SortOrder } from "./types";
 
 type Profile = { id: string; name: string };
@@ -57,7 +57,7 @@ export function ManageFilterBar({
   return (
     <div className="space-y-3 bg-muted/50 p-4 rounded-lg">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Input
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
@@ -68,11 +68,12 @@ export function ManageFilterBar({
 
       <div className="flex flex-col sm:flex-row gap-3 items-end flex-wrap">
         <div className="w-full sm:w-auto space-y-1">
-          <label className="text-sm font-medium">カテゴリ</label>
+          <span id="subsidy-filter-category-label" className="text-sm font-medium">カテゴリ</span>
           <Tabs
             value={selectedCategory}
             onValueChange={onCategoryChange}
             className="w-full sm:w-64"
+            aria-labelledby="subsidy-filter-category-label"
           >
             <TabsList className="w-full grid grid-cols-4">
               <TabsTrigger value="all">すべて</TabsTrigger>
@@ -84,9 +85,9 @@ export function ManageFilterBar({
         </div>
 
         <div className="w-full sm:w-36 space-y-1">
-          <label className="text-sm font-medium">期</label>
+          <span id="subsidy-filter-term-label" className="text-sm font-medium">期</span>
           <Select value={selectedTerm} onValueChange={onTermChange}>
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="subsidy-filter-term-label">
               <SelectValue placeholder="すべての期" />
             </SelectTrigger>
             <SelectContent>
@@ -99,9 +100,9 @@ export function ManageFilterBar({
         </div>
 
         <div className="w-full sm:w-40 space-y-1">
-          <label className="text-sm font-medium">申請者</label>
+          <span id="subsidy-filter-applicant-label" className="text-sm font-medium">申請者</span>
           <Select value={selectedApplicant} onValueChange={onApplicantChange}>
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="subsidy-filter-applicant-label">
               <SelectValue placeholder="すべての申請者" />
             </SelectTrigger>
             <SelectContent>
@@ -116,15 +117,15 @@ export function ManageFilterBar({
         </div>
 
         <div className="w-full sm:w-40 space-y-1">
-          <label className="text-sm font-medium">状況</label>
+          <span id="subsidy-filter-status-label" className="text-sm font-medium">状況</span>
           <Select value={selectedStatus} onValueChange={onStatusChange}>
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="subsidy-filter-status-label">
               <SelectValue placeholder="すべての状況" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">すべての状況</SelectItem>
-              {Object.entries(STATUS_MAP).map(([key, { label }]) => (
-                <SelectItem key={key} value={key}>
+              {getStatusOptions("subsidy").map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>
               ))}
@@ -140,7 +141,7 @@ export function ManageFilterBar({
             onClick={() => onSortToggle("created_at")}
           >
             申請日
-            <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+            <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
             {sortKey === "created_at" && (
               <span className="ml-0.5 text-[10px]">
                 {sortOrder === "asc" ? "↑" : "↓"}
@@ -154,7 +155,7 @@ export function ManageFilterBar({
             onClick={() => onSortToggle("requested_amount")}
           >
             申請額
-            <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+            <ArrowUpDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
             {sortKey === "requested_amount" && (
               <span className="ml-0.5 text-[10px]">
                 {sortOrder === "asc" ? "↑" : "↓"}

@@ -3,9 +3,10 @@
  * 各 loading.tsx から利用し、ローディング表示パターンを統一する。
  */
 
+import { PAGE_WIDTH_CLASS, type PageWidth } from "@/components/layout/page-shell";
+
 type PageLoadingShellProps = {
-  /** コンテナの max-width クラス (例: "max-w-7xl") */
-  maxWidth?: string;
+  width?: PageWidth;
   children: React.ReactNode;
 };
 
@@ -14,12 +15,12 @@ type PageLoadingShellProps = {
  * padding・overflow・レスポンシブ余白を統一する。
  */
 export function PageLoadingShell({
-  maxWidth = "max-w-7xl",
+  width = "list",
   children,
 }: PageLoadingShellProps) {
   return (
     <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className={`${maxWidth} mx-auto w-full space-y-6`}>
+      <div className={`${PAGE_WIDTH_CLASS[width]} mx-auto w-full space-y-6`}>
         {children}
       </div>
     </main>

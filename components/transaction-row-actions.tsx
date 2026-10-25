@@ -22,6 +22,7 @@ import {
 import { deleteTransaction } from "@/app/actions";
 import { toast } from "sonner";
 import { TransactionForm } from "@/components/transaction-form";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 type LedgerTransaction = {
   id: string;
@@ -91,13 +92,13 @@ export function TransactionRowActions({
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-8 w-8 p-0">
             <span className="sr-only">メニューを開く</span>
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {canEdit && (
             <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
-              <Pencil className="mr-2 h-4 w-4" />
+              <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
               編集
             </DropdownMenuItem>
           )}
@@ -107,9 +108,9 @@ export function TransactionRowActions({
                 e.preventDefault();
                 setShowDeleteDialog(true);
               }}
-              className="text-red-600 focus:text-red-600"
+              className="text-destructive focus:text-destructive"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
               削除
             </DropdownMenuItem>
           )}
@@ -117,7 +118,7 @@ export function TransactionRowActions({
       </DropdownMenu>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className={DIALOG_WIDTH_CLASS.confirm}>
           <AlertDialogHeader>
             <AlertDialogTitle>レコードの削除</AlertDialogTitle>
             <AlertDialogDescription>

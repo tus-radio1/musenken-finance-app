@@ -1,36 +1,23 @@
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentProfile } from "@/lib/sidebar-data";
+import { getCurrentUser } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./client-page";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name")
-    .eq("id", user.id)
-    .single();
+  const profile = await getCurrentProfile();
 
   return (
-    <main className="flex-1 flex flex-col p-6 pt-16 md:pt-6 pb-20 md:pb-6 overflow-y-auto">
-      <div className="max-w-2xl mx-auto w-full space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">設定</h1>
-            <p className="text-muted-foreground">
-              アカウントの設定や外観を変更できます。
-            </p>
-          </div>
-        </div>
-        <SettingsClient fullName={profile?.name || ""} />
-      </div>
-    </main>
+    <PageShell width="form">
+      <PageHeader
+        title="設定"
+        description="アカウントの設定や外観を変更できます。"
+      />
+      <SettingsClient fullName={profile?.name || ""} />
+    </PageShell>
   );
 }

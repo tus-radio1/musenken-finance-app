@@ -47,6 +47,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -56,6 +57,7 @@ import { subsidyFormSchema } from "@/lib/schema";
 import { createSubsidyItem } from "@/app/(authenticated)/subsidies/actions";
 import { useReceiptUpload } from "@/components/receipt/use-receipt-upload";
 import { FileDropzone } from "@/components/receipt/file-dropzone";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 import {
   CATEGORY_LABELS,
   CATEGORY_TERMS,
@@ -77,7 +79,7 @@ type Props = {
 export function SubsidyForm({ categories, triggerButton }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { file, setFile, upload, isUploading, error: uploadError } = useReceiptUpload();
+  const { file, setFile, upload, withSubmission, isUploading, error: uploadError } = useReceiptUpload();
 
   const form = useForm<z.infer<typeof subsidyFormSchema>>({
     resolver: zodResolver(subsidyFormSchema),
@@ -132,6 +134,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       });
       setFile(null);
     }
+    if (!nextOpen) setFile(null);
     setOpen(nextOpen);
   };
 
@@ -147,38 +150,40 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
   // --- 送信処理 ---
   async function onSubmit(values: z.infer<typeof subsidyFormSchema>) {
-    try {
-      if (!file) {
-        toast.error("根拠書類をアップロードしてください");
-        return;
+    await withSubmission(async () => {
+      try {
+        if (!file) {
+          toast.error("根拠書類をアップロードしてください");
+          return;
+        }
+
+        const uploaded = await upload();
+        if (uploaded.error !== undefined) {
+          toast.error(uploaded.error);
+          return;
+        }
+        const evidenceUrl = uploaded.filePath;
+
+        const result = await createSubsidyItem({
+          ...values,
+          evidence_url: evidenceUrl,
+        });
+
+        if (result.error) {
+          toast.error(result.error);
+          return;
+        }
+
+        toast.success("支援金申請を登録しました");
+        form.reset();
+        setFile(null);
+        setOpen(false);
+        router.refresh();
+      } catch (error) {
+        console.error("Subsidy submit error:", error);
+        toast.error("予期せぬエラーが発生しました");
       }
-
-      const uploaded = await upload();
-      if (uploaded.error !== undefined) {
-        toast.error(uploaded.error);
-        return;
-      }
-      const evidenceUrl = uploaded.filePath;
-
-      const result = await createSubsidyItem({
-        ...values,
-        evidence_url: evidenceUrl,
-      });
-
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-
-      toast.success("支援金申請を登録しました");
-      form.reset();
-      setFile(null);
-      setOpen(false);
-      router.refresh();
-    } catch (error) {
-      console.error("Subsidy submit error:", error);
-      toast.error("予期せぬエラーが発生しました");
-    }
+    });
   }
 
   return (
@@ -186,7 +191,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       <DialogTrigger asChild>
         {triggerButton ? triggerButton : <Button>＋ 支援金申請</Button>}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>支援金の新規申請</DialogTitle>
           <DialogDescription>
@@ -195,71 +200,37 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-            {/* --- セクション: 支援金種別 --- */}
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormLabel>支援金種別</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="flex flex-wrap gap-4"
-                    >
-                      {Object.entries(CATEGORY_LABELS).map(([val, label]) => (
-                        <FormItem
-                          key={val}
-                          className="flex items-center space-x-2 space-y-0"
-                        >
-                          <FormControl>
-                            <RadioGroupItem value={val} />
-                          </FormControl>
-                          <FormLabel className="font-normal cursor-pointer">
-                            {label}
-                          </FormLabel>
-                        </FormItem>
-                      ))}
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* --- セクション: 収支区分・日付 --- */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* 収支区分 */}
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,1fr)]"
+          >
+            <div className="grid content-start gap-2 md:grid-cols-2 [&_[data-slot=form-item]]:gap-1">
+              {/* --- セクション: 支援金種別 --- */}
               <FormField
                 control={form.control}
-                name="income_type"
+                name="category"
                 render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>収支区分</FormLabel>
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>支援金種別</FormLabel>
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
                         defaultValue={field.value}
-                        className="flex gap-4"
+                        className="flex flex-wrap gap-4"
                       >
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="expense" />
-                          </FormControl>
-                          <FormLabel className="font-normal cursor-pointer">
-                            支出
-                          </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="income" />
-                          </FormControl>
-                          <FormLabel className="font-normal cursor-pointer">
-                            収入
-                          </FormLabel>
-                        </FormItem>
+                        {Object.entries(CATEGORY_LABELS).map(([val, label]) => (
+                          <FormItem
+                            key={val}
+                            className="flex items-center space-x-2 space-y-0"
+                          >
+                            <FormControl>
+                              <RadioGroupItem value={val} />
+                            </FormControl>
+                            <FormLabel className="font-normal cursor-pointer">
+                              {label}
+                            </FormLabel>
+                          </FormItem>
+                        ))}
                       </RadioGroup>
                     </FormControl>
                     <FormMessage />
@@ -267,70 +238,164 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                 )}
               />
 
-              {/* 日付 */}
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col space-y-3 justify-end">
-                    <FormLabel className="mb-1">日付</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground",
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "yyyy年MM月dd日")
-                            ) : (
-                              <span>日付を選択</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          locale={ja}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+              {/* --- セクション: 収支区分・日付 --- */}
+              <div className="grid gap-3 md:grid-cols-2 md:col-span-2">
+                {/* 収支区分 */}
+                <FormField
+                  control={form.control}
+                  name="income_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>収支区分</FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          className="flex gap-4"
+                        >
+                          <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="expense" />
+                            </FormControl>
+                            <FormLabel className="font-normal cursor-pointer">
+                              支出
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="income" />
+                            </FormControl>
+                            <FormLabel className="font-normal cursor-pointer">
+                              収入
+                            </FormLabel>
+                          </FormItem>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {/* --- セクション: 申請期・経費種別 --- */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* 申請期 */}
+                {/* 日付 */}
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col justify-end">
+                      <FormLabel>日付</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "w-full pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground",
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "yyyy年MM月dd日")
+                              ) : (
+                                <span>日付を選択</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" aria-hidden="true" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            locale={ja}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* --- セクション: 申請期・経費種別 --- */}
+              <div className="grid gap-3 md:grid-cols-2 md:col-span-2">
+                {/* 申請期 */}
+                <FormField
+                  control={form.control}
+                  name="term"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>申請期</FormLabel>
+                      <Select
+                        onValueChange={(v) => field.onChange(Number(v))}
+                        value={String(field.value)}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="期を選択" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {availableTerms.map((t) => (
+                            <SelectItem key={t} value={String(t)}>
+                              {t}期
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 経費種別 */}
+                <FormField
+                  control={form.control}
+                  name="expense_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>経費種別</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="種別を選択" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {availableExpenseTypes.map((et) => (
+                            <SelectItem key={et} value={et}>
+                              {EXPENSE_TYPE_LABELS[et] || et}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* --- セクション: 会計グループ --- */}
               <FormField
                 control={form.control}
-                name="term"
+                name="accounting_group_id"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>申請期</FormLabel>
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>会計グループ</FormLabel>
                     <Select
-                      onValueChange={(v) => field.onChange(Number(v))}
-                      value={String(field.value)}
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="期を選択" />
+                          <SelectValue placeholder="グループを選択してください" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {availableTerms.map((t) => (
-                          <SelectItem key={t} value={String(t)}>
-                            {t}期
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -340,156 +405,102 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                 )}
               />
 
-              {/* 経費種別 */}
+              {/* --- セクション: 項目名・金額 --- */}
               <FormField
                 control={form.control}
-                name="expense_type"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>経費種別</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="種別を選択" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableExpenseTypes.map((et) => (
-                          <SelectItem key={et} value={et}>
-                            {EXPENSE_TYPE_LABELS[et] || et}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>項目名</FormLabel>
+                    <FormControl>
+                      <Input placeholder="例: テニスコート利用料" {...field} />
+                    </FormControl>
+                <FormDescription className="text-xs">
+                      申請する経費の具体的な品名を記載してください。
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="requested_amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>申請金額 (円)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="10000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* --- セクション: 申請理由・使用時期・備考 --- */}
+              <FormField
+                control={form.control}
+                name="justification"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>申請理由</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="支援が必要な理由を記載してください..."
+                        className="resize-none"
+                      rows={2}
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="usage_period"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>使用時期</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="例：2026年4月〜6月"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="remarks"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>備考（任意）</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="補足事項があれば記載してください..."
+                        className="resize-none"
+                        rows={2}
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
             </div>
 
-            {/* --- セクション: 会計グループ --- */}
-            <FormField
-              control={form.control}
-              name="accounting_group_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>会計グループ</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="グループを選択してください" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* --- セクション: 項目名・金額 --- */}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>項目名</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例: テニスコート利用料" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    申請する経費の具体的な品名を記載してください。
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="requested_amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>申請金額 (円)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="10000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* --- セクション: 申請理由・使用時期・備考 --- */}
-            <FormField
-              control={form.control}
-              name="justification"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>申請理由</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="支援が必要な理由を記載してください..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="usage_period"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>使用時期</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="例：2026年4月〜6月"
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="remarks"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>備考（任意）</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="補足事項があれば記載してください..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             {/* --- セクション: 根拠書類アップロード --- */}
-            <div className="space-y-2">
-              <FormDescription>
+            <div className="flex min-w-0 flex-col gap-2 lg:min-h-[24rem]">
+              <FormDescription className="text-xs">
                 見積書やHP等の料金が記載された資料をアップロードしてください。
               </FormDescription>
               <FileDropzone
@@ -498,19 +509,23 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
                 onFileChange={setFile}
                 disabled={form.formState.isSubmitting || isUploading}
                 error={uploadError}
+                className="flex flex-1 flex-col"
+                dropzoneClassName="lg:flex-1"
               />
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={form.formState.isSubmitting || isUploading}
-            >
-              {(form.formState.isSubmitting || isUploading) && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              {isUploading ? "書類を送信中..." : "申請する"}
-            </Button>
+            <DialogFooter className="lg:col-span-2">
+              <Button
+                type="submit"
+                className="w-full md:w-auto"
+                disabled={form.formState.isSubmitting || isUploading}
+              >
+                {(form.formState.isSubmitting || isUploading) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                )}
+                {isUploading ? "書類を送信中..." : "申請する"}
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

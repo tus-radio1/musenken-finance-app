@@ -93,6 +93,7 @@ let actor: Actor;
 let profileUpdateRows: Array<{ id: string }>;
 
 function resolveQuery(call: QueryCall): QueryResult {
+  if (call.op === "rpc" && call.table === "soft_delete_member") return { data: TARGET_ID };
   if (call.table === "user_roles" && call.op === "select") {
     const userId = eqValue(call, "user_id") as string;
     return { data: roleRowsFor(assignments[userId] ?? []) };
@@ -393,7 +394,8 @@ describe("deleteMember / retireMember on admin targets", () => {
     const result = await deleteMember(TARGET_ID);
 
     expect(result).toEqual({ success: true });
-    expect(adminDb.authAdmin.deleteUser).toHaveBeenCalledWith(TARGET_ID);
+    expect(adminDb.authAdmin.updateUserById).toHaveBeenCalledWith(TARGET_ID, { ban_duration: "876000h" });
+    expect(adminDb.authAdmin.deleteUser).not.toHaveBeenCalled();
   });
 
   it("lets a global admin delete another admin", async () => {
@@ -404,7 +406,8 @@ describe("deleteMember / retireMember on admin targets", () => {
     const result = await deleteMember(TARGET_ID);
 
     expect(result).toEqual({ success: true });
-    expect(adminDb.authAdmin.deleteUser).toHaveBeenCalledWith(TARGET_ID);
+    expect(adminDb.authAdmin.updateUserById).toHaveBeenCalledWith(TARGET_ID, { ban_duration: "876000h" });
+    expect(adminDb.authAdmin.deleteUser).not.toHaveBeenCalled();
   });
 });
 
@@ -497,4 +500,65 @@ describe("member writes by a non-admin manager", () => {
     expect(writesTo(adminDb.calls, "user_roles")).toHaveLength(0);
     expect(adminDb.authAdmin.updateUserById).not.toHaveBeenCalled();
   });
+});
+
+
+describe("deleteMember atomic soft delete and Auth ban", () => {
+  it("bans only after a successful RPC", async () => {
+    const events: string[] = [];
+    userDb.client.rpc.mockImplementation(async () => {
+      events.push("rpc");
+      return { data: TARGET_ID, error: null };
+    });
+    adminDb.authAdmin.updateUserById.mockImplementation(async () => {
+      events.push("ban");
+      return { data: {}, error: null };
+    });
+    expect(await deleteMember(TARGET_ID)).toEqual({ success: true });
+    expect(events).toEqual(["rpc", "ban"]);
+    expect(writesTo(adminDb.calls, "profiles")).toHaveLength(0);
+    expect(adminDb.authAdmin.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("does not ban when the RPC fails or reports no row", async () => {
+    userDb.client.rpc.mockResolvedValueOnce({ data: null, error: { message: "forbidden" } });
+    expect(await deleteMember(TARGET_ID)).toHaveProperty("error");
+    userDb.client.rpc.mockResolvedValueOnce({ data: null, error: null });
+    expect(await deleteMember(TARGET_ID)).toHaveProperty("error");
+    expect(adminDb.authAdmin.updateUserById).not.toHaveBeenCalled();
+    expect(adminDb.authAdmin.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects self-delete before RPC or Auth calls", async () => {
+    actor = "admin";
+    expect(await deleteMember(ACTOR_ID)).toEqual({ error: "自分自身は削除できません" });
+    expect(userDb.client.rpc).not.toHaveBeenCalled();
+    expect(adminDb.authAdmin.updateUserById).not.toHaveBeenCalled();
+  });
+
+  it("rejects callers without member management permission", async () => {
+    actor = "member";
+    expect(await deleteMember(TARGET_ID)).toEqual({ error: "権限がありません" });
+    expect(userDb.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("reports a ban failure and permits retry of the already-deleted member", async () => {
+    adminDb.authAdmin.updateUserById.mockResolvedValueOnce({ data: {}, error: { message: "Auth unavailable" } } as never);
+    expect(await deleteMember(TARGET_ID)).toMatchObject({ error: expect.stringContaining("論理削除済み") });
+    expect(console.error).toHaveBeenCalled();
+    assignments[TARGET_ID] = [];
+    expect(await deleteMember(TARGET_ID)).toEqual({ success: true });
+    expect(userDb.client.rpc).toHaveBeenCalledTimes(2);
+    expect(adminDb.authAdmin.updateUserById).toHaveBeenCalledTimes(2);
+    expect(adminDb.authAdmin.deleteUser).not.toHaveBeenCalled();
+  });
+});
+
+
+it("reports unexpected Auth ban exceptions after the RPC succeeds", async () => {
+  adminDb.authAdmin.updateUserById.mockRejectedValueOnce(new Error("connection lost"));
+  expect(await deleteMember(TARGET_ID)).toMatchObject({ error: expect.stringContaining("論理削除済み") });
+  expect(userDb.client.rpc).toHaveBeenCalledWith("soft_delete_member", { p_user_id: TARGET_ID });
+  expect(console.error).toHaveBeenCalled();
+  expect(adminDb.authAdmin.deleteUser).not.toHaveBeenCalled();
 });

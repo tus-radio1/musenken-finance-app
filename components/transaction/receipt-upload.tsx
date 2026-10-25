@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 import { FileDropzone } from "@/components/receipt/file-dropzone";
+import { cn } from "@/lib/utils";
 
 type Props = {
   file: File | null;
@@ -18,9 +19,19 @@ type Props = {
   existingUrl?: string | null;
   disabled?: boolean;
   error?: string | null;
+  className?: string;
+  dropzoneClassName?: string;
 };
 
-export function ReceiptUpload({ file, onFileChange, existingUrl, disabled, error }: Props) {
+export function ReceiptUpload({
+  file,
+  onFileChange,
+  existingUrl,
+  disabled,
+  error,
+  className,
+  dropzoneClassName,
+}: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // revoke 用に現在の URL を追跡
   const currentUrlRef = useRef<string | null>(null);
@@ -57,7 +68,7 @@ export function ReceiptUpload({ file, onFileChange, existingUrl, disabled, error
   }, []);
 
   return (
-    <div className="space-y-2">
+    <div className={cn("flex flex-col gap-2", className)}>
       <FileDropzone
         label="領収書データ (任意)"
         file={file}
@@ -65,24 +76,26 @@ export function ReceiptUpload({ file, onFileChange, existingUrl, disabled, error
         existingUrl={existingUrl}
         disabled={disabled}
         error={error}
+        className="flex flex-1 flex-col"
+        dropzoneClassName={dropzoneClassName}
       />
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         {/* 画像プレビュー — blob URL (URL.createObjectURL) を表示するため
            next/image は使用不可（src に blob: スキームを渡せない）。
            ローカルファイル選択時のプレビュー専用なのでパフォーマンス影響なし。 */}
         {previewUrl && (
-          <div className="w-full max-w-[200px] border rounded-md overflow-hidden bg-muted flex flex-col items-center justify-center p-2">
+          <div className="w-full max-w-40 border rounded-md overflow-hidden bg-muted flex flex-col items-center justify-center p-1.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
               alt="プレビュー"
-              className="object-contain max-h-[150px] w-auto h-auto rounded-sm"
+              className="object-contain max-h-28 w-auto h-auto rounded-sm"
             />
           </div>
         )}
         {file && file.type === "application/pdf" && (
-          <div className="w-full max-w-[200px] h-24 border rounded-md bg-muted flex items-center justify-center text-sm font-medium text-muted-foreground flex-col gap-2">
-            <FileText className="h-8 w-8 text-muted-foreground/60" />
+          <div className="w-full max-w-40 h-16 border rounded-md bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-col gap-1">
+            <FileText className="h-6 w-6 text-muted-foreground/60" aria-hidden="true" />
             <span>PDFデータ</span>
           </div>
         )}

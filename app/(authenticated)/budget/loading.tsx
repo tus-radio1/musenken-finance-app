@@ -6,7 +6,7 @@ import {
 
 export default function BudgetLoading() {
   return (
-    <PageLoadingShell maxWidth="max-w-5xl">
+    <PageLoadingShell>
       {/* ヘッダーと年度セレクター */}
       <div className="flex justify-between items-center">
         <SkeletonBlock className="h-8 w-28" />

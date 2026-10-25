@@ -98,7 +98,7 @@ export function ItemsMobileCardList({
                   <span className="text-xs text-muted-foreground">
                     {item.term}期
                   </span>
-                  <StatusBadge status={item.status} />
+                  <StatusBadge status={item.status} domain="subsidy" />
                 </div>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 px-2">
@@ -106,8 +106,7 @@ export function ItemsMobileCardList({
                     <ChevronDown
                       className={`ml-1 h-3.5 w-3.5 transition-transform ${
                         openCards.has(item.id) ? "rotate-180" : ""
-                      }`}
-                    />
+                      }`} aria-hidden="true" />
                   </Button>
                 </CollapsibleTrigger>
               </div>
@@ -147,7 +146,7 @@ export function ItemsMobileCardList({
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                        <ExternalLink className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                         領収書
                       </a>
                     </Button>
@@ -162,7 +161,7 @@ export function ItemsMobileCardList({
                   {item.evidence_public_url ? (
                     <Button variant="outline" size="sm" asChild>
                       <a href={item.evidence_public_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                        <ExternalLink className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                         確認する
                       </a>
                     </Button>
@@ -178,13 +177,13 @@ export function ItemsMobileCardList({
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
                           <span className="sr-only">メニューを開く</span>
-                          <MoreHorizontal className="h-4 w-4" />
+                          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {canEdit && (
                           <DropdownMenuItem onClick={() => onEditClick(item)}>
-                            <Pencil className="mr-2 h-4 w-4" />
+                            <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                             編集
                           </DropdownMenuItem>
                         )}
@@ -194,9 +193,9 @@ export function ItemsMobileCardList({
                               e.preventDefault();
                               onDeleteClick(item);
                             }}
-                            className="text-red-600 focus:text-red-600"
+                            className="text-destructive focus:text-destructive"
                           >
-                            <Trash2 className="mr-2 h-4 w-4" />
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                             削除
                           </DropdownMenuItem>
                         )}

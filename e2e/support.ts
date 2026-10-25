@@ -60,7 +60,7 @@ export function transactionRow(page: Page, description: string): Locator {
 
 export async function openLedger(page: Page, groupName: string): Promise<void> {
   await page.goto("/ledger");
-  await page.getByRole("heading", { level: 1 }).getByRole("combobox").click();
+  await page.getByRole("combobox", { name: "会計グループ", exact: true }).click();
   await page.getByRole("option", { name: groupName, exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText(groupName);
 }

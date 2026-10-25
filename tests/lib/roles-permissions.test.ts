@@ -293,6 +293,7 @@ describe("delegable roles (S1) add no capability", () => {
       permissions.canReassignTransactionPeople(a),
       permissions.canDeleteTransaction(a, pendingOf(OTHER_ID), ACTOR_ID),
       permissions.canViewBudgetPage(a),
+      permissions.canViewAuditLogs(a),
       permissions.canEditBudget(a, { isCurrent: true }),
       permissions.canCreateFiscalYear(a),
       permissions.canManageGroups(a),
@@ -371,5 +372,28 @@ describe("getTransactionRowPermissions", () => {
         actorId: undefined,
       }),
     ).toEqual(none);
+  });
+});
+
+
+describe("audit log and transfer permissions", () => {
+  it.each([
+    [ROLES.admin, true], [ROLES.accounting, true], [ROLES.chair, false],
+    [ROLES.viceChair, false], [ROLES.leaderG1, false], [ROLES.memberG1, false],
+  ] as const)("gates audit viewing and transfers for $name", (r, expected) => {
+    expect(permissions.canViewAuditLogs(access(r))).toBe(expected);
+    expect(permissions.canCreateClubTransaction(access(r))).toBe(expected);
+  });
+
+  it.each([ROLES.admin, ROLES.accounting, ROLES.memberG1])("prevents individual transfer operations for $name", (r) => {
+    for (const status of ["pending", "approved"]) {
+      const tx = { ...pendingOf(ACTOR_ID), approval_status: status, transaction_kind: "transfer" };
+      expect(permissions.canEditTransaction(access(r), tx, ACTOR_ID)).toBe(false);
+      expect(permissions.canDeleteTransaction(access(r), tx, ACTOR_ID)).toBe(false);
+      expect(permissions.canApproveTransaction(access(r), { ...tx, created_by: OTHER_ID }, ACTOR_ID, true)).toBe(false);
+      expect(permissions.getTransactionRowPermissions(access(r), tx, {
+        actorId: ACTOR_ID, isCurrentFiscalYear: true, isReadOnly: false,
+      })).toEqual({ canEdit: false, canDelete: false, canApprove: false, canChangeApprovalStatus: false });
+    }
   });
 });

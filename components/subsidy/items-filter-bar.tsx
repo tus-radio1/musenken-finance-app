@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STATUS_LABELS } from "@/lib/constants/subsidy";
+import { getStatusOptions } from "@/lib/status-display";
 
 type AccountingGroup = { id: string; name: string };
 
@@ -48,7 +48,7 @@ export function ItemsFilterBar({
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Input
           placeholder="概要で検索..."
           value={searchQuery}
@@ -57,7 +57,7 @@ export function ItemsFilterBar({
         />
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+        <Filter className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
         <Select value={categoryFilter} onValueChange={onCategoryFilterChange}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="種別" />
@@ -98,8 +98,8 @@ export function ItemsFilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">すべての状態</SelectItem>
-            {Object.entries(STATUS_LABELS).map(([key, label]) => (
-              <SelectItem key={key} value={key}>
+            {getStatusOptions("subsidy").map(({ value, label }) => (
+              <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>
             ))}

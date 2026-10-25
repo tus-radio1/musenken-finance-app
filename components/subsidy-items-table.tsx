@@ -32,6 +32,8 @@ import { ItemsMobileCardList } from "@/components/subsidy/items-mobile-card-list
 import { ItemsEditDialog } from "@/components/subsidy/items-edit-dialog";
 import type { SubsidyItem, SortKey, SortOrder, EditFormState } from "@/components/subsidy/types";
 import { getReceiptViewUrl } from "@/lib/receipt-url";
+import { EmptyState } from "@/components/feedback/empty-state";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 export function SubsidyItemsTable({
   items: initialItems,
@@ -74,7 +76,7 @@ export function SubsidyItemsTable({
     justification: "",
     remarks: "",
   });
-  const { file, setFile, upload, error: uploadError } = useReceiptUpload();
+  const { file, setFile, upload, withSubmission, error: uploadError } = useReceiptUpload();
 
   // --- 削除確認状態 ---
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -181,7 +183,7 @@ export function SubsidyItemsTable({
     setShowDeleteDialog(false);
   };
 
-  const handleEditSubmit = async () => {
+  const handleEditSubmit = async () => withSubmission(async () => {
     if (!editingItem) return;
     setIsSubmitting(true);
 
@@ -260,7 +262,7 @@ export function SubsidyItemsTable({
       setEditingItem(null);
       setFile(null);
     }
-  };
+  });
 
   const availableTerms = useMemo(
     () => CATEGORY_TERMS[editForm.category] || [1],
@@ -323,11 +325,14 @@ export function SubsidyItemsTable({
 
       {/* テーブル / カード表示 */}
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          {items.length === 0
-            ? "まだ支援金の申請はありません。"
-            : "条件に一致する申請がありません。"}
-        </p>
+        <EmptyState
+          message={
+            items.length === 0
+              ? "まだ支援金の申請はありません。"
+              : "条件に一致する申請がありません。"
+          }
+          className="py-6"
+        />
       ) : (
         <>
           {/* PC table (xl and above) */}
@@ -360,7 +365,7 @@ export function SubsidyItemsTable({
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className={DIALOG_WIDTH_CLASS.confirm}>
           <AlertDialogHeader>
             <AlertDialogTitle>申請の削除</AlertDialogTitle>
             <AlertDialogDescription>
@@ -379,7 +384,7 @@ export function SubsidyItemsTable({
       {/* Edit dialog */}
       <ItemsEditDialog
         editingItem={editingItem}
-        onClose={() => setEditingItem(null)}
+        onClose={() => { setEditingItem(null); setFile(null); }}
         editForm={editForm}
         onEditFormChange={setEditForm}
         onSubmit={handleEditSubmit}

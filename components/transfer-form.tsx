@@ -13,6 +13,7 @@ import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { useRouter } from "next/navigation";
+import { DIALOG_WIDTH_CLASS } from "@/components/layout/page-shell";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -115,13 +117,13 @@ function TransferFormInner({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
         {/* Date */}
         <FormField
           control={form.control}
           name="date"
           render={({ field }) => (
-            <FormItem className="flex flex-col">
+            <FormItem className="flex flex-col md:col-span-2">
               <FormLabel>日付</FormLabel>
               <div className="flex gap-2 items-center">
                 <FormControl>
@@ -142,8 +144,8 @@ function TransferFormInner({
                 </FormControl>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon">
-                      <CalendarIcon className="h-4 w-4" />
+                    <Button variant="outline" size="icon" aria-label="日付を選択">
+                      <CalendarIcon className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -166,7 +168,7 @@ function TransferFormInner({
         />
 
         {/* From / To accounts */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
           <FormField
             control={form.control}
             name="from_account_id"
@@ -276,16 +278,21 @@ function TransferFormInner({
           )}
         />
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={form.formState.isSubmitting}
-        >
-          {form.formState.isSubmitting && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          資金移動を登録
-        </Button>
+        <DialogFooter className="md:col-span-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>
+            キャンセル
+          </Button>
+          <Button
+            type="submit"
+            className="w-full md:w-auto"
+            disabled={form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
+            資金移動を登録
+          </Button>
+        </DialogFooter>
       </form>
     </Form>
   );
@@ -312,11 +319,11 @@ export function TransferForm({
           <Button variant="outline">資金移動</Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`${DIALOG_WIDTH_CLASS.form} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>資金移動の登録</DialogTitle>
           <DialogDescription>
-            金庫と銀行口座間の資金移動を記録します。
+            金庫と銀行口座間の資金移動を記録します。登録時に承認されます。
           </DialogDescription>
         </DialogHeader>
 
