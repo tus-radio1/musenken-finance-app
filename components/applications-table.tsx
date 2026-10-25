@@ -48,6 +48,7 @@ type Transaction = {
   amount: number;
   description: string;
   approval_status: string;
+  transaction_kind?: string | null;
   accounting_group_id?: string;
   financial_account_id: string;
   accounting_group_name: string;

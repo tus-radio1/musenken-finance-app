@@ -27,6 +27,7 @@ import {
 import type { RoleAccessContext } from "@/lib/roles/types";
 import { createClient } from "@/utils/supabase/client";
 import { FiscalYearSelector } from "@/components/fiscal-year-selector";
+import { TransferForm } from "@/components/transfer-form";
 import { PageHeader } from "@/components/layout/page-header";
 import { ErrorState } from "@/components/feedback/error-state";
 import { EmptyState } from "@/components/feedback/empty-state";
@@ -327,6 +328,9 @@ export default function LedgerView({
         title={selectedTeam ? `${selectedTeam.name}の出納帳` : "出納帳"}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {isClubWideGroup && !ledgerReadOnly && canCreateClubTransaction(access) && (
+              <TransferForm financialAccounts={financialAccounts} />
+            )}
             <Select value={selectedGroup} onValueChange={setSelectedGroup}>
               <SelectTrigger aria-label="会計グループ" className="w-[180px]">
                 <SelectValue placeholder="グループを選択" />

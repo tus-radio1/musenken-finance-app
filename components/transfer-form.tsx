@@ -279,6 +279,9 @@ function TransferFormInner({
         />
 
         <DialogFooter className="md:col-span-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>
+            キャンセル
+          </Button>
           <Button
             type="submit"
             className="w-full md:w-auto"
@@ -320,7 +323,7 @@ export function TransferForm({
         <DialogHeader>
           <DialogTitle>資金移動の登録</DialogTitle>
           <DialogDescription>
-            金庫と銀行口座間の資金移動を記録します。
+            金庫と銀行口座間の資金移動を記録します。登録時に承認されます。
           </DialogDescription>
         </DialogHeader>
 
