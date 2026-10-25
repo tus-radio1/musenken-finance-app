@@ -29,7 +29,7 @@ export default async function LedgerPage({
       getAccountingGroups(),
       getAccountingUserId(),
       getFiscalYears(),
-      supabase.from("profiles").select("id, name").is("deleted_at", null),
+      supabase.from("profiles").select("id, name, deleted_at"),
       supabase.from("financial_accounts").select("id, name, is_active").order("display_order"),
     ]);
 
@@ -106,7 +106,7 @@ export default async function LedgerPage({
           fyYear={fyYear}
           access={access}
           currentProfileId={profileId}
-          users={profiles || []}
+          users={(profiles || []).filter((profile) => !profile.deleted_at)}
           accountingUserId={accountingUserId}
           fiscalYears={(fiscalYears || []).map((fy) => ({ ...fy, is_current: fy.is_current ?? false }))}
           selectedYear={fyYear}

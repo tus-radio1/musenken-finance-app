@@ -137,7 +137,7 @@ export async function readLedgerTransactions(
     const profilesData = lookups
       ? lookups.profiles
       : (await auth.supabase.from("profiles").select("id, name")
-          .in("id", idArray).is("deleted_at", null)).data;
+          .in("id", idArray)).data;
     profileNameMap = Object.fromEntries(
       (profilesData || []).map((p) => [p.id, p.name || p.id]),
     );

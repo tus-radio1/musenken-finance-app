@@ -16,7 +16,6 @@ import { ROLE_NAMES_JA } from "@/lib/roles/constants";
 import { toRoleAssignment } from "@/lib/roles/parse";
 import { isAdmin } from "@/lib/roles/permissions";
 import type { RoleAssignment } from "@/lib/roles/types";
-import { logAuditEvent } from "@/lib/audit-log";
 import { passwordResetRateLimiter } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/client-ip";
 import {
@@ -426,72 +425,34 @@ export async function deleteMember(userId: string) {
   const perm = await verifyManageMembersPermission(auth, access);
   if (!perm.ok) return { error: perm.error } as const;
 
+  if (userId === auth.userId) {
+    return { error: "自分自身は削除できません" } as const;
+  }
   const admin = createAdminClient();
-
-  // 非管理者は権限ロール保持者（管理者・会計・部長・副部長・グループロール等）を
-  // 操作できない（ロール剥奪・アカウント削除による権限奪取の防止）
   if (!isAdmin(access)) {
     const targetRoles = await inspectTargetRoles(admin, userId);
-    if (targetRoles === null) {
-      return { error: ROLE_LOOKUP_ERROR } as const;
-    }
-    if (!targetRoles.manageableByNonAdmin) {
-      return { error: PROTECTED_TARGET_ERROR } as const;
-    }
+    if (targetRoles === null) return { error: ROLE_LOOKUP_ERROR } as const;
+    if (!targetRoles.manageableByNonAdmin) return { error: PROTECTED_TARGET_ERROR } as const;
   }
 
-  // Fetch current profile data for audit log before soft delete
-  const { data: oldProfile } = await auth.supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .is("deleted_at", null)
-    .single();
-
-  if (!oldProfile) {
-    return { error: "対象のプロフィールが見つかりません" } as const;
+  // The caller's JWT is mandatory: the RPC independently authorizes the actor
+  // and atomically removes roles, marks the profile and writes the audit row.
+  const { data: deletedId, error } = await auth.supabase.rpc("soft_delete_member", { p_user_id: userId });
+  if (error || deletedId !== userId) {
+    console.error("[deleteMember] Soft delete RPC failed:", error);
+    return { error: "部員の論理削除に失敗しました。再読み込みして確認してください" } as const;
   }
 
-  // 1) user_roles: Physical delete is acceptable for junction table rows.
-  //    These are not financial records and will be recreated if the user is restored.
-  const { error: roleDelErr } = await auth.supabase.from("user_roles").delete().eq("user_id", userId);
-  if (roleDelErr) {
-    console.error("[deleteMember] Role deletion error:", roleDelErr);
-    return { error: "ロールの削除に失敗しました" } as const;
+  // Never delete Auth users: that would cascade into profiles and destroy history.
+  // Repeating the RPC is a no-op for the original operator/admin, so ban failures
+  // can be retried from the still-open confirmation dialog.
+  try {
+    const { error: banError } = await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h" });
+    if (banError) throw banError;
+  } catch (error) {
+    console.error("[deleteMember] Auth ban failed after soft delete:", error);
+    return { error: "部員は論理削除済みですがログインの停止に失敗しました。この画面からもう一度削除を実行してください" } as const;
   }
-
-  // 2) profiles: Soft delete by setting deleted_at instead of physical deletion.
-  //    This preserves financial record references (transactions, subsidies).
-  const deletedAt = new Date().toISOString();
-  const { error: profileErr } = await auth.supabase
-    .from("profiles")
-    .update({ deleted_at: deletedAt, updated_at: deletedAt })
-    .eq("id", userId)
-    .is("deleted_at", null);
-  if (profileErr) {
-    console.error(profileErr);
-    return { error: "プロフィール削除に失敗しました" } as const;
-  }
-
-  // 3) Auth user: Physical deletion is kept intentionally.
-  //    The Supabase auth system is separate from financial records.
-  //    Soft-deleted profile preserves the data trail; the auth account
-  //    is removed so the user can no longer log in.
-  const { error: authErr } = await admin.auth.admin.deleteUser(userId);
-  if (authErr) {
-    console.error(authErr);
-    return { error: "認証ユーザー削除に失敗しました" } as const;
-  }
-
-  // 4) Audit log: Record the soft delete event using auth.profileId
-  await logAuditEvent({
-    tableName: "profiles",
-    recordId: userId,
-    action: "SOFT_DELETE",
-    oldData: oldProfile as Record<string, unknown>,
-    newData: { deleted_at: deletedAt },
-    changedBy: auth.profileId,
-  });
 
   revalidatePath("/members/manage");
   revalidatePath("/members");
