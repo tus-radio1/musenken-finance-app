@@ -79,7 +79,7 @@ type Props = {
 export function SubsidyForm({ categories, triggerButton }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { file, setFile, upload, isUploading, error: uploadError } = useReceiptUpload();
+  const { file, setFile, upload, withSubmission, isUploading, error: uploadError } = useReceiptUpload();
 
   const form = useForm<z.infer<typeof subsidyFormSchema>>({
     resolver: zodResolver(subsidyFormSchema),
@@ -134,6 +134,7 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
       });
       setFile(null);
     }
+    if (!nextOpen) setFile(null);
     setOpen(nextOpen);
   };
 
@@ -149,38 +150,40 @@ export function SubsidyForm({ categories, triggerButton }: Props) {
 
   // --- 送信処理 ---
   async function onSubmit(values: z.infer<typeof subsidyFormSchema>) {
-    try {
-      if (!file) {
-        toast.error("根拠書類をアップロードしてください");
-        return;
+    await withSubmission(async () => {
+      try {
+        if (!file) {
+          toast.error("根拠書類をアップロードしてください");
+          return;
+        }
+
+        const uploaded = await upload();
+        if (uploaded.error !== undefined) {
+          toast.error(uploaded.error);
+          return;
+        }
+        const evidenceUrl = uploaded.filePath;
+
+        const result = await createSubsidyItem({
+          ...values,
+          evidence_url: evidenceUrl,
+        });
+
+        if (result.error) {
+          toast.error(result.error);
+          return;
+        }
+
+        toast.success("支援金申請を登録しました");
+        form.reset();
+        setFile(null);
+        setOpen(false);
+        router.refresh();
+      } catch (error) {
+        console.error("Subsidy submit error:", error);
+        toast.error("予期せぬエラーが発生しました");
       }
-
-      const uploaded = await upload();
-      if (uploaded.error !== undefined) {
-        toast.error(uploaded.error);
-        return;
-      }
-      const evidenceUrl = uploaded.filePath;
-
-      const result = await createSubsidyItem({
-        ...values,
-        evidence_url: evidenceUrl,
-      });
-
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-
-      toast.success("支援金申請を登録しました");
-      form.reset();
-      setFile(null);
-      setOpen(false);
-      router.refresh();
-    } catch (error) {
-      console.error("Subsidy submit error:", error);
-      toast.error("予期せぬエラーが発生しました");
-    }
+    });
   }
 
   return (

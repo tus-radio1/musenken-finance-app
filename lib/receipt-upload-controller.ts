@@ -1,4 +1,4 @@
-import { uploadReceiptAction } from "@/app/actions";
+import { uploadReceiptAction, discardReceiptUpload } from "@/app/actions";
 import { getReceiptFileErrorMessage, prepareReceiptFile } from "@/lib/image";
 import { validateReceiptFileBeforePreparation } from "@/lib/receipt-file-selection";
 import { validateReceiptFile } from "@/lib/receipt-upload";
@@ -17,6 +17,21 @@ const UPLOAD_SESSION_CANCELED_ERROR = "アップロードはキャンセルさ�
 export function createReceiptUploadController() {
   let state: ReceiptUploadState = { file: null, status: "idle", error: null };
   let generation = 0;
+  let submissions = 0;
+  const pendingPaths = new Set<string>();
+  const cleanup = async (): Promise<void> => {
+    if (submissions > 0) return;
+    const paths = [...pendingPaths];
+    pendingPaths.clear();
+    await Promise.all(paths.map(async (path) => {
+      try {
+        const result = await discardReceiptUpload(path);
+        if (result.error) console.warn("[receipt cleanup]", result.error);
+      } catch (error) {
+        console.error("[receipt cleanup] Request failed:", error);
+      }
+    }));
+  };
   const listeners = new Set<() => void>();
   const isBusy = (): boolean => state.status === "preparing" || state.status === "uploading";
   const update = (next: ReceiptUploadState): void => {
@@ -29,6 +44,18 @@ export function createReceiptUploadController() {
   };
 
   return {
+    // Keep cleanup behind the save request: closing a dialog must not delete
+    // an upload that an in-flight create/update is about to reference.
+    withSubmission: async <T>(save: () => Promise<T>): Promise<T> => {
+      submissions += 1;
+      try { return await save(); }
+      finally { submissions -= 1; await cleanup(); }
+    },
+    cancel: (): void => {
+      generation += 1;
+      update({ file: null, status: "idle", error: null });
+      void cleanup();
+    },
     getSnapshot: (): ReceiptUploadState => state,
     subscribe: (listener: () => void): (() => void) => {
       listeners.add(listener);
@@ -38,12 +65,14 @@ export function createReceiptUploadController() {
       if (file === null) {
         generation += 1;
         update({ file: null, status: "idle", error: null });
+        void cleanup();
         return;
       }
       if (isBusy()) return;
       const error = validateReceiptFileBeforePreparation(file);
       if (error) { fail(error); return; }
       generation += 1;
+      void cleanup();
       update({ file, status: "idle", error: null });
     },
     upload: async (): Promise<ReceiptUploadResult> => {
@@ -64,7 +93,11 @@ export function createReceiptUploadController() {
         update({ ...state, status: "uploading" });
         if (uploadGeneration !== generation) return { error: UPLOAD_SESSION_CANCELED_ERROR };
         const result = await uploadReceiptAction(formData);
-        if (uploadGeneration !== generation) return { error: UPLOAD_SESSION_CANCELED_ERROR };
+        if (result.filePath) pendingPaths.add(result.filePath);
+        if (uploadGeneration !== generation) {
+          await cleanup();
+          return { error: UPLOAD_SESSION_CANCELED_ERROR };
+        }
         if (result.error) return fail(result.error);
         if (!result.filePath) return fail("書類のアップロードに失敗しました");
         update({ ...state, status: "done", error: null });

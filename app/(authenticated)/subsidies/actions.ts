@@ -25,6 +25,7 @@ import {
   isReceiptPathOwnedBy,
 } from "@/lib/receipt-upload";
 import { removeReplacedReceipt } from "@/lib/receipt-storage";
+import { discardReceiptUpload } from "@/app/actions";
 import { getStatusDisplay } from "@/lib/status-display";
 import {
   updateMySubsidyItemSchema,
@@ -42,7 +43,20 @@ const createSubsidyItemServerSchema = subsidyFormSchema.extend({
     .min(1, "根拠書類をアップロードしてください"),
 });
 
-export async function createSubsidyItem(
+export async function createSubsidyItem(values: z.infer<typeof subsidyFormSchema>) {
+  let saved = false;
+  try {
+    const result = await persistSubsidyItem(values);
+    saved = "success" in result;
+    return result;
+  } finally {
+    if (!saved && values && typeof values.evidence_url === "string" && values.evidence_url) {
+      await discardReceiptUpload(values.evidence_url);
+    }
+  }
+}
+
+async function persistSubsidyItem(
   values: z.infer<typeof subsidyFormSchema>,
 ) {
   const inputValidation = validateInput(createSubsidyItemServerSchema, values);

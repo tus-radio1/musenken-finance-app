@@ -62,6 +62,8 @@ function createFakeClient(handler: QueryHandler) {
         return builder;
       },
       is: () => builder,
+      in: () => builder,
+      range: () => builder,
       lte: () => builder,
       gte: () => builder,
       order: () => builder,
@@ -79,6 +81,7 @@ function createFakeClient(handler: QueryHandler) {
   return {
     client: {
       from,
+      rpc: vi.fn(async () => ({ data: true, error: null })),
       storage: {
         from: () => ({ upload: storageUpload, remove: storageRemove }),
       },
@@ -141,7 +144,7 @@ vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn(async () => {}) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
-const { uploadReceiptAction, updateTransaction, createTransaction } =
+const { uploadReceiptAction, updateTransaction, createTransaction, discardReceiptUpload } =
   await import("@/app/actions");
 
 // ---------------------------------------------------------------------------
@@ -212,8 +215,8 @@ function defaultUserHandler(overrides: { updateError?: unknown } = {}) {
 /** Admin client reference-count queries: no remaining references by default. */
 function referenceCountHandler(referencedPaths: string[] = []) {
   return (call: QueryCall): QueryResult => {
-    const value = call.filters[0]?.[1];
-    return { count: referencedPaths.includes(String(value)) ? 1 : 0 };
+    return { data: call.table === "transactions"
+      ? referencedPaths.map((path) => ({ receipt_url: path })) : [] };
   };
 }
 
@@ -456,5 +459,46 @@ describe("createTransaction receipt ownership", () => {
     );
 
     expect(result).toHaveProperty("error");
+  });
+});
+
+
+describe("abandoned receipt uploads", () => {
+  it("cleans up the caller's unreferenced upload when creation fails", async () => {
+    state.user = createFakeClient((call) => call.table === "fiscal_years"
+      ? { error: { message: "db error" } } : {});
+    expect(await createTransaction(baseValues, NEW_PATH, TX_ID)).toHaveProperty("error");
+    expect(state.admin.storageRemove).toHaveBeenCalledWith([NEW_PATH]);
+  });
+
+  it("cleans up after server validation fails", async () => {
+    expect(await createTransaction({ ...baseValues, amount: -1 }, NEW_PATH, TX_ID)).toHaveProperty("error");
+    expect(state.admin.storageRemove).toHaveBeenCalledWith([NEW_PATH]);
+  });
+
+  it("refuses another user's object", async () => {
+    expect(await discardReceiptUpload("other-user/file.pdf")).toHaveProperty("error");
+    expect(state.admin.storageRemove).not.toHaveBeenCalled();
+  });
+
+  it("refuses a referenced object, including a full legacy URL", async () => {
+    state.admin = createFakeClient(referenceCountHandler([
+      `https://example.test/storage/v1/object/public/receipts/${NEW_PATH}`,
+    ]));
+    expect(await discardReceiptUpload(NEW_PATH)).toHaveProperty("error");
+    expect(state.admin.storageRemove).not.toHaveBeenCalled();
+  });
+
+  it("keeps evidence of a deleted record", async () => {
+    state.admin = createFakeClient((call) => ({ data: call.table === "audit_logs"
+      ? [{ old_data: { receipt_url: NEW_PATH } }] : [] }));
+    expect(await discardReceiptUpload(NEW_PATH)).toHaveProperty("error");
+    expect(state.admin.storageRemove).not.toHaveBeenCalled();
+  });
+
+  it("does not remove a file when the atomic cleanup claim is denied", async () => {
+    state.admin.client.rpc.mockResolvedValue({ data: false, error: null });
+    expect(await discardReceiptUpload(NEW_PATH)).toHaveProperty("error");
+    expect(state.admin.storageRemove).not.toHaveBeenCalled();
   });
 });

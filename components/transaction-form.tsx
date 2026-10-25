@@ -137,7 +137,7 @@ function TransactionFormInner({
   defaultFinancialAccountId?: string;
   canChangeApprovalStatus?: boolean;
 }) {
-  const { file, setFile, upload, isUploading, error: uploadError } = useReceiptUpload();
+  const { file, setFile, upload, withSubmission, isUploading, error: uploadError } = useReceiptUpload();
   const router = useRouter();
 
   const preventCoreEdits = false;
@@ -182,52 +182,54 @@ function TransactionFormInner({
   });
 
   async function onSubmit(values: z.input<typeof formSchema>) {
-    try {
-      let receiptPath: string | null | undefined = undefined;
-      const transactionId = initialData?.id || crypto.randomUUID();
+    await withSubmission(async () => {
+      try {
+        let receiptPath: string | null | undefined = undefined;
+        const transactionId = initialData?.id || crypto.randomUUID();
 
-      if (file) {
-        const uploaded = await upload();
-        if (uploaded.error !== undefined) {
-          toast.error(uploaded.error);
+        if (file) {
+          const uploaded = await upload();
+          if (uploaded.error !== undefined) {
+            toast.error(uploaded.error);
+            return;
+          }
+          receiptPath = uploaded.filePath;
+        }
+
+        if (!initialData && receiptPath === undefined) {
+          receiptPath = null;
+        }
+
+        let result;
+        if (initialData) {
+          result = await updateTransaction(initialData.id, {
+            ...values,
+            receipt_url: receiptPath,
+          });
+        } else {
+          result = await createTransaction(
+            values as z.infer<typeof formSchema>,
+            receiptPath,
+            transactionId,
+          );
+        }
+
+        if ("error" in result) {
+          toast.error(result.error);
           return;
         }
-        receiptPath = uploaded.filePath;
-      }
 
-      if (!initialData && receiptPath === undefined) {
-        receiptPath = null;
+        toast.success(initialData ? "変更を保存しました" : "取引を登録しました");
+        form.reset();
+        setFile(null);
+        onClose();
+        window.dispatchEvent(new Event("ledger-refresh"));
+        router.refresh();
+      } catch (error) {
+        console.error("Transaction submit error:", error);
+        toast.error("予期せぬエラーが発生しました");
       }
-
-      let result;
-      if (initialData) {
-        result = await updateTransaction(initialData.id, {
-          ...values,
-          receipt_url: receiptPath,
-        });
-      } else {
-        result = await createTransaction(
-          values as z.infer<typeof formSchema>,
-          receiptPath,
-          transactionId,
-        );
-      }
-
-      if ("error" in result) {
-        toast.error(result.error);
-        return;
-      }
-
-      toast.success(initialData ? "変更を保存しました" : "取引を登録しました");
-      form.reset();
-      setFile(null);
-      onClose();
-      window.dispatchEvent(new Event("ledger-refresh"));
-      router.refresh();
-    } catch (error) {
-      console.error("Transaction submit error:", error);
-      toast.error("予期せぬエラーが発生しました");
-    }
+    });
   }
 
   return (

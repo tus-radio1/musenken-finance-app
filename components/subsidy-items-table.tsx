@@ -76,7 +76,7 @@ export function SubsidyItemsTable({
     justification: "",
     remarks: "",
   });
-  const { file, setFile, upload, error: uploadError } = useReceiptUpload();
+  const { file, setFile, upload, withSubmission, error: uploadError } = useReceiptUpload();
 
   // --- 削除確認状態 ---
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -183,7 +183,7 @@ export function SubsidyItemsTable({
     setShowDeleteDialog(false);
   };
 
-  const handleEditSubmit = async () => {
+  const handleEditSubmit = async () => withSubmission(async () => {
     if (!editingItem) return;
     setIsSubmitting(true);
 
@@ -262,7 +262,7 @@ export function SubsidyItemsTable({
       setEditingItem(null);
       setFile(null);
     }
-  };
+  });
 
   const availableTerms = useMemo(
     () => CATEGORY_TERMS[editForm.category] || [1],
@@ -384,7 +384,7 @@ export function SubsidyItemsTable({
       {/* Edit dialog */}
       <ItemsEditDialog
         editingItem={editingItem}
-        onClose={() => setEditingItem(null)}
+        onClose={() => { setEditingItem(null); setFile(null); }}
         editForm={editForm}
         onEditFormChange={setEditForm}
         onSubmit={handleEditSubmit}

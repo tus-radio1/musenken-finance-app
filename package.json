@@ -17,6 +17,7 @@
     "functions:serve": "supabase functions serve",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
+    "report:orphans": "node scripts/report-orphan-receipts.mjs",
     "e2e:install": "playwright install chromium"
   },
   "dependencies": {

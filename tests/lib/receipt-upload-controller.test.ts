@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { uploadReceiptAction } from "@/app/actions";
+import { uploadReceiptAction, discardReceiptUpload } from "@/app/actions";
 import { prepareReceiptFile, ReceiptFileError } from "@/lib/image";
 import { createReceiptUploadController, type ReceiptUploadStatus } from "@/lib/receipt-upload-controller";
 import { selectReceiptFile } from "@/lib/receipt-file-selection";
 import { MAX_RECEIPT_FILE_SIZE_BYTES, RECEIPT_TYPE_ERROR_MESSAGE } from "@/lib/receipt-upload";
 
-vi.mock("@/app/actions", () => ({ uploadReceiptAction: vi.fn() }));
+vi.mock("@/app/actions", () => ({ uploadReceiptAction: vi.fn(), discardReceiptUpload: vi.fn() }));
 vi.mock("@/lib/image", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/image")>(),
   prepareReceiptFile: vi.fn(),
@@ -15,6 +15,7 @@ const pdf = (): File => new File(["receipt"], "receipt.pdf", { type: "applicatio
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(discardReceiptUpload).mockResolvedValue({ success: true });
   vi.mocked(prepareReceiptFile).mockImplementation(async (file) => file);
   vi.mocked(uploadReceiptAction).mockResolvedValue({ success: true, filePath: "member/receipt.pdf" });
 });
@@ -193,5 +194,47 @@ describe("useReceiptUpload controller", () => {
     cleanup();
     controller.setFile(pdf());
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("receipt upload cleanup lifecycle", () => {
+  it("cleans up a successful upload arriving after cancellation", async () => {
+    const controller = createReceiptUploadController();
+    controller.setFile(pdf());
+    let finish!: (result: { success: true; filePath: string }) => void;
+    vi.mocked(uploadReceiptAction).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = controller.upload();
+    await vi.waitFor(() => expect(uploadReceiptAction).toHaveBeenCalled());
+    controller.cancel();
+    finish({ success: true, filePath: "member/late.pdf" });
+    expect(await pending).toHaveProperty("error");
+    expect(discardReceiptUpload).toHaveBeenCalledWith("member/late.pdf");
+  });
+
+  it("defers cancel cleanup until the in-flight save finishes", async () => {
+    const controller = createReceiptUploadController();
+    controller.setFile(pdf());
+    let finishSave!: () => void;
+    const saving = controller.withSubmission(async () => {
+      await controller.upload();
+      await new Promise<void>((resolve) => { finishSave = resolve; });
+    });
+    await vi.waitFor(() => expect(controller.getSnapshot().status).toBe("done"));
+    controller.cancel();
+    expect(discardReceiptUpload).not.toHaveBeenCalled();
+    finishSave();
+    await saving;
+    expect(discardReceiptUpload).toHaveBeenCalledWith("member/receipt.pdf");
+  });
+
+  it("cleans uploads on save rejection", async () => {
+    const controller = createReceiptUploadController();
+    controller.setFile(pdf());
+    await expect(controller.withSubmission(async () => {
+      await controller.upload();
+      throw new Error("save failed");
+    })).rejects.toThrow("save failed");
+    expect(discardReceiptUpload).toHaveBeenCalledWith("member/receipt.pdf");
   });
 });

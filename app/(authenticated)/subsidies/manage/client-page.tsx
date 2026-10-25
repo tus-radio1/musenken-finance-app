@@ -84,8 +84,8 @@ export function SubsidiesManageClientPage({
     justification: "",
     evidence_url: "",
   });
-  const { file, setFile, upload, error: uploadError } = useReceiptUpload();
-  const { file: evidenceFile, setFile: setEvidenceFile, upload: uploadEvidence, error: evidenceUploadError } = useReceiptUpload();
+  const { file, setFile, upload, withSubmission, error: uploadError } = useReceiptUpload();
+  const { file: evidenceFile, setFile: setEvidenceFile, upload: uploadEvidence, withSubmission: withEvidenceSubmission, error: evidenceUploadError } = useReceiptUpload();
 
   // --- トグル・ソートハンドラ ---
   const toggleCard = (id: string) => {
@@ -205,7 +205,7 @@ export function SubsidiesManageClientPage({
   };
 
   // --- 編集送信 ---
-  const handleEditSubmit = async () => {
+  const handleEditSubmit = async () => withSubmission(() => withEvidenceSubmission(async () => {
     if (!editingItem) return;
     setIsSubmitting(true);
 
@@ -298,7 +298,7 @@ export function SubsidiesManageClientPage({
       setFile(null);
       setEvidenceFile(null);
     }
-  };
+  }));
 
   // --- 削除 ---
   const handleDelete = (id: string) => {
