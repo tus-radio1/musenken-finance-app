@@ -10,6 +10,7 @@ import {
   Users,
   UserCog,
   HandCoins,
+  History,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -44,6 +45,9 @@ export function useSidebarData(data: SidebarData) {
       : []),
     ...(canManageMembers(access)
       ? [{ href: "/members/manage", label: "部員管理", icon: UserCog }]
+      : []),
+    ...(data.showAuditLogs
+      ? [{ href: "/audit-logs", label: "変更履歴", icon: History }]
       : []),
     { href: "/settings", label: "設定", icon: Settings },
   ];

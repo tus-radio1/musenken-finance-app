@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser, getCurrentRoles } from "@/lib/auth/context";
+import { canViewAuditLogs } from "@/lib/roles/permissions";
 import type { SidebarData } from "@/lib/sidebar-types";
 
 export const getCurrentProfile = cache(async () => {
@@ -31,6 +32,7 @@ export async function getSidebarData(): Promise<SidebarData> {
     roleNames: distinct(access.roles.map((r) => r.name)),
     roleTypes: distinct(access.roles.map((r) => r.type)),
     access,
+    showAuditLogs: canViewAuditLogs(access),
     pendingSubsidies: pending.data ?? [],
     userProfile: {
       full_name: profile?.name || auth.user.user_metadata?.name || "",

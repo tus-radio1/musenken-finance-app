@@ -38,6 +38,8 @@ const FILTER_METHODS = [
   "is",
   "in",
   "lte",
+  "lt",
+  "range",
   "gte",
   "match",
   "order",

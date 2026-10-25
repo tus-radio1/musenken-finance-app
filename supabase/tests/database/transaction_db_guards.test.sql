@@ -397,7 +397,7 @@ SELECT throws_ok(
     WHERE id = md5('prb tx other')::uuid$$,
   '42501', NULL, 'later status changes cannot hide approver reassignment');
 
--- The SECURITY DEFINER transfer RPC still inserts both pending legs, even with
+-- The SECURITY DEFINER transfer RPC still inserts both approved legs, even with
 -- the accountant JWT present. It executes as its owner, not authenticated.
 SELECT lives_ok(
   $$SELECT public.create_transfer('2098-05-01', 10,
@@ -406,8 +406,9 @@ SELECT lives_ok(
     'prb transfer', NULL, NULL, auth.uid())$$,
   'SECURITY DEFINER create_transfer remains functional');
 SELECT is((SELECT count(*) FROM public.transactions WHERE description = 'prb transfer'
-    AND transaction_kind = 'transfer' AND approval_status = 'pending' AND created_by = auth.uid()),
-  2::bigint, 'create_transfer persisted both attributed pending legs');
+    AND transaction_kind = 'transfer' AND approval_status = 'approved' AND created_by = auth.uid()
+    AND approved_by = auth.uid() AND approved_at IS NOT NULL),
+  2::bigint, 'create_transfer persisted both attributed approved legs');
 
 RESET ROLE;
 -- Keep the self-row JWT: the exemption must depend on current_user, not JWT role.

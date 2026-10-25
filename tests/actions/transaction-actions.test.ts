@@ -78,6 +78,7 @@ function accessFor(actor: Actor) {
 }
 
 type TxRow = {
+  transaction_kind?: string;
   accounting_group_id: string;
   created_by: string;
   approval_status: string;
@@ -755,5 +756,21 @@ describe.each(["chair", "viceChair"] as const)("club writes by %s", (clubActor) 
     tx = { ...tx, created_by: OTHER_USER_ID };
     expect(await updateTransactionStatus(TX_ID, status, "reason")).toHaveProperty("error");
     expect(txWrites("update")).toHaveLength(0);
+  });
+});
+
+
+describe.each(["accounting", "admin"] as const)("individual transfer protection for %s", (role) => {
+  it("rejects editing, deleting and changing approval without writes", async () => {
+    actor = role;
+    tx = { ...tx, accounting_group_id: CLUB, transaction_kind: "transfer", approval_status: "approved" };
+    expect(await updateTransaction(TX_ID, formValues())).toHaveProperty("error");
+    expect(await deleteTransaction(TX_ID)).toHaveProperty("error");
+    // Legacy pending transfers must not expose a one-leg approval path either.
+    tx = { ...tx, approval_status: "pending" };
+    expect(await updateTransactionStatus(TX_ID, "approved")).toHaveProperty("error");
+    expect(writesTo(userDb.calls, "transactions")).toHaveLength(0);
+    expect(writesTo(adminDb.calls, "transactions")).toHaveLength(0);
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });
