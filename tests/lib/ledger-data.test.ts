@@ -53,3 +53,20 @@ describe("shared ledger reader", () => {
     }
   });
 });
+
+
+it("resolves a soft-deleted member's name on subsequent ledger reads", async () => {
+  const { client, calls } = createSupabaseMock((call) => {
+    if (call.table === "accounting_groups") return { data: { id: "group", type: "general" } };
+    if (call.table === "transactions") return { data: [{
+      id: "tx", created_by: "deleted-member", financial_account_id: "wallet", amount: -100,
+      date: "2026-10-01", transaction_kind: "expense", approval_status: "pending",
+    }] };
+    if (call.table === "profiles") return { data: [{ id: "deleted-member", name: "Former member", deleted_at: "2026-10-25" }] };
+    return { data: [] };
+  });
+  const result = await readLedgerTransactions({ supabase: client } as unknown as AuthContext, access, params);
+  expect(result.data?.[0].created_by_name).toBe("Former member");
+  const profileQuery = calls.find((call) => call.table === "profiles");
+  expect(profileQuery?.filters.some((filter) => filter.method === "is" && filter.args[0] === "deleted_at")).toBe(false);
+});

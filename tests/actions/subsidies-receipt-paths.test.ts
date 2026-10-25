@@ -66,6 +66,7 @@ vi.mock("@/lib/system-config", () => ({
   getAccountingUserIdSync: vi.fn(() => null),
 }));
 vi.mock("@/lib/receipt-storage", () => ({
+  removeUnreferencedReceipt: vi.fn(async () => true),
   removeReplacedReceipt: vi.fn(async ({ oldPath }: { oldPath: string }) => {
     events.push(`remove:${oldPath}`);
   }),
@@ -104,7 +105,7 @@ const { createSubsidyItem, updateMySubsidyItem } = await import(
 const { updateSubsidyItem } = await import(
   "@/app/(authenticated)/subsidies/manage/actions"
 );
-const { removeReplacedReceipt } = await import("@/lib/receipt-storage");
+const { removeReplacedReceipt, removeUnreferencedReceipt } = await import("@/lib/receipt-storage");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -285,5 +286,15 @@ describe("updateSubsidyItem receipt / evidence paths", () => {
 
     expect(result).toHaveProperty("error");
     expect(removeReplacedReceipt).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("createSubsidyItem failed upload cleanup", () => {
+  it("cleans the caller's evidence upload on insert failure", async () => {
+    userDb = createSupabaseMock((call) => call.op === "insert"
+      ? { error: { message: "insert failed" } } : resolveQuery(call));
+    expect(await createSubsidyItem({ ...NEW_ITEM, evidence_url: OWN_NEW_PATH })).toHaveProperty("error");
+    expect(removeUnreferencedReceipt).toHaveBeenCalledWith(OWN_NEW_PATH, ACTOR_ID);
   });
 });

@@ -63,7 +63,7 @@ import {
   isReceiptPathOwnedBy,
   validateReceiptFile,
 } from "@/lib/receipt-upload";
-import { removeReplacedReceipt } from "@/lib/receipt-storage";
+import { removeReplacedReceipt, removeUnreferencedReceipt } from "@/lib/receipt-storage";
 
 const RECEIPT_PATH_ERROR = "領収書URLの形式が不正です";
 
@@ -198,7 +198,33 @@ export async function uploadReceiptAction(formData: FormData) {
   return { success: true, filePath };
 }
 
+/** Cancel only the authenticated caller's unreferenced upload. */
+export async function discardReceiptUpload(path: string) {
+  const auth = await resolveAuthContext();
+  if (!auth.ok) return { error: auth.error };
+  if (typeof path !== "string" || !isReceiptPathOwnedBy(path, auth.context.userId)) {
+    return { error: RECEIPT_PATH_ERROR };
+  }
+  const removed = await removeUnreferencedReceipt(path, auth.context.userId);
+  return removed ? { success: true } : { error: "参照中または削除できない書類です" };
+}
+
 export async function createTransaction(
+  values: z.infer<typeof formSchema>,
+  receiptPath?: string | null,
+  transactionId?: string,
+) {
+  let saved = false;
+  try {
+    const result = await persistTransaction(values, receiptPath, transactionId);
+    saved = "success" in result;
+    return result;
+  } finally {
+    if (!saved && receiptPath) await discardReceiptUpload(receiptPath);
+  }
+}
+
+async function persistTransaction(
   values: z.infer<typeof formSchema>,
   receiptPath?: string | null,
   transactionId?: string,
@@ -819,20 +845,6 @@ export async function deleteTransaction(id: string) {
   if (!deletedRows || deletedRows.length !== 1) {
     return { error: STALE_TRANSACTION_ERROR };
   }
-
-  await logAuditEvent({
-    tableName: "transactions",
-    recordId: id,
-    action: "DELETE",
-    oldData: {
-      created_by: transaction.created_by,
-      approval_status: transaction.approval_status,
-      amount: transaction.amount,
-      description: transaction.description,
-      accounting_group_id: transaction.accounting_group_id,
-    },
-    changedBy: auth.profileId,
-  });
 
   revalidatePath("/ledger");
   revalidatePath("/applications");

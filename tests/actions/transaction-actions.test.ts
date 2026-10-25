@@ -154,6 +154,7 @@ vi.mock("@/lib/system-config", () => ({
   getAccountingUserIdSync: vi.fn(() => "00000000-0000-4000-8000-000000000000"),
 }));
 vi.mock("@/lib/receipt-storage", () => ({
+  removeUnreferencedReceipt: vi.fn(async () => false),
   removeReplacedReceipt: vi.fn(async () => undefined),
 }));
 vi.mock("@/utils/supabase/server", () => ({
@@ -696,7 +697,8 @@ describe("deleteTransaction", () => {
     tx = { ...tx, created_by: OTHER_USER_ID, approval_status: status };
     expect(await deleteTransaction(TX_ID)).toEqual({ success: true });
     expect(txWrites("delete")).toHaveLength(1);
-    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    // The DB DELETE trigger owns the atomic audit (covered by pgTAP).
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   // Bug (item 6): a DELETE that removed 0 rows was reported as success.
@@ -709,7 +711,7 @@ describe("deleteTransaction", () => {
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
-  it("deletes an owner's pending transaction and audits it", async () => {
+  it("deletes an owner's pending transaction with DB-owned auditing", async () => {
     actor = "member";
     tx = { ...tx, created_by: ACTOR_ID };
 
@@ -717,7 +719,8 @@ describe("deleteTransaction", () => {
 
     expect(result).toEqual({ success: true });
     expect(txWrites("delete")).toHaveLength(1);
-    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    // The DB DELETE trigger owns the atomic audit (covered by pgTAP).
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });
 

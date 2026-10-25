@@ -544,7 +544,7 @@ export function ManageMembersClient({
             <DialogDescription>
               <strong>{deleteTarget?.name}</strong>（
               {deleteTarget?.student_number}
-              ）のアカウントを完全に削除します。この操作は取り消すことができません。誤って登録されたアカウントのみ削除してください。
+              ）のアカウントを停止し、部員一覧から非表示にします。取引・変更履歴と氏名は保持されます。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -563,7 +563,7 @@ export function ManageMembersClient({
               {deleteLoading && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
-              完全に削除する
+              削除してログインを停止
             </Button>
           </DialogFooter>
         </DialogContent>
