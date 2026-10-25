@@ -227,8 +227,8 @@ describe("updateSubsidyStatus to unexecuted", () => {
     const result = await updateSubsidyStatus(ITEM_ID, "unexecuted");
 
     expect(result).toEqual({ success: true });
-    // One audit row for the status, one per deleted transaction.
-    expect(logAuditEvent).toHaveBeenCalledTimes(3);
+    // The app audits the status; the DB trigger audits each deleted transaction.
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
   });
 });
 

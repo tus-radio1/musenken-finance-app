@@ -118,18 +118,7 @@ export async function updateSubsidyStatus(id: string, status: string) {
       return { error: "関連する出納帳データの削除に失敗しました" };
     }
 
-    // Log audit events for all deleted transactions in parallel
-    await Promise.all(
-      (relatedTx ?? []).map((tx) =>
-        logAuditEvent({
-          tableName: "transactions",
-          recordId: tx.id,
-          action: "DELETE",
-          oldData: { subsidy_item_id: id },
-          changedBy: auth.profileId,
-        }),
-      ),
-    );
+    // The audit_deleted_transaction trigger records each deleted row.
 
     if ((relatedTx?.length ?? 0) < linkedCount) {
       console.error(
